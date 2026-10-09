@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.test-build/
+package-lock.json
+*.tgz

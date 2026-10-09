@@ -1,0 +1,64 @@
+{
+  "name": "unisearch-cli",
+  "version": "0.1.0",
+  "description": "Unified CLI for AI agents to search the web, read pages, discover site links, and look up documentation.",
+  "keywords": [
+    "cli",
+    "agent",
+    "web-search",
+    "web-scraping"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "author": "Dabbler <email@dabbler.top>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ADabbler/unisearch.git"
+  },
+  "homepage": "https://github.com/ADabbler/unisearch#readme",
+  "bugs": {
+    "url": "https://github.com/ADabbler/unisearch/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "unisearch": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "skills/",
+    "README.md",
+    "README.zh-CN.md",
+    "docs/en/configuration.md",
+    "docs/zh-CN/configuration.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true }); rmSync('.test-build', { recursive: true, force: true });\"",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "dev": "npm run build && node dist/cli.js",
+    "test": "npm run build && tsc -p tsconfig.test.json && node --test \".test-build/tests/*.test.js\"",
+    "check:package": "npm run build && node scripts/check-package.mjs",
+    "check": "npm run format:check && npm run typecheck && npm test && node scripts/check-package.mjs",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@clack/core": "^1.5.1",
+    "@clack/prompts": "^1.8.1",
+    "@cto.af/linebreak": "^4.0.3",
+    "commander": "^15.0.0",
+    "fast-string-width": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "prettier": "3.9.9",
+    "typescript": "^7.0.2"
+  }
+}

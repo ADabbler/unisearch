@@ -1,0 +1,3 @@
+interface:
+  display_name: 'UniSearch'
+  short_description: 'Search the web, read pages, and find documentation'

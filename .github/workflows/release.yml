@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+    with:
+      upload_package: true
+
+  publish-npm:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      package_file: ${{ steps.metadata.outputs.package_file }}
+      prerelease: ${{ steps.metadata.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org/
+          package-manager-cache: false
+      - name: Check the tag and release notes
+        id: metadata
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $version." >&2
+            exit 1
+          fi
+          notes=".github/releases/$GITHUB_REF_NAME.md"
+          if [ ! -s "$notes" ]; then
+            echo "Release notes are missing or empty: $notes" >&2
+            exit 1
+          fi
+          npm_tag=latest
+          prerelease=false
+          if [[ "${version%%+*}" == *-* ]]; then
+            npm_tag=next
+            prerelease=true
+          fi
+          printf 'PACKAGE_NAME=%s\nPACKAGE_VERSION=%s\nPACKAGE_FILE=%s-%s.tgz\nNPM_TAG=%s\n' "$name" "$version" "$name" "$version" "$npm_tag" >> "$GITHUB_ENV"
+          printf 'package_file=%s-%s.tgz\nprerelease=%s\n' "$name" "$version" "$prerelease" >> "$GITHUB_OUTPUT"
+      - name: Use npm 12 for trusted publishing
+        run: npm install --global npm@12 --ignore-scripts
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: package
+      - name: Publish to npm
+        run: |
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version --json > "$RUNNER_TEMP/npm-version.json"; then
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION already exists; checking its integrity next."
+          else
+            jq -e '.error.code == "E404"' "$RUNNER_TEMP/npm-version.json"
+            publish_args=(publish "package/$PACKAGE_FILE" --ignore-scripts --access public --provenance)
+            if [ "$NPM_TAG" = next ]; then
+              publish_args+=(--tag next)
+            fi
+            npm "${publish_args[@]}"
+            tagged_version=$(npm view "$PACKAGE_NAME@$NPM_TAG" version)
+            if [ "$tagged_version" != "$PACKAGE_VERSION" ]; then
+              echo "The npm $NPM_TAG tag does not point to $PACKAGE_VERSION." >&2
+              exit 1
+            fi
+          fi
+      - name: Verify the npm package and installation
+        run: |
+          expected="sha512-$(openssl dgst -sha512 -binary "package/$PACKAGE_FILE" | openssl base64 -A)"
+          actual=$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity)
+          if [ "$actual" != "$expected" ]; then
+            echo "The npm version differs from the package verified by CI." >&2
+            exit 1
+          fi
+          release_prefix="$RUNNER_TEMP/npm-install"
+          npm install --global --prefix "$release_prefix" --cache "$RUNNER_TEMP/npm-cache" --ignore-scripts --no-audit --no-fund "$PACKAGE_NAME@$PACKAGE_VERSION"
+          export UNISEARCH_CONFIG_PATH="$RUNNER_TEMP/unisearch-config.json"
+          export UNISEARCH_LANG=en
+          installed_version=$("$release_prefix/bin/unisearch" --version)
+          if [ "$installed_version" != "unisearch $PACKAGE_VERSION" ]; then
+            echo "Unexpected installed version: $installed_version" >&2
+            exit 1
+          fi
+          "$release_prefix/bin/unisearch" --help
+
+  github-release:
+    needs: publish-npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: package
+      - name: Publish the GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: ${{ github.ref_name }}
+          body_path: .github/releases/${{ github.ref_name }}.md
+          files: package/${{ needs.publish-npm.outputs.package_file }}
+          fail_on_unmatched_files: true
+          prerelease: ${{ needs.publish-npm.outputs.prerelease == 'true' }}
+          make_latest: ${{ needs.publish-npm.outputs.prerelease == 'true' && 'false' || 'legacy' }}

@@ -30,7 +30,6 @@ jobs:
       contents: read
       id-token: write
     outputs:
-      package_file: ${{ steps.metadata.outputs.package_file }}
       prerelease: ${{ steps.metadata.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6
@@ -62,7 +61,7 @@ jobs:
             prerelease=true
           fi
           printf 'PACKAGE_NAME=%s\nPACKAGE_VERSION=%s\nPACKAGE_FILE=%s-%s.tgz\nNPM_TAG=%s\n' "$name" "$version" "$name" "$version" "$npm_tag" >> "$GITHUB_ENV"
-          printf 'package_file=%s-%s.tgz\nprerelease=%s\n' "$name" "$version" "$prerelease" >> "$GITHUB_OUTPUT"
+          printf 'prerelease=%s\n' "$prerelease" >> "$GITHUB_OUTPUT"
       - name: Use npm 12 for trusted publishing
         run: npm install --global npm@12 --ignore-scripts
       - uses: actions/download-artifact@v8
@@ -115,16 +114,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@v8
-        with:
-          name: npm-package
-          path: package
       - name: Publish the GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
           body_path: .github/releases/${{ github.ref_name }}.md
-          files: package/${{ needs.publish-npm.outputs.package_file }}
-          fail_on_unmatched_files: true
           prerelease: ${{ needs.publish-npm.outputs.prerelease == 'true' }}
           make_latest: ${{ needs.publish-npm.outputs.prerelease == 'true' && 'false' || 'legacy' }}

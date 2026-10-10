@@ -9,6 +9,7 @@ permissions:
 
 concurrency:
   group: release
+  queue: max
   cancel-in-progress: false
 
 defaults:
@@ -74,7 +75,7 @@ jobs:
             echo "$PACKAGE_NAME@$PACKAGE_VERSION already exists; checking its integrity next."
           else
             jq -e '.error.code == "E404"' "$RUNNER_TEMP/npm-version.json"
-            publish_args=(publish "package/$PACKAGE_FILE" --ignore-scripts --access public --provenance)
+            publish_args=(publish "./package/$PACKAGE_FILE" --ignore-scripts --access public --provenance)
             if [ "$NPM_TAG" = next ]; then
               publish_args+=(--tag next)
             fi

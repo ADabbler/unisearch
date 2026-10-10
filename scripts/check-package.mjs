@@ -116,7 +116,12 @@ function installed(args, language, expectedStatus = 0, errorOutput = false) {
       ? run(
           'cmd.exe',
           ['/d', '/s', '/c', `""${executable}" ${args.map((arg) => `"${arg}"`).join(' ')}"`],
-          { cwd: caller, env: environment },
+          {
+            cwd: caller,
+            env: environment,
+            // Keep the nested quotes intact for cmd.exe's /c command line.
+            windowsVerbatimArguments: true,
+          },
           expectedStatus,
         )
       : run(executable, args, { cwd: caller, env: environment }, expectedStatus);

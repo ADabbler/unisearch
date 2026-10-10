@@ -91,7 +91,11 @@ test('setup saved configuration and Codex Skill are usable by new CLI processes'
         /fixture-setup-key|local configuration|missing configuration|^- /m,
       );
       assert.match(preview, /Skills installation locations/);
-      assert.ok(preview.includes(`Codex: ${join(root, '.codex', 'skills', 'unisearch')}`));
+      assert.ok(
+        preview
+          .replace(/\r?\n│  /g, '')
+          .includes(`Codex: ${join(root, '.codex', 'skills', 'unisearch')}`),
+      );
     },
     () => {},
   );
@@ -151,7 +155,9 @@ test('setup saved configuration and Codex Skill are usable by new CLI processes'
     { cwd: root, env },
   );
   assert.match(skills.stdout, /Codex: current/);
-  assert.ok(skills.stdout.includes(join(root, '.codex', 'skills', 'unisearch')));
+  assert.ok(
+    skills.stdout.replace(/\r?\n\s*/g, '').includes(join(root, '.codex', 'skills', 'unisearch')),
+  );
   assert.deepEqual(calls, []);
   assert.deepEqual(await runCli(['exa', 'search', 'setup integration', '--limit', '1']), {
     provider: 'exa',

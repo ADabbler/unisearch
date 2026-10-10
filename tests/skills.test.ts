@@ -134,7 +134,7 @@ test('independent failures, cancellation, source validation and overlap prefligh
 });
 
 test('failed removal and rename retain actual side effects and cleanup errors', async (t) => {
-  const root = temporary(t),
+  const root = await fs.realpath(temporary(t)),
     source = join(root, 'source');
   await fs.mkdir(source);
   await fs.writeFile(join(source, 'SKILL.md'), 'new');
@@ -167,7 +167,7 @@ test('failed removal and rename retain actual side effects and cleanup errors', 
 });
 
 test('cancellation during replacement finishes current target and does not start the next', async (t) => {
-  const root = temporary(t),
+  const root = await fs.realpath(temporary(t)),
     source = join(root, 'source');
   await fs.mkdir(source);
   await fs.writeFile(join(source, 'SKILL.md'), 'new');
@@ -216,12 +216,12 @@ test('Skill CLI uses plain text and rejects unsupported result options before wr
   const installed = await run(['skills', 'install', '--targets', 'codex']);
   assert.equal(installed.exit, 0);
   assert.match(installed.channels.out, /Codex: installed/);
-  assert.ok(installed.channels.out.includes(target.path));
+  assert.ok(installed.channels.out.replace(/\r?\n\s*/g, '').includes(target.path));
   assert.equal((await run(['skills', 'remove', '--targets', 'codex'])).exit, 0);
 });
 
 test('unexpected read failures stop subsequent Skill targets', async (t) => {
-  const root = temporary(t),
+  const root = await fs.realpath(temporary(t)),
     source = join(root, 'source');
   await fs.mkdir(source);
   await fs.writeFile(join(source, 'SKILL.md'), 'skill');

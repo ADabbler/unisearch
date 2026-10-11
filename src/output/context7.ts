@@ -19,7 +19,7 @@ export function renderContext7(data: Data, language: Language): string {
   const sep = language === 'zh' ? '：' : ': ';
   const sections = [text(language, 'ctx7Source')];
   if ('results' in data) {
-    if (data.search_filter_applied) sections.push(`> ${text(language, 'ctx7Filtered')}`);
+    if (data.search_filter_applied) sections.push(text(language, 'ctx7Filtered'));
     for (const [index, item] of data.results.entries()) {
       sections.push(
         `## ${index + 1}. ${inline(item.title ?? item.id)}`,

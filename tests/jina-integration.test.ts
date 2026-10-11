@@ -338,7 +338,10 @@ test('Jina output and files preserve partial data, diagnostic redaction and ordi
   assert.equal(readFileSync(file, 'utf8'), normal.channels.out);
   assert.match(saved.channels.err, /Billed usage \(tokens\): 99/);
   f.reply(envelope([{ url, title: 'No body' }]));
-  const partial = await f.run(['jina', 'search', 'q', '--format=json', '--output', file], key);
+  const partial = await f.run(
+    ['jina', 'search', 'q', '--include-text', '--format=json', '--output', file],
+    key,
+  );
   assert.equal(partial.exit, 6);
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).status, 'partial');
   const before = readFileSync(file, 'utf8');
@@ -540,7 +543,7 @@ test('root search runs model, Jina and Exa concurrently and retains requested so
   );
 });
 
-test('root search keeps Jina partial and invalid data when model fails, with local preflight before any request', async (t) => {
+test('root search keeps Jina metadata and invalid data when model fails, with local preflight before any request', async (t) => {
   const f = await fixture(t);
   const env = {
     ...key,
@@ -558,7 +561,7 @@ test('root search keeps Jina partial and invalid data when model fails, with loc
       });
       const result = await f.run(['search', 'q', '--extra-sources', 'jina', '--format=json'], env);
       let expectedExit = 3;
-      if (modelOk) expectedExit = entries[0] === page ? 0 : 6;
+      if (modelOk) expectedExit = 'title' in entries[0] && entries[0].title === 0 ? 6 : 0;
       assert.equal(result.exit, expectedExit);
       assert.equal(result.json().data.extra_sources[0].data.results.length, 1);
       if (!modelOk) assert.equal(result.json().error.details.failures[0].provider, 'model');

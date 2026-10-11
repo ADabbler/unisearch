@@ -47,11 +47,11 @@ Use \`unisearch status\`.`,
     },
     markdown: `来源：Firecrawl · [Report](https://example.org/report)
 
-> 上游提示：Some document pages were not parsed.
+上游提示：Some document pages were not parsed.
 
 最终 URL：https://example.org/report.pdf
 
-> 正文已解析 2 页，文档共 5 页
+正文已解析 2 页，文档共 5 页
 
 # Report
 
@@ -220,7 +220,7 @@ See the command reference.
 
 ### Firecrawl
 
-> 上游提示：Some sources were unavailable.
+上游提示：Some sources were unavailable.
 
 #### 1. [Guide](https://example.org/docs)
 

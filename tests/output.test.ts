@@ -134,7 +134,7 @@ test('verbose views use one details object without changing normal data', async 
   const markdown = capture();
   await display(success(body), { ...options, execution, verbose: true }, markdown);
   assert.equal(markdown.out, body);
-  assert.equal(markdown.err, 'elapsed_ms: 12\n');
+  assert.equal(markdown.err, '\n---\n\n## 执行详情\n\nelapsed_ms: 12\n');
   const json = capture();
   await display(success(body), { ...options, format: 'json', execution, verbose: true }, json);
   assert.deepEqual(JSON.parse(json.out), {

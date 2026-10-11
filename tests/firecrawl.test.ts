@@ -758,7 +758,7 @@ test('Firecrawl map keeps links and coverage warnings without inferring fields o
   assert.equal(data.links[1].title, undefined);
   assert.equal(
     renderMap(data, 'zh'),
-    '来源：Firecrawl\n\n> 上游提示：Coverage is limited\n\n1. [Docs](https://example.org/docs)\n   Reference\n2. [https://example.org/path?q=1](https://example.org/path?q=1)\n3. [https://example.org/path?q=1](https://example.org/path?q=1)',
+    '来源：Firecrawl\n\n上游提示：Coverage is limited\n\n1. [Docs](https://example.org/docs)\n   Reference\n2. [https://example.org/path?q=1](https://example.org/path?q=1)\n3. [https://example.org/path?q=1](https://example.org/path?q=1)',
   );
   assert.deepEqual(mapData(blankMap, 1, safe), { provider: 'firecrawl', links: [] });
   for (const response of [

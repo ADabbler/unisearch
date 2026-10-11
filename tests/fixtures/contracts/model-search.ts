@@ -62,7 +62,7 @@ export const cases: ContractCase[] = [
 
 ### Exa
 
-#### 1. [示例文档](https://example.org/docs)`,
+1. [示例文档](https://example.org/docs)`,
   },
   {
     name: 'model success with Exa timeout',

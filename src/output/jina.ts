@@ -2,7 +2,7 @@ import { text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { Data, Page } from '../providers/jina-response.js';
 import type { JsonValue } from '../result.js';
-import { inline } from './exa.js';
+import { inline, resultTitle } from './exa.js';
 import { link, warnings } from './firecrawl.js';
 
 function cell(value: JsonValue): string {
@@ -86,7 +86,7 @@ export function renderJina(data: Data, language: Language, level = 2, showProvid
   const entries = data.results.map((page, index) =>
     [
       ...(searching || data.results.length !== 1
-        ? [`${'#'.repeat(level)} ${index + 1}. ${link(page.url, page.title)}`]
+        ? [resultTitle(index, page.url, page.title, level, !!page.text?.trim())]
         : []),
       ...pageContent(page, language),
     ].join('\n\n'),

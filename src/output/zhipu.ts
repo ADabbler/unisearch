@@ -1,7 +1,7 @@
 import { text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { FetchData, SearchData } from '../providers/zhipu-response.js';
-import { inline } from './exa.js';
+import { inline, resultTitle } from './exa.js';
 import { link } from './firecrawl.js';
 import { pageContent } from './jina.js';
 import { inlineCode } from './context7.js';
@@ -29,7 +29,7 @@ export function renderZhipu(
     }
     if (!data.results.length) sections.push(text(language, 'noResults'));
     for (const [index, item] of data.results.entries()) {
-      sections.push(`${'#'.repeat(level)} ${index + 1}. ${link(item.url, item.title)}`);
+      sections.push(resultTitle(index, item.url, item.title, level, !!item.description?.trim()));
       const labels: string[] = [];
       if (item.source)
         labels.push(`${text(language, 'zhipuWebsiteLabel')}${sep}${inline(item.source)}`);

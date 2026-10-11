@@ -181,7 +181,6 @@ test(
         q: 'integration query',
         num: 2,
         type: 'web',
-        respondWith: 'content',
         fallback: false,
       });
       assert.deepEqual(f.calls.find((call) => call.path === '/gateway/v1/search')?.body, {
@@ -274,7 +273,11 @@ test('combined Jina and AnySearch failures retain independent evidence and redac
         path,
         '--verbose',
       ]);
-      assert.equal(result.exit, mode === 'model-failure' ? 3 : 6, result.channels.out);
+      assert.equal(
+        result.exit,
+        mode === 'model-failure' ? 3 : mode === 'jina-partial' ? 0 : 6,
+        result.channels.out,
+      );
       const saved = readFileSync(path, 'utf8');
       for (const secret of credentials)
         assert.ok(!`${saved}${result.channels.out}${result.channels.err}`.includes(secret));

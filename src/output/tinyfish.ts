@@ -1,7 +1,7 @@
 import { text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { FetchData, SearchData } from '../providers/tinyfish-response.js';
-import { inline } from './exa.js';
+import { inline, resultTitle } from './exa.js';
 import { inlineCode } from './context7.js';
 import { contentInfo, link } from './firecrawl.js';
 
@@ -21,7 +21,7 @@ export function renderSearch(
   if (!data.results.length) parts.push(text(language, 'noResults'));
   for (const [index, item] of data.results.entries()) {
     if (index) parts.push('---');
-    parts.push(`${'#'.repeat(level)} ${index + 1}. ${link(item.url, item.title)}`);
+    parts.push(resultTitle(index, item.url, item.title, level, !!item.snippet?.trim()));
     const site = [
       item.site_name ? `${text(language, 'tinyfishSiteLabel')}${sep}${inline(item.site_name)}` : '',
       item.position !== undefined && item.position !== index + 1

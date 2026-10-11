@@ -211,7 +211,11 @@ export function parseResponse(
         page_status: pageStatus,
         ...(statusText ? { upstream_message: safe(statusText) } : {}),
       });
-    else if (!page.text && (entry.content == null || typeof entry.content === 'string'))
+    else if (
+      (request.operation === 'fetch' || request.includeText) &&
+      !page.text &&
+      (entry.content == null || typeof entry.content === 'string')
+    )
       unavailable('jinaEmpty', 'empty_content');
     if (
       request.operation === 'search' &&

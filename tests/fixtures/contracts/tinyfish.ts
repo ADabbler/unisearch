@@ -445,7 +445,12 @@ Arguments and options for each command.`,
     markdown: `来源：TinyFish · [https://example.org/guide](https://example.org/guide)
 
 Complete body.`,
-    details: `执行耗时：25 ms
+    details: `
+---
+
+## 执行详情
+
+执行耗时：25 ms
 尝试 1：HTTP 200，25 ms，成功，请求 ID tf-success-fixture
   页面读取耗时：https://example.org/guide · 18 ms`,
   },

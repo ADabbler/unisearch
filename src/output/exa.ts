@@ -8,6 +8,17 @@ export function inline(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').replace(/[\\`*_[\]<>]/g, '\\$&');
 }
 
+export function resultTitle(
+  index: number,
+  url: string,
+  title: string | undefined,
+  level: number,
+  hasContent: boolean,
+): string {
+  const value = `${index + 1}. ${link(url, title)}`;
+  return hasContent ? `${'#'.repeat(level)} ${value}` : value;
+}
+
 export function renderSearch(
   data: SearchData,
   language: Language,
@@ -16,7 +27,15 @@ export function renderSearch(
 ): string {
   const separator = language === 'zh' ? '：' : ': ';
   const entries = data.results.map((item, index) => {
-    const sections = [`${'#'.repeat(level)} ${index + 1}. ${link(item.url, item.title)}`];
+    const sections = [
+      resultTitle(
+        index,
+        item.url,
+        item.title,
+        level,
+        !!item.text?.trim() || !!item.highlights?.some((value) => value.trim()),
+      ),
+    ];
     const metadata = [
       item.published_date
         ? `${text(language, 'publishedLabel')}${separator}${inline(item.published_date)}`
@@ -36,13 +55,8 @@ export function renderSearch(
     if (item.highlights)
       sections.push(
         `${'#'.repeat(level + 1)} ${text(language, 'highlightsLabel')}\n\n${item.highlights
-          .map((value) =>
-            value
-              .split(/\r\n|\r|\n/)
-              .map((line) => `> ${line}`)
-              .join('\n'),
-          )
-          .join('\n>\n')}`,
+          .map((value) => value.replace(/\r\n|\r/g, '\n'))
+          .join('\n\n')}`,
       );
     if (item.text)
       sections.push(`${'#'.repeat(level + 1)} ${text(language, 'textLabel')}\n\n${item.text}`);

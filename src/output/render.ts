@@ -17,6 +17,7 @@ export type RenderData<T extends JsonValue> = (
 export interface ExecutionDetails {
   data: JsonObject;
   markdown: (data: JsonObject, language: Language) => string;
+  heading?: boolean;
 }
 
 export interface RenderOptions<T extends JsonValue> {
@@ -181,6 +182,10 @@ function markdown<T extends JsonValue>(outcome: Outcome<T>, options: RenderOptio
   return line(sections.join('\n\n'));
 }
 
+function executionSection(value: string, language: Language): string {
+  return `\n---\n\n## ${text(language, 'executionDetails')}\n\n${value}`;
+}
+
 function json(value: unknown): string {
   return line(
     JSON.stringify(
@@ -243,12 +248,16 @@ function readable<T extends JsonValue>(
     options.verbose && options.execution
       ? options.execution.markdown(options.execution.data, options.language)
       : '';
-  details.push(execution);
+  const executionDetails =
+    execution && options.format === 'markdown' && options.execution?.heading !== false
+      ? executionSection(execution, options.language)
+      : execution;
+  details.push(executionDetails);
   return {
     outcome,
     content,
     details: details.some(Boolean) ? line(details.filter(Boolean).join('\n\n')) : '',
-    execution: execution ? line(execution) : '',
+    execution: executionDetails ? line(executionDetails) : '',
   };
 }
 

@@ -6,7 +6,7 @@ import type {
   ScrapeData,
   SearchData,
 } from '../providers/firecrawl-response.js';
-import { inline } from './exa.js';
+import { inline, resultTitle } from './exa.js';
 
 function separator(language: Language): string {
   return language === 'zh' ? '：' : ': ';
@@ -17,15 +17,10 @@ export function link(url: string, title = url): string {
   );
   return `[${inline(title)}](${target})`;
 }
-function quote(value: string): string {
-  return value
-    .split(/\r\n|\r|\n/)
-    .map((line) => `> ${line}`)
-    .join('\n');
-}
 export function warnings(values: string[] | undefined, language: Language): string[] {
-  return (values ?? []).map((value) =>
-    quote(`${text(language, 'upstreamWarningLabel')}${separator(language)}${value}`),
+  return (values ?? []).map(
+    (value) =>
+      `${text(language, 'upstreamWarningLabel')}${separator(language)}${value.replace(/\r\n|\r/g, '\n')}`,
   );
 }
 export function contentInfo(
@@ -39,11 +34,9 @@ export function contentInfo(
     );
   if (data.content_truncation)
     sections.push(
-      quote(
-        text(language, 'truncatedContent')
-          .replace('{parsed}', String(data.content_truncation.parsed_pages))
-          .replace('{total}', String(data.content_truncation.total_pages)),
-      ),
+      text(language, 'truncatedContent')
+        .replace('{parsed}', String(data.content_truncation.parsed_pages))
+        .replace('{total}', String(data.content_truncation.total_pages)),
     );
   return sections;
 }
@@ -57,7 +50,15 @@ export function renderSearch(
   const sections = showProvider ? [text(language, 'firecrawlSource')] : [];
   sections.push(...warnings(data.warnings, language));
   const results = data.results.map((item, index) => {
-    const parts = [`${'#'.repeat(level)} ${index + 1}. ${link(item.url, item.title)}`];
+    const parts = [
+      resultTitle(
+        index,
+        item.url,
+        item.title,
+        level,
+        !!item.description?.trim() || !!item.text?.trim(),
+      ),
+    ];
     parts.push(...warnings(item.warnings, language));
     if (item.description) parts.push(item.description);
     parts.push(...contentInfo(item, language));
@@ -75,7 +76,7 @@ export function renderSearch(
         details.push(
           `${text(language, 'upstreamMessageLabel')}${separator(language)}${item.content_error.message}`,
         );
-      parts.push(quote(details.join('\n')));
+      parts.push(details.join('\n').replace(/\r\n|\r/g, '\n'));
     }
     if (item.text)
       parts.push(`${'#'.repeat(level + 1)} ${text(language, 'textLabel')}\n\n${item.text}`);

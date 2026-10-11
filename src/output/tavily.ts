@@ -1,7 +1,7 @@
 import { text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { ExtractData, MapData, TavilySearchData } from '../providers/tavily.js';
-import { inline } from './exa.js';
+import { inline, resultTitle } from './exa.js';
 import { link } from './firecrawl.js';
 
 export function renderTavilySearch(
@@ -12,7 +12,15 @@ export function renderTavilySearch(
 ): string {
   const separator = language === 'zh' ? '：' : ': ';
   const entries = data.results.map((item, index) => {
-    const sections = [`${'#'.repeat(level)} ${index + 1}. ${link(item.url, item.title)}`];
+    const sections = [
+      resultTitle(
+        index,
+        item.url,
+        item.title,
+        level,
+        !!item.content?.trim() || !!item.text?.trim(),
+      ),
+    ];
     const metadata = [
       item.published_date
         ? `${text(language, 'tavilyPublished')}${separator}${inline(item.published_date)}`

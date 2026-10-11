@@ -568,7 +568,7 @@ test('results preserve order, duplicates, original Markdown and optional-content
     text: item.text,
     highlights: item.highlights,
   });
-  const expected = `来源：Exa\n\n## 1. [Runtime release schedule](https://example.com/releases)\n\n发布日期：2026-09-01 · 作者：Runtime team\n\n### 摘录\n\n> The release schedule lists supported versions.\n\n### 正文\n\n${item.text}`;
+  const expected = `来源：Exa\n\n## 1. [Runtime release schedule](https://example.com/releases)\n\n发布日期：2026-09-01 · 作者：Runtime team\n\n### 摘录\n\nThe release schedule lists supported versions.\n\n### 正文\n\n${item.text}`;
   assert.equal(renderSearch({ ...data, results: [data.results[0]] }, 'zh'), expected);
   assert.match(renderSearch(data, 'en'), /\n---\n/);
   const missing = searchData(
@@ -736,20 +736,20 @@ test('public errors redact credentials, authorization values and URL userinfo an
   assert.doesNotMatch(rendered.details, /\n# fake success/);
 });
 
-test('Markdown highlights quote CR, LF and CRLF line endings consistently', () => {
+test('Markdown highlights normalize CR, LF and CRLF without adding quote prefixes', () => {
   const data = searchData(
     {
       results: [
         {
           title: 'Page',
           url: 'https://example.com',
-          highlights: ['first\r# second\r\nthird\nfourth'],
+          highlights: ['first\r# second\r\nthird\nfourth', '> Original quote'],
         },
       ],
     },
     { text: false, highlights: true },
   );
-  assert.match(renderSearch(data, 'en'), /> first\n> # second\n> third\n> fourth/);
+  assert.match(renderSearch(data, 'en'), /first\n# second\nthird\nfourth\n\n> Original quote/);
   assert.equal(data.results[0].highlights?.[0], 'first\r# second\r\nthird\nfourth');
 });
 

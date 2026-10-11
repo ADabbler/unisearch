@@ -30,7 +30,7 @@ export const cases: ContractCase[] = [
     },
     markdown: `来源：Context7
 
-> 候选库已按团队访问规则筛选
+候选库已按团队访问规则筛选
 
 ## 1. Example UI
 

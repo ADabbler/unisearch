@@ -361,6 +361,7 @@ export function createCli(version: string, options: CliOptions = {}) {
             execution: {
               data: record,
               markdown: (value, language) => renderDoctorExecution(value, language, singleProvider),
+              heading: false,
             },
           },
           abort.signal,
@@ -855,6 +856,7 @@ export function createCli(version: string, options: CliOptions = {}) {
     .argument('<QUERY>', text('en', 'queryArgument'));
   for (const [flags, key] of [
     ['--limit <N>', 'jinaLimit'],
+    ['--include-text', 'textOption'],
     ['--country <CODE>', 'jinaCountry'],
     ['--language <CODE>', 'jinaLanguage'],
     ['--search-type <TYPE>', 'jinaSearchType'],

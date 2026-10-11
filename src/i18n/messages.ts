@@ -24,6 +24,7 @@ const messages = {
     '部分服务存在诊断问题，原因见各服务结果',
     'Some services have diagnostic issues; see each service result',
   ],
+  executionDetails: ['执行详情', 'Execution details'],
   doctorDetails: ['详细诊断', 'Diagnostic details'],
   configuredModelLabel: ['配置模型', 'Configured model'],
   doctorPassed: ['检查通过', 'check passed'],
@@ -399,7 +400,7 @@ const messages = {
   upstreamContentLabel: ['上游内容', 'Upstream content'],
   jinaCommand: ['Jina 网页读取与搜索', 'Jina page reading and search'],
   jinaFetch: ['读取单个网页正文', 'Read one page'],
-  jinaSearch: ['搜索网页、新闻或图片并返回正文', 'Search web, news or images and return page text'],
+  jinaSearch: ['搜索网页、新闻或图片', 'Search web, news or images'],
   jinaTarget: [
     '仅提取匹配区域，如 article.post-body',
     'Extract matching content, e.g. article.post-body',

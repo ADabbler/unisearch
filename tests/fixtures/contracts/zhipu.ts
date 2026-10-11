@@ -99,7 +99,7 @@ export const cases: ContractCase[] = [
 
 引擎：\`search_std\`
 
-#### 1. [政策原文](https://example.org/policy)
+1. [政策原文](https://example.org/policy)
 
 引用：\`ref_1\``,
   },

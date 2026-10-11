@@ -81,7 +81,7 @@ export const cases: ContractCase[] = [
 
 文档页数：2
 
-> 上游提示：This is a cached snapshot of the original page, consider retry with caching opt-out.
+上游提示：This is a cached snapshot of the original page, consider retry with caching opt-out.
 
 # Manual
 
@@ -258,7 +258,7 @@ Read the installation steps.
 
 ---
 
-## 2. [Reference](https://example.org/reference)
+2. [Reference](https://example.org/reference)
 
 API reference.`,
   },
@@ -362,7 +362,7 @@ The client calls the API.`,
 
 来源：Jina · 网页搜索
 
-## 1. [Reference](https://example.org/reference)`,
+1. [Reference](https://example.org/reference)`,
   },
   {
     name: 'page reading error retains returned content',
@@ -401,7 +401,7 @@ The client calls the API.`,
 
 来源：Jina · [Access denied](https://example.org/private)
 
-> 上游提示：Target URL returned error 403: Access denied by the origin server
+上游提示：Target URL returned error 403: Access denied by the origin server
 
 Access denied. Please sign in.`,
   },

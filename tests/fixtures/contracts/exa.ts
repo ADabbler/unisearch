@@ -36,7 +36,7 @@ export const cases: ContractCase[] = [
 
 ### 摘录
 
-> The guide describes installation and first use.
+The guide describes installation and first use.
 
 ### 正文
 
@@ -109,7 +109,7 @@ Installation instructions.`,
 
 ### 摘录
 
-> Installation requires the example package.`,
+Installation requires the example package.`,
   },
   {
     name: 'partial batch success',

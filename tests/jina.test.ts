@@ -76,11 +76,15 @@ test('Jina native POST preserves targets, selectors and independent connection p
       type: searchType,
       gl: 'US',
       hl: 'sr-ME',
-      respondWith: 'content',
       fallback: false,
     });
+    assert.equal(f.calls.at(-1)?.headers['x-respond-with'], 'no-content');
     assert.equal(f.calls.at(-1)?.path, '/searcher/search');
   }
+  f.reply(envelope([{ ...page, imageUrl: 'https://example.org/image.png' }]));
+  assert.equal((await f.run(['jina', 'search', query, '--include-text'], key)).exit, 0);
+  assert.equal(f.calls.at(-1)?.body.respondWith, 'content');
+  assert.equal(f.calls.at(-1)?.headers['x-respond-with'], undefined);
   assert.equal(readFileSync(f.file, 'utf8'), before);
 });
 
@@ -158,6 +162,7 @@ test('Jina rejects invalid inputs, credentials and disabled operations before HT
     ['--language', 'en\u0000'],
     ['--search-type', 'video'],
     ['--limit', '1', '--limit', '2'],
+    ['--include-text', '--include-text'],
   ])
     assert.equal((await f.run(['jina', 'search', 'q', ...options], key)).exit, 2);
   assert.equal((await f.run(['jina', 'search', ' \n '], key)).exit, 2);
@@ -234,7 +239,7 @@ test('Jina maps complete content, metadata arrays, external relations and distin
   const md = await f.run(['jina', 'search', 'q'], key);
   assert.match(md.channels.out, /Published: today/);
   assert.match(md.channels.out, /Search date label: today/);
-  assert.match(md.channels.out, /> ## Notice two/);
+  assert.match(md.channels.out, /Upstream warning: Notice one\n## Notice two/);
   assert.ok(md.channels.out.includes(content));
   assert.match(md.channels.out, /0 × 12/);
   assert.match(md.channels.out, /canonical/);
@@ -264,18 +269,21 @@ test('Jina search retains empty, short, oversized and partial result sets with s
     assert.equal(result.json().data.results.length, entries.length);
   }
   f.reply(envelope([page, page]));
-  const excess = await f.run(['jina', 'search', 'q', '--limit', '1', '--format=json'], key);
+  const excess = await f.run(
+    ['jina', 'search', 'q', '--limit', '1', '--include-text', '--format=json'],
+    key,
+  );
   assert.equal(excess.exit, 4);
   assert.equal(excess.json().data.results.length, 2);
   for (const entries of [[{ url, title: 'Empty' }], [page, { url, content: null }]]) {
     f.reply(envelope(entries));
-    const result = await f.run(['jina', 'search', 'q', '--format=json'], key);
+    const result = await f.run(['jina', 'search', 'q', '--include-text', '--format=json'], key);
     assert.equal(result.exit, 6);
     assert.equal(result.json().data.results.length, entries.length);
     assert.equal(result.json().error.details.failures[0].details.index, entries.length - 1);
   }
   f.reply(envelope([null, { url }, { ...page, title: 123 }]));
-  const invalid = await f.run(['jina', 'search', 'q', '--format=json'], {
+  const invalid = await f.run(['jina', 'search', 'q', '--include-text', '--format=json'], {
     ...key,
     UNISEARCH_RETRIES: '2',
   });

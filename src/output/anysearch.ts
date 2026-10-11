@@ -1,8 +1,7 @@
 import { text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { CatalogData, DomainsData, ExtractData, SearchData } from '../providers/anysearch.js';
-import { inline } from './exa.js';
-import { link } from './firecrawl.js';
+import { inline, resultTitle } from './exa.js';
 import { inlineCode } from './context7.js';
 import { renderRetrieval } from './retrieval.js';
 
@@ -14,7 +13,15 @@ export function renderSearch(
 ): string {
   const sections = showProvider ? [text(language, 'anysearchSource')] : [];
   const results = data.results.map((item, index) => {
-    const parts = [`${'#'.repeat(level)} ${index + 1}. ${link(item.url, item.title)}`];
+    const parts = [
+      resultTitle(
+        index,
+        item.url,
+        item.title,
+        level,
+        !!item.snippet?.trim() || !!item.content?.trim(),
+      ),
+    ];
     if (item.snippet && item.content)
       parts.push(
         `**${text(language, 'anysearchSnippet')}**`,

@@ -43,6 +43,7 @@ export interface FetchOptions {
 export interface SearchOptions {
   timeout?: number;
   limit?: string;
+  includeText?: boolean;
   country?: string;
   language?: string;
   searchType?: string;
@@ -62,6 +63,7 @@ export interface SearchRequest extends Connection {
   operation: 'search';
   limit: number;
   searchType: SearchType;
+  includeText: boolean;
 }
 export type Request = FetchRequest | SearchRequest;
 
@@ -91,7 +93,8 @@ function prepareConnection(
       throw error;
     }
   }
-  const body: JsonObject = { respondWith: 'content' };
+  const body: JsonObject =
+    operation === 'search' && !options.includeText ? {} : { respondWith: 'content' };
   if (operation === 'fetch' && options.maxTokens !== undefined) {
     try {
       body.maxTokens = parseInput(
@@ -179,7 +182,13 @@ export function prepareSearch(
   Object.assign(request.body, { q: query, type: searchType, fallback: false });
   if (options.country !== undefined) request.body.gl = options.country;
   if (options.language !== undefined) request.body.hl = options.language;
-  return { ...request, operation: 'search', searchType, limit: request.body.num as number };
+  return {
+    ...request,
+    operation: 'search',
+    searchType,
+    limit: request.body.num as number,
+    includeText: options.includeText === true,
+  };
 }
 
 function httpError(
@@ -237,6 +246,9 @@ export async function request(
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
+          ...(input.operation === 'search' && !input.includeText
+            ? { 'X-Respond-With': 'no-content' }
+            : {}),
           ...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {}),
         },
         body: JSON.stringify(input.body),

@@ -54,6 +54,19 @@ async function readTree(
   }
 }
 
+async function readComparableTree(path: string, signal?: AbortSignal): Promise<Node | undefined> {
+  const node = await readTree(path, false, true, true, signal);
+  if (node?.kind !== 'link') return node;
+  let resolved: string;
+  try {
+    resolved = await fs.realpath(path);
+  } catch (error) {
+    if (systemCode(error) === 'ENOENT') return node;
+    throw systemCode(error) ? fileError(error, path, 'resolve') : error;
+  }
+  return readTree(resolved, false, true, true, signal);
+}
+
 function compare(source: Node, target: Node): JsonObject {
   const differences: Record<string, string[]> = { missing: [], modified: [], extra: [] };
   function walk(a: Node, b: Node, path: string) {
@@ -164,7 +177,11 @@ export async function manageSkills(
     try {
       const parent = await canonicalPath(dirname(item.path));
       const path = join(parent, basename(item.path));
-      const existing = await readTree(path, false, action !== 'remove', true, signal);
+      const rawExisting = await readTree(path, false, action !== 'remove', true, signal);
+      const existing =
+        action === 'remove' || rawExisting?.kind !== 'link'
+          ? rawExisting
+          : await readComparableTree(path, signal);
       checkCancellation(signal);
       if (action === 'remove') {
         operation = 'remove';

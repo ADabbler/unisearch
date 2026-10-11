@@ -58,6 +58,6 @@ export function renderSkills(data: SkillsData, language: Language, showPaths = t
         }
         return lines.join('\n');
       })
-      .join('\n\n'),
+      .join('\n'),
   );
 }

@@ -339,6 +339,7 @@ export function createCli(version: string, options: CliOptions = {}) {
         provider === undefined
           ? prepareDoctorBatch(timeout, values, config.env, ui)
           : prepareDoctor(provider, timeout, values, config.env, ui);
+      const singleProvider = 'check' in plan ? plan.provider : undefined;
       const abort = new AbortController();
       const cancel = () => abort.abort();
       const record: JsonObject = 'check' in plan ? { check: plan.check } : {};
@@ -357,7 +358,10 @@ export function createCli(version: string, options: CliOptions = {}) {
           {
             renderData: (data, language) => renderDoctor(data, language, { anonymous }),
             textErrorPlacement: 'before-data',
-            execution: { data: record, markdown: renderDoctorExecution },
+            execution: {
+              data: record,
+              markdown: (value, language) => renderDoctorExecution(value, language, singleProvider),
+            },
           },
           abort.signal,
         );

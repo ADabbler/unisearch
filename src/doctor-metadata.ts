@@ -31,6 +31,10 @@ function integer(value: unknown): value is number {
   return finite(value) && Number.isInteger(value) && value >= 0;
 }
 
+function nullableInteger(value: unknown): value is number | null {
+  return value === null || integer(value);
+}
+
 export function parseMetadata(request: MetadataRequest, value: unknown): JsonObject | undefined {
   const { provider } = request;
   const body = object(value, provider, 'response');
@@ -53,10 +57,18 @@ export function parseMetadata(request: MetadataRequest, value: unknown): JsonObj
     if (key.limit !== null && !integer(key.limit)) return invalid(provider, 'key.limit');
     const quota: JsonObject = { key: { usage: key.usage, limit: key.limit } };
     const values: JsonObject = {};
-    for (const field of ['plan_usage', 'plan_limit', 'paygo_usage', 'paygo_limit']) {
+    for (const field of ['plan_usage', 'paygo_usage']) {
       if (account[field] === undefined) continue;
       if (!integer(account[field])) return invalid(provider, `account.${field}`);
       values[field] = account[field];
+    }
+    if (account.plan_limit !== undefined) {
+      if (!integer(account.plan_limit)) return invalid(provider, 'account.plan_limit');
+      values.plan_limit = account.plan_limit;
+    }
+    if (account.paygo_limit !== undefined) {
+      if (!nullableInteger(account.paygo_limit)) return invalid(provider, 'account.paygo_limit');
+      values.paygo_limit = account.paygo_limit;
     }
     if (account.current_plan !== undefined) {
       if (typeof account.current_plan !== 'string')
@@ -70,12 +82,18 @@ export function parseMetadata(request: MetadataRequest, value: unknown): JsonObj
         usage: key.usage,
         limit: key.limit,
       });
+    const planExhausted =
+      integer(values.plan_usage) &&
+      integer(values.plan_limit) &&
+      values.plan_usage >= values.plan_limit;
+    const paygoExhausted =
+      integer(values.paygo_usage) &&
+      integer(values.paygo_limit) &&
+      values.paygo_usage >= values.paygo_limit;
+    const paygoUnavailable = values.paygo_limit === null;
     if (
-      ['plan_usage', 'plan_limit', 'paygo_usage', 'paygo_limit'].every(
-        (field) => values[field] !== undefined,
-      ) &&
-      (values.plan_usage as number) >= (values.plan_limit as number) &&
-      (values.paygo_usage as number) >= (values.paygo_limit as number)
+      (planExhausted && (paygoUnavailable || paygoExhausted)) ||
+      (values.plan_limit === undefined && paygoExhausted)
     )
       throw new AppError('QUOTA_EXCEEDED', 'tavilyQuota', { provider, ...values });
     return quota;

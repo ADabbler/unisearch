@@ -2,8 +2,8 @@ import type { DoctorData, DoctorService } from '../doctor.js';
 import type { Provider } from '../config/fields.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
 import { text } from '../i18n/messages.js';
-import { providerName } from '../i18n/providers.js';
-import type { JsonObject, PublicError } from '../result.js';
+import { operationName, providerName } from '../i18n/providers.js';
+import type { JsonObject, JsonValue, PublicError } from '../result.js';
 import { renderExecution } from './exa.js';
 import { errorText } from './render.js';
 import { wrapText } from './text.js';
@@ -34,6 +34,53 @@ function parenthetical(value: string, language: Language): string {
   return language === 'zh' ? `（${value}）` : ` (${value})`;
 }
 
+function serviceTitle(provider: Provider, language: Language): string {
+  return `${providerName(provider, language)} (${provider})`;
+}
+
+function indented(value: string): string {
+  return value
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n');
+}
+
+function scalar(value: JsonValue): string {
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+function structuredLines(value: JsonValue, indent: string): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return [`${indent}${scalar(value)}`];
+  const lines: string[] = [];
+  for (const [key, item] of Object.entries(value)) {
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      lines.push(`${indent}${key}:`, ...structuredLines(item, `${indent}  `));
+    } else lines.push(`${indent}${key}: ${scalar(item)}`);
+  }
+  return lines;
+}
+
+function checkLines(check: JsonObject, language: Language): string[] {
+  const separator = language === 'zh' ? '：' : ': ';
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(check)) {
+    if (key === 'operation') {
+      lines.push(
+        `  ${text(language, 'operationLabel')}${separator}${operationName(String(value), language)}`,
+      );
+    } else if (key === 'endpoint') {
+      lines.push(`  ${text(language, 'endpointLabel')}${separator}${String(value)}`);
+    } else if (key === 'quota') {
+      lines.push(`  ${text(language, 'quotaLabel')}${language === 'zh' ? '：' : ':'}`);
+      lines.push(...structuredLines(value, '    '));
+    } else {
+      lines.push(`  ${key}${separator}${scalar(value)}`);
+    }
+  }
+  return lines;
+}
+
 export function renderDoctor(
   data: JsonObject,
   language: Language,
@@ -49,7 +96,7 @@ export function renderDoctor(
           options.anonymous.has(service.provider) &&
           (service.state === 'passed' || service.state === 'failed');
         if (service.provider === 'jina' && anonymous) {
-          const lines = [`${providerName(service.provider, language)} (${service.provider}):`];
+          const lines = [`${serviceTitle(service.provider, language)}:`];
           const fetchState = `${stateLabel(service.state, language)}${parenthetical(language === 'zh' ? '匿名' : 'anonymous', language)}`;
           lines.push(`  fetch: ${fetchState}`);
           if (service.error) lines.push(...errorLines(service.error, language, '    '));
@@ -60,7 +107,7 @@ export function renderDoctor(
           return lines.join('\n');
         }
         const lines = [
-          `${providerName(service.provider, language)} (${service.provider}): ${stateLabel(service.state, language)}${anonymous ? parenthetical(language === 'zh' ? '匿名' : 'anonymous', language) : ''}${service.model ? ` (${service.model})` : ''}`,
+          `${serviceTitle(service.provider, language)}: ${stateLabel(service.state, language)}${anonymous ? parenthetical(language === 'zh' ? '匿名' : 'anonymous', language) : ''}${service.model ? `${language === 'zh' ? '，' : ', '}${text(language, 'configuredModelLabel')}${language === 'zh' ? '：' : ': '}${service.model}` : ''}`,
         ];
         if (service.error) lines.push(...errorLines(service.error, language, '  '));
         return lines.join('\n');
@@ -69,17 +116,36 @@ export function renderDoctor(
   );
 }
 
-export function renderDoctorExecution(record: JsonObject, language: Language): string {
+function renderDoctorServiceExecution(
+  record: JsonObject,
+  language: Language,
+  provider?: Provider,
+): string {
+  const check = checkLines(record.check as JsonObject, language).join('\n');
+  const execution = renderExecution(record, language);
+  return [
+    provider ? `${serviceTitle(provider, language)}:` : '',
+    check,
+    execution ? indented(execution) : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+export function renderDoctorExecution(
+  record: JsonObject,
+  language: Language,
+  provider?: Provider,
+): string {
+  const separator = language === 'zh' ? '：' : ':';
   if (!Array.isArray(record.services)) {
-    const check = Object.entries(record.check as JsonObject)
-      .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
-      .join('\n');
-    return wrapText(`${check}\n${renderExecution(record, language)}`, process.stderr.columns ?? 80);
+    return `\n${text(language, 'doctorDetails')}${separator}\n\n${wrapText(renderDoctorServiceExecution(record, language, provider), process.stderr.columns ?? 80)}`;
   }
-  return wrapText(
-    (record.services as JsonObject[])
-      .map((service) => `${service.provider}\n${renderDoctorExecution(service, language)}`)
-      .join('\n\n'),
-    process.stderr.columns ?? 80,
-  );
+  const sections = (record.services as JsonObject[])
+    .map((service) => {
+      const serviceProvider = service.provider as Provider;
+      return renderDoctorServiceExecution(service, language, serviceProvider);
+    })
+    .join('\n');
+  return `\n${text(language, 'doctorDetails')}${separator}\n\n${wrapText(sections, process.stderr.columns ?? 80)}`;
 }

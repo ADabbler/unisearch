@@ -98,12 +98,33 @@ test('root and internal links never modify external targets; parent links are su
   await fs.symlink(outside, join(root, '.codex', 'skills'), linkType);
   await fs.symlink(outside, target.path, linkType);
   const status = await manageSkills('status', [target], 'en', undefined, source);
-  assert.deepEqual(status.result.data?.targets[0].differences, { modified: ['.'] });
+  assert.equal(status.result.data?.targets[0].state, 'different');
+  assert.ok(status.result.data?.targets[0].differences);
   await manageSkills('install', [target], 'en', undefined, source);
   assert.equal((await fs.lstat(target.path)).isDirectory(), true);
   await fs.symlink(outside, join(target.path, 'external'), linkType);
   await manageSkills('remove', [target], 'en');
   assert.equal(await fs.readFile(join(outside, 'sentinel'), 'utf8'), 'untouched');
+});
+
+test('status compares the contents behind a root skill symlink', async (t) => {
+  const root = temporary(t),
+    source = join(root, 'source'),
+    outside = join(root, 'outside');
+  await fs.mkdir(source);
+  await fs.mkdir(outside);
+  await fs.writeFile(join(source, 'SKILL.md'), 'skill');
+  await fs.writeFile(join(outside, 'SKILL.md'), 'skill');
+  const [target] = targetPaths(['codex'], context(root, {}));
+  await fs.mkdir(join(root, '.codex', 'skills'), { recursive: true });
+  await fs.symlink(outside, target.path, process.platform === 'win32' ? 'junction' : 'dir');
+  const result = await manageSkills('status', [target], 'en', undefined, source);
+  assert.equal(result.result.data?.targets[0].state, 'current');
+  assert.equal(result.result.data?.targets[0].differences, undefined);
+  assert.equal((await fs.lstat(target.path)).isSymbolicLink(), true);
+  const update = await manageSkills('update', [target], 'en', undefined, source);
+  assert.equal(update.result.data?.targets[0].state, 'unchanged');
+  assert.equal((await fs.lstat(target.path)).isSymbolicLink(), true);
 });
 
 test('independent failures, cancellation, source validation and overlap preflight', async (t) => {
@@ -202,6 +223,8 @@ test('Skill CLI uses plain text and rejects unsupported result options before wr
   assert.equal(missing.exit, 2);
   const status = await run(['skills', 'status', '--targets', 'codex']);
   assert.match(status.channels.out, /Codex: not installed/);
+  const compactStatus = await run(['skills', 'status', '--targets', 'codex,claude']);
+  assert.doesNotMatch(compactStatus.channels.out, /\n\n/);
   const [target] = targetPaths(['codex'], config);
   const rejected = await run([
     'skills',

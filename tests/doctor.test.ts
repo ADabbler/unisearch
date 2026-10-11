@@ -94,6 +94,10 @@ test('bare doctor reports every service and diagnoses ready anonymous and authen
     plain.channels.out,
     /check passed|Missing configuration|Invalid configuration|Disabled/,
   );
+  assert.match(
+    plain.channels.out,
+    /Model \(model\): check passed, Configured model: fixture-model/,
+  );
   assert.doesNotMatch(plain.channels.out, /endpoint|attempts/);
   assert.doesNotMatch(plain.channels.out, /\[MISSING_CONFIG\]|\[INVALID_CONFIG\]|[。.]$/m);
   const plainLines = plain.channels.out.split('\n');
@@ -136,8 +140,13 @@ test('bare doctor reports every service and diagnoses ready anonymous and authen
   }
   const verbose = await f.run(['doctor', '--verbose'], env);
   assert.equal(verbose.channels.out, plain.channels.out);
-  assert.match(verbose.channels.err, /endpoint:|Execution time/);
+  assert.match(verbose.channels.err, /^\nDiagnostic details:\n\nModel \(model\):\n  Operation:/);
+  assert.match(verbose.channels.err, /\nContext7 \(ctx7\):\n  Operation:/);
+  assert.doesNotMatch(verbose.channels.err, /^model$/m);
+  assert.doesNotMatch(verbose.channels.err, /\n\nContext7 \(ctx7\):/);
   assert.doesNotMatch(verbose.channels.out, /endpoint:|Execution time/);
+  const namedVerbose = await f.run(['doctor', 'model', '--verbose'], env);
+  assert.match(namedVerbose.channels.err, /^\nDiagnostic details:\n\nModel \(model\):/);
   f.reply({}, 401);
   const namedFailure = await f.run(['doctor', 'ctx7'], env);
   assert.equal(namedFailure.exit, 3);
@@ -423,7 +432,14 @@ test('model listing ignores generation settings and never falls back; malformed 
 test('quota checks preserve null limits, reject known exhaustion and validate retained metadata regardless of verbose', async (t) => {
   const f = await fixture(t);
   const cases: [string, unknown, number][] = [
-    ['tavily', { key: { usage: 10, limit: null }, account: {} }, 0],
+    [
+      'tavily',
+      {
+        key: { usage: 10, limit: null },
+        account: { plan_usage: 10, plan_limit: 1000, paygo_usage: 0, paygo_limit: null },
+      },
+      0,
+    ],
     ['tavily', { key: { usage: 10, limit: 10 }, account: {} }, 4],
     [
       'tavily',
@@ -434,6 +450,15 @@ test('quota checks preserve null limits, reject known exhaustion and validate re
       4,
     ],
     ['tavily', { key: { usage: 0, limit: null }, account: { plan_usage: 2, plan_limit: 2 } }, 0],
+    [
+      'tavily',
+      {
+        key: { usage: 0, limit: null },
+        account: { plan_usage: 2, plan_limit: 2, paygo_usage: 0, paygo_limit: null },
+      },
+      4,
+    ],
+    ['tavily', { key: { usage: 0, limit: null }, account: { plan_limit: null } }, 4],
     ['tavily', { key: { usage: 0, limit: null }, account: { current_plan: 1 } }, 4],
     ['firecrawl', { success: true, data: { remainingCredits: 1 } }, 0],
     ['firecrawl', { success: true, data: { remainingCredits: 0 } }, 4],

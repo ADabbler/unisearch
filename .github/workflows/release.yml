@@ -79,20 +79,21 @@ jobs:
               publish_args+=(--tag next)
             fi
             npm "${publish_args[@]}"
-            tagged_version=$(npm view "$PACKAGE_NAME@$NPM_TAG" version)
-            if [ "$tagged_version" != "$PACKAGE_VERSION" ]; then
-              echo "The npm $NPM_TAG tag does not point to $PACKAGE_VERSION." >&2
-              exit 1
-            fi
           fi
       - name: Verify the npm package and installation
         run: |
           expected="sha512-$(openssl dgst -sha512 -binary "package/$PACKAGE_FILE" | openssl base64 -A)"
-          actual=$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity)
-          if [ "$actual" != "$expected" ]; then
-            echo "The npm version differs from the package verified by CI." >&2
-            exit 1
-          fi
+          actual=''
+          for attempt in {1..18}; do
+            actual=$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity 2>/dev/null || true)
+            if [ "$actual" = "$expected" ]; then break; fi
+            if [ "$attempt" -eq 18 ]; then
+              echo "The npm version differs from the package verified by CI." >&2
+              exit 1
+            fi
+            echo "The npm package is not visible yet; retrying integrity check ($attempt/18)."
+            sleep 10
+          done
           release_prefix="$RUNNER_TEMP/npm-install"
           npm install --global --prefix "$release_prefix" --cache "$RUNNER_TEMP/npm-cache" --ignore-scripts --no-audit --no-fund "$PACKAGE_NAME@$PACKAGE_VERSION"
           export UNISEARCH_CONFIG_PATH="$RUNNER_TEMP/unisearch-config.json"

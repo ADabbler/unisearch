@@ -289,6 +289,19 @@ test('TinyFish fetch maps batch and selectors without truncating body or metadat
     per_url_timeout_ms: 1,
   });
   const data = r.json().data;
+  assert.deepEqual(Object.keys(data.results[0]), [
+    'url',
+    'title',
+    'language',
+    'author',
+    'published_date',
+    'final_url',
+    'links',
+    'image_links',
+    'unmatched_selectors',
+    'page_metadata',
+    'text',
+  ]);
   assert.equal(data.results[0].text, content);
   assert.equal(data.results[0].description, undefined);
   assert.equal(data.results[0].latency_ms, undefined);

@@ -160,6 +160,14 @@ test('Exa contents independently retains text, highlights, dates, authors and ac
   };
   const outcome = parse(body, [a], true);
   assert.equal(outcome.exitCode, 0);
+  assert.deepEqual(Object.keys(outcome.result.data!.results[0]!), [
+    'url',
+    'title',
+    'published_date',
+    'author',
+    'highlights',
+    'text',
+  ]);
   assert.deepEqual(outcome.result.data, {
     provider: 'exa',
     results: [

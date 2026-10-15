@@ -100,11 +100,16 @@ export function parseResponse(
       ['description', 'description'],
       ['publishedTime', 'published_date'],
     ] as const;
+    let fetchText: string | undefined;
     for (const [source, target] of strings) {
       const value = optionalText(source);
-      if (value !== undefined) page[target] = value;
+      if (value !== undefined) {
+        if (request.operation === 'fetch' && target === 'text') fetchText = value;
+        else page[target] = value;
+      }
     }
-    if (page.description === page.title || page.description === page.text) delete page.description;
+    if (page.description === page.title || page.description === (fetchText ?? page.text))
+      delete page.description;
     const warning = optionalText('warning');
     if (warning !== undefined) page.warnings = [safe(warning)];
     const numbers =
@@ -206,6 +211,7 @@ export function parseResponse(
     )
       badField('httpStatus/warning');
     if (entry.httpStatus == null) pageStatus = warningStatuses[0];
+    const hasText = request.operation === 'fetch' ? fetchText !== undefined : !!page.text;
     if (pageStatus !== undefined && pageStatus >= 400)
       unavailable('jinaTargetFailed', 'target_http_error', {
         page_status: pageStatus,
@@ -213,7 +219,7 @@ export function parseResponse(
       });
     else if (
       (request.operation === 'fetch' || request.includeText) &&
-      !page.text &&
+      !hasText &&
       (entry.content == null || typeof entry.content === 'string')
     )
       unavailable('jinaEmpty', 'empty_content');
@@ -223,6 +229,7 @@ export function parseResponse(
       (entry.imageUrl == null || (typeof entry.imageUrl === 'string' && !entry.imageUrl.trim()))
     )
       unavailable('jinaImageMissing', 'missing_image');
+    if (fetchText !== undefined) page.text = fetchText;
   }
   const data: Data = {
     provider: 'jina',

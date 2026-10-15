@@ -461,6 +461,14 @@ test('Zhipu Reader preserves Markdown, unknown metadata, content relationships a
   };
   f.reply({ ...reader, reader_result: { ...page, metadata, external } });
   const result = (await f.run(['zhipu', 'fetch', url, '--format=json'])).json();
+  assert.deepEqual(Object.keys(result.data.results[0]), [
+    'url',
+    'title',
+    'description',
+    'metadata',
+    'external',
+    'text',
+  ]);
   assert.deepEqual(result.data, {
     provider: 'zhipu',
     results: [

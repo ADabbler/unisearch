@@ -684,6 +684,15 @@ test('Firecrawl scrape separates page failures, unavailable text and malformed r
     url,
     safe,
   );
+  assert.deepEqual(Object.keys(data), [
+    'provider',
+    'url',
+    'title',
+    'content_type',
+    'final_url',
+    'warnings',
+    'text',
+  ]);
   assert.deepEqual(data, {
     provider: 'firecrawl',
     url,

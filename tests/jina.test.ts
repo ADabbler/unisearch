@@ -252,11 +252,16 @@ test('Jina preserves short independent descriptions and removes only exact title
   for (const description of [page.title, page.content, '# Guide', 'Guide summary']) {
     f.reply(envelope({ ...page, description }));
     const result = await f.run(['jina', 'fetch', url, '--format=json']);
+    const pageResult = result.json().data.results[0];
+    const expectedKeys = ['url', 'title'];
+    if (pageResult.description !== undefined) expectedKeys.push('description');
+    expectedKeys.push('text');
+    assert.deepEqual(Object.keys(pageResult), expectedKeys);
     assert.equal(
-      result.json().data.results[0].description,
+      pageResult.description,
       [page.title, page.content].includes(description) ? undefined : description,
     );
-    assert.equal(result.json().data.results[0].text, page.content);
+    assert.equal(pageResult.text, page.content);
   }
 });
 

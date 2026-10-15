@@ -247,9 +247,10 @@ export function fetchData(
         else if (finalUrl !== url) page.final_url = finalUrl;
       }
       if (item.format !== 'markdown') read.bad('format');
+      let pageText: string | undefined;
       if (item.text !== null && typeof item.text !== 'string') read.bad('text');
       else if (typeof item.text === 'string' && item.text.trim() && item.format === 'markdown')
-        page.text = item.text;
+        pageText = item.text;
       else if (item.format === 'markdown')
         failures.push({
           url,
@@ -257,7 +258,7 @@ export function fetchData(
           message: text(language, 'tinyfishEmpty'),
           details: { reason: 'empty_content' },
         });
-      if (page.description === page.text) delete page.description;
+      if (page.description === pageText) delete page.description;
       for (const key of ['links', 'image_links'] as const) {
         const value = read.strings(key, true);
         if (value !== undefined) page[key] = value;
@@ -285,6 +286,7 @@ export function fetchData(
           read.bad('latency_ms');
         else (context.pageLatencies ??= []).push({ url, latency_ms: item.latency_ms });
       }
+      if (pageText !== undefined) page.text = pageText;
       if (Object.keys(page).some((key) => key !== 'url' && key !== 'missing_content'))
         results.push(page);
     }

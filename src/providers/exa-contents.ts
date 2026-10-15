@@ -46,6 +46,7 @@ export function contentsData(
       continue;
     }
     const result: SearchResult = { url: item.url };
+    let pageText: string | undefined;
     let invalid = false;
     if (typeof item.title !== 'string') invalid = true;
     else if (item.title.trim()) result.title = item.title;
@@ -60,7 +61,7 @@ export function contentsData(
     }
     if (item.text !== undefined && item.text !== null) {
       if (typeof item.text !== 'string') invalid = true;
-      else if (item.text.trim()) result.text = item.text;
+      else if (item.text.trim()) pageText = item.text;
     }
     if (request.highlights) {
       const value = item.highlights;
@@ -76,10 +77,11 @@ export function contentsData(
           if (highlights.length) result.highlights = highlights;
         }
       }
-      if (result.text && !result.highlights && !invalidHighlights)
+      if (pageText !== undefined && !result.highlights && !invalidHighlights)
         result.missing_content = ['highlights'];
       invalid ||= invalidHighlights;
     }
+    if (pageText !== undefined) result.text = pageText;
     if (result.text || result.highlights) results.push(result);
     if (invalid) fail(item.url, 'INVALID_RESPONSE', 'invalidResponse');
     else if (!result.text)

@@ -127,15 +127,15 @@ export function parseResponse<O extends Operation>(
     else if (!validPageUrl(entry.url)) invalid('reader_result.url');
     else {
       const page: FetchData['results'][number] = { url: entry.url };
+      let pageText: string | undefined;
       if (typeof entry.content !== 'string') invalid('reader_result.content');
       else if (!entry.content.trim()) emptyContent = true;
-      else page.text = entry.content;
+      else pageText = entry.content;
       for (const key of ['title', 'description'] as const) {
         const value = optionalText(entry, key, `reader_result.${key}`);
         if (value !== undefined) page[key] = value;
       }
-      if (page.description === page.title || page.description === page.text)
-        delete page.description;
+      if (page.description === page.title || page.description === pageText) delete page.description;
       if (entry.metadata !== undefined) {
         if (!isObject(entry.metadata)) invalid('reader_result.metadata');
         else {
@@ -148,7 +148,7 @@ export function parseResponse<O extends Operation>(
             }
             if (
               key === 'description' &&
-              [page.title, page.description, page.text].includes(value as string)
+              [page.title, page.description, pageText].includes(value as string)
             )
               continue;
             metadata.push([key, value as JsonValue]);
@@ -184,6 +184,7 @@ export function parseResponse<O extends Operation>(
           if (relations.length) page.external = Object.fromEntries(relations);
         }
       }
+      if (pageText !== undefined) page.text = pageText;
       if (Object.keys(page).length > 1) data = { provider: 'zhipu', results: [page] };
     }
   }

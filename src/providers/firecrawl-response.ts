@@ -192,12 +192,12 @@ export function scrapeData(
   return {
     provider: 'firecrawl',
     url,
-    text: doc.markdown,
     ...(title ? { title } : {}),
     ...(contentType ? { content_type: contentType } : {}),
     ...finalUrl(meta, url),
     ...truncation(meta),
     ...notices(doc, safe),
+    text: doc.markdown,
   };
 }
 

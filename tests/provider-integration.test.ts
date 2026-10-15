@@ -34,7 +34,7 @@ async function fixture(t: TestContext) {
   return f;
 }
 
-test('anonymous Jina and AnySearch respect default order, explicit replacement, preflight and disabled fallback', async (t) => {
+test('Anonymous Jina and AnySearch respect default order, explicit replacement, preflight and disabled fallback', async (t) => {
   const f = await fixture(t);
   const first = await f.run(['fetch', pageUrl, '--format=json']);
   assert.equal(first.exit, 0, first.channels.out);
@@ -143,7 +143,7 @@ test('Jina failed page data survives later AnySearch failures and successful ext
 });
 
 test(
-  'model, Jina and AnySearch run concurrently with stable source order and complete JSON/Markdown files',
+  'Model, Jina and AnySearch run concurrently with stable source order and complete JSON/Markdown files',
   { timeout: 5000 },
   async (t) => {
     const f = await fixture(t);
@@ -230,7 +230,7 @@ test(
   },
 );
 
-test('combined Jina and AnySearch failures retain independent evidence and redact each other’s credentials', async (t) => {
+test('Combined Jina and AnySearch failures retain independent evidence and redact each other’s credentials', async (t) => {
   const f = await fixture(t);
   const credentials = [
     'fixture-jina-current',

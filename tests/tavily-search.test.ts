@@ -79,7 +79,7 @@ async function body(req: IncomingMessage): Promise<JsonObject> {
   return JSON.parse(Buffer.concat(chunks).toString());
 }
 
-test('three native tasks start concurrently, reuse saved operation settings and retain requested source order', async (t) => {
+test('Three native tasks start concurrently, reuse saved operation settings and retain requested source order', async (t) => {
   const root = temporary(t);
   const file = join(root, 'config.json');
   writeFileSync(
@@ -152,7 +152,7 @@ test('three native tasks start concurrently, reuse saved operation settings and 
   assert.equal(calls, 6);
 });
 
-test('eight model/Exa/Tavily combinations preserve data and failure order, including quota and timeout errors', async (t) => {
+test('Eight model/Exa/Tavily combinations preserve data and failure order, including quota and timeout errors', async (t) => {
   const root = temporary(t);
   let mask = 0;
   let calls = 0;
@@ -246,7 +246,7 @@ test('eight model/Exa/Tavily combinations preserve data and failure order, inclu
   assert.equal(calls, 48);
 });
 
-test('a bad selected Tavily prerequisite prevents all three native requests', async (t) => {
+test('A bad selected Tavily prerequisite prevents all three native requests', async (t) => {
   const root = temporary(t);
   let calls = 0;
   const base = await server(t, (_req, res) => {
@@ -273,7 +273,7 @@ test('a bad selected Tavily prerequisite prevents all three native requests', as
   assert.equal(calls, 0);
 });
 
-test('model fallback does not restart either supplement and an empty successful source remains visible', async () => {
+test('Model fallback does not restart either supplement and an empty successful source remains visible', async () => {
   const plan = prepareCombinedSearch(
     'q',
     { extraSources: 'tavily,exa' },
@@ -315,7 +315,7 @@ test('model fallback does not restart either supplement and an empty successful 
   );
 });
 
-test('internal Tavily failure cancels pending tasks; completed supplements survive internal errors and user cancellation', async () => {
+test('Internal Tavily failure cancels pending tasks; completed supplements survive internal errors and user cancellation', async () => {
   for (const cancel of [false, true]) {
     const plan = prepareCombinedSearch('q', { extraSources: 'tavily,exa' }, {}, env, 'en');
     const abort = new AbortController();

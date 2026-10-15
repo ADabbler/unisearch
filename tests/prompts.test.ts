@@ -55,7 +55,7 @@ const choices = [
   { value: 'b', label: 'Beta' },
 ];
 
-test('terminal choices end the guide on the last option and show each keyboard hint once', async (t) => {
+test('Terminal choices end the guide on the last option and show each keyboard hint once', async (t) => {
   const f = terminal(t);
   const first = f.prompts.select('界面语言', choices, 'b', 'zh');
   const firstFrame = f.take();
@@ -102,7 +102,7 @@ test('terminal choices end the guide on the last option and show each keyboard h
   assert.match(f.take(), /未选择/);
 });
 
-test('narrow prompts wrap text and keep the guide on every line', { timeout: 5000 }, async (t) => {
+test('Narrow prompts wrap text and keep the guide on every line', { timeout: 5000 }, async (t) => {
   const f = terminal(t, 28);
   const result = f.prompts.select('界面语言', choices, 'a', 'zh');
   const frame = f.take().trimEnd().split('\n');
@@ -199,7 +199,7 @@ test('narrow prompts wrap text and keep the guide on every line', { timeout: 500
   }
 });
 
-test('terminal choice lists scroll within the viewport and retain every selectable option', async (t) => {
+test('Terminal choice lists scroll within the viewport and retain every selectable option', async (t) => {
   const f = terminal(t, 28, 10);
   const options = Array.from({ length: 17 }, (_, index) => ({
     value: String(index),
@@ -216,7 +216,7 @@ test('terminal choice lists scroll within the viewport and retain every selectab
   assert.deepEqual(await result, ['16']);
 });
 
-test('terminal Escape, Ctrl+C, Ctrl+D, EOF and abort cancel prompts and release listeners', async (t) => {
+test('Terminal Escape, Ctrl+C, Ctrl+D, EOF and abort cancel prompts and release listeners', async (t) => {
   for (const action of ['escape', 'ctrl-c', 'ctrl-d', 'eof', 'abort'] as const) {
     const f = terminal(t);
     const result = f.prompts.select('Protocol', choices, 'a', 'en');

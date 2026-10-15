@@ -14,7 +14,7 @@ const keys = {
 };
 
 test(
-  'root search runs Zhipu and other sources concurrently and preserves the explicit output order',
+  'Root search runs Zhipu and other sources concurrently and preserves the explicit output order',
   { timeout: 5000 },
   async (t) => {
     const f = await fixture(t);
@@ -47,7 +47,7 @@ test(
   },
 );
 
-test('root search preserves failed Zhipu evidence, accepts empty results and never reissues supplements on model fallback', async (t) => {
+test('Root search preserves failed Zhipu evidence, accepts empty results and never reissues supplements on model fallback', async (t) => {
   const f = await fixture(t);
   for (const mode of ['empty', 'partial', 'model-failure', 'fallback'] as const) {
     f.save({ providers: { model: { fallback_models: [{ id: 'backup' }] } } });
@@ -90,7 +90,7 @@ test('root search preserves failed Zhipu evidence, accepts empty results and nev
   assert.equal(f.calls.length, before);
 });
 
-test('completed Zhipu search evidence survives sibling cancellation, timeout and internal failure', async (t) => {
+test('Completed Zhipu search evidence survives sibling cancellation, timeout and internal failure', async (t) => {
   const f = await fixture(t);
   for (const mode of ['cancel', 'timeout', 'internal'] as const) {
     const time = timer();
@@ -136,7 +136,7 @@ test('completed Zhipu search evidence survives sibling cancellation, timeout and
   }
 });
 
-test('root fetch includes configured Zhipu by default and validates all eligible candidates before requests', async (t) => {
+test('Root fetch includes configured Zhipu by default and validates all eligible candidates before requests', async (t) => {
   const f = await fixture(t);
   const defaultResult = await f.run(['fetch', url, '--format=json']);
   assert.equal(defaultResult.exit, 0, defaultResult.channels.out);
@@ -164,7 +164,7 @@ test('root fetch includes configured Zhipu by default and validates all eligible
   assert.equal((await f.run(['fetch', url, '--no-fallback'], malformed)).exit, 0);
 });
 
-test('root fetch switches both ways, respects permanent business errors and preserves distinct diagnostic IDs', async (t) => {
+test('Root fetch switches both ways, respects permanent business errors and preserves distinct diagnostic IDs', async (t) => {
   const f = await fixture(t);
   for (const order of [
     ['zhipu', 'exa'],
@@ -219,7 +219,7 @@ test('root fetch switches both ways, respects permanent business errors and pres
   }
 });
 
-test('root fetch keeps the latest reliable body when subsequent failures have only metadata', async (t) => {
+test('Root fetch keeps the latest reliable body when subsequent failures have only metadata', async (t) => {
   const f = await fixture(t);
   for (const order of [
     ['zhipu', 'exa'],
@@ -297,7 +297,7 @@ test('Zhipu service switching uses the classified error even when its business c
   }
 });
 
-test('root fetch does not turn an interrupted permanent refusal into a retry or unauthorized switch', async (t) => {
+test('Root fetch does not turn an interrupted permanent refusal into a retry or unauthorized switch', async (t) => {
   const f = await fixture(t);
   for (const status of [400, 401, 404]) {
     const time = timer();
@@ -342,7 +342,7 @@ test('root fetch does not turn an interrupted permanent refusal into a retry or 
   }
 });
 
-test('root fetch uses one controlled deadline across Zhipu and subsequent providers', async (t) => {
+test('Root fetch uses one controlled deadline across Zhipu and subsequent providers', async (t) => {
   const f = await fixture(t);
   f.handle((call, res) =>
     res.end(

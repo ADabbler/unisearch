@@ -37,7 +37,7 @@ const failed: Outcome<string> = {
   exitCode: 4,
 };
 
-test('result shapes preserve empty data, partial results, failures, and cancellation', async () => {
+test('Result shapes preserve empty data, partial results, failures, and cancellation', async () => {
   const empty = capture();
   assert.equal(await display(success([]), { language: 'en', format: 'json' }, empty), 0);
   assert.deepEqual(JSON.parse(empty.out), { status: 'success', data: [] });
@@ -63,7 +63,7 @@ test('result shapes preserve empty data, partial results, failures, and cancella
   assert.doesNotMatch(JSON.stringify(unknown), /do-not-print/);
 });
 
-test('failure composition keeps the incoming error causes and previous failure', () => {
+test('Failure composition keeps the incoming error causes and previous failure', () => {
   const cause = { code: 'CLEANUP_FAILURE', message: 'The temporary file could not be removed.' };
   const error = new AppError('FILE_IO_ERROR', 'fileIO', { causes: [cause] });
   const outcome = failure(error, 'en', partial);
@@ -85,7 +85,7 @@ test('Markdown preserves original content and necessary failure summaries', asyn
   assert.equal(plain.err, '');
 });
 
-test('plain text routes errors to stderr and retains completed results for partial failure and cancellation', async () => {
+test('Plain text routes errors to stderr and retains completed results for partial failure and cancellation', async () => {
   const renderData = (value: string) => value;
   for (const outcome of [
     failure<string>(new AppError('TIMEOUT', 'requestTimeout', { provider: 'exa' }), 'en'),
@@ -118,7 +118,7 @@ test('plain text routes errors to stderr and retains completed results for parti
   assert.equal(channels.err, 'Error: The request timed out\n');
 });
 
-test('verbose views use one details object without changing normal data', async () => {
+test('Verbose views use one details object without changing normal data', async () => {
   let detailRenders = 0;
   const execution = {
     data: { elapsed_ms: 12 },
@@ -146,7 +146,7 @@ test('verbose views use one details object without changing normal data', async 
   assert.equal(detailRenders, 1);
 });
 
-test('saving success, partial, and error-with-data suppresses stdout and preserves exit status', async (t) => {
+test('Saving success, partial, and error-with-data suppresses stdout and preserves exit status', async (t) => {
   const root = temporary(t);
   const path = join(root, '中文 output.md');
   for (const outcome of [success(body), partial, failed]) {
@@ -176,7 +176,7 @@ test('saving success, partial, and error-with-data suppresses stdout and preserv
   assert.deepEqual(JSON.parse(await fs.readFile(path, 'utf8')), partial.result);
 });
 
-test('no-data failure and cancellation keep the existing file', async (t) => {
+test('No-data failure and cancellation keep the existing file', async (t) => {
   const root = temporary(t);
   const path = join(root, 'result.json');
   await fs.writeFile(path, 'old');
@@ -195,7 +195,7 @@ test('no-data failure and cancellation keep the existing file', async (t) => {
   }
 });
 
-test('cancellation around output preparation, writing and rename preserves the exact commit boundary', async (t) => {
+test('Cancellation around output preparation, writing and rename preserves the exact commit boundary', async (t) => {
   const root = temporary(t);
   const path = join(root, 'result.json');
   for (const phase of [
@@ -266,7 +266,7 @@ test('cancellation around output preparation, writing and rename preserves the e
   }
 });
 
-test('cancellation only renders again when cleanup changes the report and preserves the input outcome', async (t) => {
+test('Cancellation only renders again when cleanup changes the report and preserves the input outcome', async (t) => {
   const root = temporary(t);
   const path = join(root, 'result.md');
   await fs.writeFile(path, 'old');
@@ -300,7 +300,7 @@ test('cancellation only renders again when cleanup changes the report and preser
   }
 });
 
-test('bad output directories stop the operation before it starts', async (t) => {
+test('Bad output directories stop the operation before it starts', async (t) => {
   const root = temporary(t);
   for (const path of [join(root, 'missing', 'result'), root]) {
     let calls = 0;
@@ -320,7 +320,7 @@ test('bad output directories stop the operation before it starts', async (t) => 
   assert.deepEqual(await fs.readdir(root), []);
 });
 
-test('valid long output filenames do not exceed the temporary filename limit', async (t) => {
+test('Valid long output filenames do not exceed the temporary filename limit', async (t) => {
   const root = temporary(t);
   const name = 'report-'.repeat(32) + '.md';
   const path = join(root, name);
@@ -333,7 +333,7 @@ test('valid long output filenames do not exceed the temporary filename limit', a
   assert.equal(channels.err, '');
 });
 
-test('temporary-file creation errors stop the operation', async (t) => {
+test('Temporary-file creation errors stop the operation', async (t) => {
   const root = temporary(t);
   const path = join(root, 'result');
   await fs.writeFile(path, 'old');
@@ -356,7 +356,7 @@ test('temporary-file creation errors stop the operation', async (t) => {
   assert.equal(await fs.readFile(path, 'utf8'), 'old');
 });
 
-test('write failure preserves old content and acquired data', async (t) => {
+test('Write failure preserves old content and acquired data', async (t) => {
   const root = temporary(t);
   const path = join(root, 'result');
   await fs.writeFile(path, 'old');
@@ -384,7 +384,7 @@ test('write failure preserves old content and acquired data', async (t) => {
   assert.deepEqual(await fs.readdir(root), ['result']);
 });
 
-test('replacement failure retains previous failure reasons and removes the temporary file', async (t) => {
+test('Replacement failure retains previous failure reasons and removes the temporary file', async (t) => {
   const root = temporary(t);
   const path = join(root, 'result');
   await fs.writeFile(path, 'old');
@@ -404,7 +404,7 @@ test('replacement failure retains previous failure reasons and removes the tempo
   assert.deepEqual(await fs.readdir(root), ['result']);
 });
 
-test('cleanup failure reports the temporary file path', async (t) => {
+test('Cleanup failure reports the temporary file path', async (t) => {
   const root = temporary(t);
   t.mock.method(fs, 'unlink', async () => {
     throw Object.assign(new Error(), { code: 'EACCES' });
@@ -426,7 +426,7 @@ test('cleanup failure reports the temporary file path', async (t) => {
   assert.equal((await fs.readdir(root)).length, 1);
 });
 
-test('render failures report an error, retain serializable data, and do not replace a target', async (t) => {
+test('Render failures report an error, retain serializable data, and do not replace a target', async (t) => {
   const root = temporary(t);
   const path = join(root, 'result');
   await fs.writeFile(path, 'old');
@@ -458,7 +458,7 @@ test('render failures report an error, retain serializable data, and do not repl
   assert.match(result.error.message, /could not be serialized/);
 });
 
-test('a renderer failure without a file is reported once and cannot turn into success', async () => {
+test('A renderer failure without a file is reported once and cannot turn into success', async () => {
   for (const renderer of ['renderData', 'renderText'] as const) {
     const channels = capture();
     let renders = 0;
@@ -482,7 +482,7 @@ test('a renderer failure without a file is reported once and cannot turn into su
   }
 });
 
-test('stream errors are handled and result in a nonzero exit', async () => {
+test('Stream errors are handled and result in a nonzero exit', async () => {
   const stream = new Writable({
     write(_chunk, _encoding, done) {
       done(Object.assign(new Error(), { code: 'EPIPE' }));

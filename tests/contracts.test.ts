@@ -56,7 +56,7 @@ for (const [group, cases] of Object.entries({
   anysearch: anysearchCases,
   jina,
   tinyfish: tinyfishCases,
-  mcp,
+  'zhipu-mcp': mcp,
   zhipu,
 })) {
   for (const { name, result, renderer, markdown, stderr, details } of cases) {

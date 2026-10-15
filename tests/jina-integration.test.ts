@@ -361,7 +361,7 @@ test('Jina output and files preserve partial data, diagnostic redaction and ordi
   assert.equal(f.calls.length, calls);
 });
 
-test('unified fetch admits anonymous Jina in the default position and respects candidate preflight and disabling', async (t) => {
+test('Unified fetch admits anonymous Jina in the default position and respects candidate preflight and disabling', async (t) => {
   const f = await fixture(t);
   const first = await f.run(['fetch', url, '--format=json']);
   assert.equal(first.exit, 0);
@@ -455,7 +455,7 @@ test('Jina switches in both directions, aggregates errors and retains the latest
   assert.equal((await f.run(['fetch', url, '--format=json'], env)).json().data.provider, 'exa');
 });
 
-test('unified fetch shares remaining deadline with Jina and keeps its billed attempt when another provider succeeds', async (t) => {
+test('Unified fetch shares remaining deadline with Jina and keeps its billed attempt when another provider succeeds', async (t) => {
   const f = await fixture(t);
   const env = {
     ...f.env,
@@ -499,7 +499,7 @@ test('unified fetch shares remaining deadline with Jina and keeps its billed att
   }
 });
 
-test('root search runs model, Jina and Exa concurrently and retains requested source order', async (t) => {
+test('Root search runs model, Jina and Exa concurrently and retains requested source order', async (t) => {
   const f = await fixture(t);
   const env = {
     ...key,
@@ -543,7 +543,7 @@ test('root search runs model, Jina and Exa concurrently and retains requested so
   );
 });
 
-test('root search keeps Jina metadata and invalid data when model fails, with local preflight before any request', async (t) => {
+test('Root search keeps Jina metadata and invalid data when model fails, with local preflight before any request', async (t) => {
   const f = await fixture(t);
   const env = {
     ...key,
@@ -579,7 +579,7 @@ test('root search keeps Jina metadata and invalid data when model fails, with lo
   assert.equal(f.calls.length, calls);
 });
 
-test('completed Jina data survives root search cancellation, total timeout and internal sibling failures', async (t) => {
+test('Completed Jina data survives root search cancellation, total timeout and internal sibling failures', async (t) => {
   const f = await fixture(t);
   const env = {
     ...f.env,

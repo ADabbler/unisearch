@@ -8,7 +8,7 @@ import type { ExecutionClock } from '../src/execution.js';
 import type { JsonObject } from '../src/result.js';
 import { fixture, initializeResult, pageText, pageUrl, rpc } from './zhipu-mcp-fixture.js';
 
-test('MCP consumes complete SSE events, split Unicode, multiline data and responds to ping and unsupported requests', async (t) => {
+test('Zhipu MCP consumes complete SSE events, split Unicode, multiline data and responds to ping and unsupported requests', async (t) => {
   const f = await fixture(t);
   for (const ending of ['\n', '\r\n', '\r']) {
     f.calls.length = 0;
@@ -63,7 +63,7 @@ test('MCP consumes complete SSE events, split Unicode, multiline data and respon
   }
 });
 
-test('MCP rejects mismatched RPC IDs and damaged envelopes without accepting data', async (t) => {
+test('Zhipu MCP rejects mismatched RPC IDs and damaged envelopes without accepting data', async (t) => {
   const f = await fixture(t);
   for (const body of [
     { jsonrpc: '2.0', id: '2', result: { content: [] } },
@@ -88,7 +88,7 @@ test('MCP rejects mismatched RPC IDs and damaged envelopes without accepting dat
   }
 });
 
-test('MCP distinguishes incomplete SSE and resumable streams without replaying tools', async (t) => {
+test('Zhipu MCP distinguishes incomplete SSE and resumable streams without replaying tools', async (t) => {
   const f = await fixture(t);
   for (const [body, expected, reason] of [
     [
@@ -115,7 +115,7 @@ test('MCP distinguishes incomplete SSE and resumable streams without replaying t
   }
 });
 
-test('MCP HTTP classifications, invalid UTF-8, RPC errors and redirects stay explicit', async (t) => {
+test('Zhipu MCP HTTP classifications, invalid UTF-8, RPC errors and redirects stay explicit', async (t) => {
   const f = await fixture(t);
   for (const [status, code] of [
     [401, 'AUTHENTICATION_ERROR'],
@@ -166,7 +166,7 @@ test('MCP HTTP classifications, invalid UTF-8, RPC errors and redirects stay exp
   }
 });
 
-test('MCP retries whole sessions through the public budget, tracks Retry-After and preserves stage diagnostics', async (t) => {
+test('Zhipu MCP retries whole sessions through the public budget, tracks Retry-After and preserves stage diagnostics', async (t) => {
   const f = await fixture(t);
   for (const mode of ['session', 'endpoint', 'rate', 'budget'] as const) {
     f.calls.length = 0;
@@ -233,7 +233,7 @@ test('MCP retries whole sessions through the public budget, tracks Retry-After a
   }
 });
 
-test('MCP handshake, tool request, SSE reading and retry waits stop on cancellation and preserve files', async (t) => {
+test('Zhipu MCP handshake, tool request, SSE reading and retry waits stop on cancellation and preserve files', async (t) => {
   const f = await fixture(t);
   const output = join(f.root, 'saved.json');
   for (const phase of ['initialize', 'tool', 'sse', 'wait'] as const) {
@@ -270,7 +270,7 @@ test('MCP handshake, tool request, SSE reading and retry waits stop on cancellat
   }
 });
 
-test('MCP rejected HTTP bodies cannot turn authentication errors into retryable network failures', async (t) => {
+test('Zhipu MCP rejected HTTP bodies cannot turn authentication errors into retryable network failures', async (t) => {
   const f = await fixture(t);
   f.initialize((_call, res) => {
     res.writeHead(401, { 'content-type': 'application/json', 'content-length': '1000' });
@@ -285,7 +285,7 @@ test('MCP rejected HTTP bodies cannot turn authentication errors into retryable 
   assert.equal(f.calls.length, 1);
 });
 
-test('MCP single-attempt cap covers the handshake and times out without starting a late tool call', async () => {
+test('Zhipu MCP single-attempt cap covers the handshake and times out without starting a late tool call', async () => {
   for (const operation of ['search', 'fetch', 'docs', 'tree', 'read-file'] as const) {
     let now = 0;
     let timeout!: () => void;
@@ -339,7 +339,7 @@ test('MCP single-attempt cap covers the handshake and times out without starting
   }
 });
 
-test('MCP releases response streams after invalid session headers and failed SSE cleanup', async () => {
+test('Zhipu MCP releases response streams after invalid session headers and failed SSE cleanup', async () => {
   const request = mcp.prepare(
     'search',
     'q',
@@ -390,7 +390,7 @@ test('MCP releases response streams after invalid session headers and failed SSE
   }
 });
 
-test('MCP rejects nonfinite error payloads without turning upstream errors into render failures', async (t) => {
+test('Zhipu MCP rejects non-finite error payloads without turning upstream errors into render failures', async (t) => {
   const f = await fixture(t);
   f.initialize((_call, res) => {
     res.writeHead(401, { 'content-type': 'application/json' });

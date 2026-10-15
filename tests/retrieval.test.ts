@@ -92,7 +92,7 @@ async function fixture(t: TestContext) {
   };
 }
 
-test('unified commands select real configured operations and share each provider’s settings', async (t) => {
+test('Unified commands select real configured operations and share each provider’s settings', async (t) => {
   const f = await fixture(t);
   for (const operation of ['fetch', 'map'] as const) {
     for (const providers of [undefined, ['firecrawl', 'tavily']] as const) {
@@ -139,7 +139,7 @@ test('unified commands select real configured operations and share each provider
   assert.equal(single.json().data.provider, 'firecrawl');
 });
 
-test('selection and parameter errors fail before HTTP; disabled fallback scopes configuration checks', async (t) => {
+test('Selection and parameter errors fail before HTTP; disabled fallback scopes configuration checks', async (t) => {
   const f = await fixture(t);
   for (const values of [
     { fetch: { providers: [] } },
@@ -189,7 +189,7 @@ test('selection and parameter errors fail before HTTP; disabled fallback scopes 
   assert.equal(onlyTavily.exit, 0, onlyTavily.channels.out);
 });
 
-test('fetch and map switch in either direction and retain only the successful data and concise summary', async (t) => {
+test('Fetch and map switch in either direction and retain only the successful data and concise summary', async (t) => {
   const f = await fixture(t);
   for (const operation of ['fetch', 'map'] as const) {
     for (const providers of [
@@ -234,7 +234,7 @@ test('fetch and map switch in either direction and retain only the successful da
   }
 });
 
-test('empty map is success, provider limit semantics and returned URLs survive normalization', async (t) => {
+test('Empty map is success, provider limit semantics and returned URLs survive normalization', async (t) => {
   const f = await fixture(t);
   f.save({ fetch: { providers: ['tavily', 'firecrawl'] } });
   f.reply({ '/tavily/map': { body: { results: [] } } });
@@ -263,7 +263,7 @@ test('empty map is success, provider limit semantics and returned URLs survive n
   assert.equal(switched.json().meta.service_fallbacks[0].code, 'INVALID_RESPONSE');
 });
 
-test('content failures switch; unknown upstream and parameter failures terminate; aggregate exits retain all reasons', async (t) => {
+test('Content failures switch; unknown upstream and parameter failures terminate; aggregate exits retain all reasons', async (t) => {
   const f = await fixture(t);
   f.save({ fetch: { providers: ['tavily', 'firecrawl'] } });
   for (const body of [
@@ -311,7 +311,7 @@ test('content failures switch; unknown upstream and parameter failures terminate
   assert.equal(f.calls.length, 1);
 });
 
-test('target page statuses control fetch fallback: 403 switches, 404 and 410 stop', async (t) => {
+test('Target page statuses control fetch fallback: 403 switches, 404 and 410 stop', async (t) => {
   const f = await fixture(t);
   f.save({ fetch: { providers: ['firecrawl', 'tavily'] } });
   for (const { statusCode, message } of [
@@ -342,7 +342,7 @@ test('target page statuses control fetch fallback: 403 switches, 404 and 410 sto
   assert.equal(f.calls.length, 2);
 });
 
-test('malformed extraction preserves complete pages across later failure and output files', async (t) => {
+test('Malformed extraction preserves complete pages across later failure and output files', async (t) => {
   const f = await fixture(t);
   f.save({ fetch: { providers: ['tavily', 'firecrawl'] } });
   const pages = [
@@ -370,7 +370,7 @@ test('malformed extraction preserves complete pages across later failure and out
   assert.equal(recovered.json().data.provider, 'firecrawl');
 });
 
-test('shared deadline and Retry-After use remaining time across actual provider requests', async (t) => {
+test('Shared deadline and Retry-After use remaining time across actual provider requests', async (t) => {
   const f = await fixture(t);
   let now = 0;
   const caps: number[] = [];
@@ -483,7 +483,7 @@ test('shared deadline and Retry-After use remaining time across actual provider 
   assert.equal((record.attempts as JsonObject[])[0].wait_ms, 1000);
 });
 
-test('permanent transport errors can switch, programming errors stop and retain completed extraction data', async (t) => {
+test('Permanent transport errors can switch, programming errors stop and retain completed extraction data', async (t) => {
   const f = await fixture(t);
   const plan = prepareRetrieval(
     'fetch',
@@ -580,7 +580,7 @@ test(
   },
 );
 
-test('native slow body cancellation preserves earlier complete data and reports the started service', async (t) => {
+test('Native slow body cancellation preserves earlier complete data and reports the started service', async (t) => {
   const f = await fixture(t);
   let release!: () => void;
   const pending = new Promise<void>((resolve) => {
@@ -628,7 +628,7 @@ test('native slow body cancellation preserves earlier complete data and reports 
   assert.equal(result.result.meta, undefined);
 });
 
-test('file preparation, empty success, errors and Markdown verbosity use the shared output lifecycle', async (t) => {
+test('File preparation, empty success, errors and Markdown verbosity use the shared output lifecycle', async (t) => {
   const f = await fixture(t);
   f.save({ fetch: { providers: ['tavily', 'firecrawl'] } });
   assert.equal((await f.run(['fetch', url, '--output', join(f.root, 'absent', 'out')])).exit, 5);
@@ -653,7 +653,7 @@ test('file preparation, empty success, errors and Markdown verbosity use the sha
   assert.deepEqual(readdirSync(f.root).sort(), ['config.json', 'out.md']);
 });
 
-test('unified Firecrawl metadata and diagnostics retain content while redacting every known credential', async (t) => {
+test('Unified Firecrawl metadata and diagnostics retain content while redacting every known credential', async (t) => {
   const f = await fixture(t);
   f.save({
     fetch: { providers: ['firecrawl'] },
@@ -688,7 +688,7 @@ test('unified Firecrawl metadata and diagnostics retain content while redacting 
   assert.match(md.channels.out, /\[REDACTED\]/);
 });
 
-test('all four search tasks start together, preserve order and redact cross-service diagnostics', async (t) => {
+test('All four search tasks start together, preserve order and redact cross-service diagnostics', async (t) => {
   const f = await fixture(t);
   f.save({
     providers: {

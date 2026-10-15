@@ -237,7 +237,7 @@ test('Zhipu precisely masks known credentials in upstream keys and values while 
   assert.equal(failure.json().error.code, 'QUOTA_EXCEEDED');
 });
 
-test('exact credential masking retains colliding dictionary entries and reserves unchanged names', () => {
+test('Exact credential masking retains colliding dictionary entries and reserves unchanged names', () => {
   const entries: [string, JsonObject | number | boolean | null][] = [
     ['fixture-first-key', { first: true }],
     ['fixture-second-key', { second: true }],

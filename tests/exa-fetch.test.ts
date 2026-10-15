@@ -476,7 +476,7 @@ test('Exa complete URL failures never retry; HTTP failures use the common retry 
   }
 });
 
-test('unified fetch omits Exa length limits, respects default order and only checks actual candidates', async (t) => {
+test('Unified fetch omits Exa length limits, respects default order and only checks actual candidates', async (t) => {
   const f = await fixture(t);
   const defaults = (await f.run(['config', 'get', 'fetch.providers'])).json().data
     .value as string[];

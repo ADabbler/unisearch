@@ -94,7 +94,7 @@ test('Exa help exposes search and fetch, and parameter errors are local', async 
   }
 });
 
-test('search mapping preserves defaults, explicit modes, dates, domains and requested contents', () => {
+test('Search mapping preserves defaults, explicit modes, dates, domains and requested contents', () => {
   assert.equal(
     prepare({}, { providers: { exa: { base_url: 'https://example.com/@team/' } } }).url,
     'https://example.com/@team/search',
@@ -152,7 +152,7 @@ test('search mapping preserves defaults, explicit modes, dates, domains and requ
   );
 });
 
-test('invalid dates, domain forms and category combinations fail before configuration or requests', () => {
+test('Invalid dates, domain forms and category combinations fail before configuration or requests', () => {
   for (const date of [
     '2025-02-29',
     '2026-04-31',
@@ -193,7 +193,7 @@ test('invalid dates, domain forms and category combinations fail before configur
   assert.throws(() => prepare({ category: ' ' }), AppError);
 });
 
-test('configuration resolution is shared with status and uses only effective operation settings', () => {
+test('Configuration resolution is shared with status and uses only effective operation settings', () => {
   const values = {
     providers: {
       exa: { api_key: 42, base_url: 'invalid', search: { limit: -1, search_type: 'old' } },
@@ -300,7 +300,7 @@ test('Exa configuration fields support set/get/list/unset with validation and en
   assert.equal(JSON.parse(readFileSync(path, 'utf8')).providers.exa.search, undefined);
 });
 
-test('local HTTP CLI sends one exact POST and supports operation option positions and --', async (t) => {
+test('Local HTTP CLI sends one exact POST and supports operation option positions and --', async (t) => {
   const root = temporary(t);
   const requests: { url?: string; method?: string; key?: string; body: unknown }[] = [];
   const base = await server(t, async (req, res) => {
@@ -410,7 +410,7 @@ test('local HTTP CLI sends one exact POST and supports operation option position
   assert.deepEqual(readdirSync(root), ['结果.json']);
 });
 
-test('local retry success renders and saves the same complete data with verbose details only when requested', async (t) => {
+test('Local retry success renders and saves the same complete data with verbose details only when requested', async (t) => {
   const root = temporary(t);
   let calls = 0;
   const base = await server(t, (_req, res) => {
@@ -478,7 +478,7 @@ test('local retry success renders and saves the same complete data with verbose 
   assert.equal(calls, 4);
 });
 
-test('local preconditions make no requests; failures preserve old output and save errors retain acquired data', async (t) => {
+test('Local preconditions make no requests; failures preserve old output and save errors retain acquired data', async (t) => {
   const root = temporary(t);
   const output = join(root, 'result.json');
   await fs.writeFile(output, 'old');
@@ -547,7 +547,7 @@ test('local preconditions make no requests; failures preserve old output and sav
   assert.deepEqual(readdirSync(root), ['result.json']);
 });
 
-test('results preserve order, duplicates, original Markdown and optional-content availability without redundant JSON', () => {
+test('Results preserve order, duplicates, original Markdown and optional-content availability without redundant JSON', () => {
   const item = {
     title: 'Runtime release schedule',
     url: 'https://example.com/releases',
@@ -594,7 +594,7 @@ test('results preserve order, duplicates, original Markdown and optional-content
   );
 });
 
-test('invalid retained response fields fail as a whole and never use id as URL', () => {
+test('Invalid retained response fields fail as a whole and never use id as URL', () => {
   const valid = { title: 'title', url: 'https://example.com' };
   for (const body of [
     {},
@@ -709,7 +709,7 @@ test('HTTP errors, malformed bodies and redirects retain their exact classificat
   }
 });
 
-test('public errors redact credentials, authorization values and URL userinfo and quote all Markdown lines', async () => {
+test('Public errors redact credentials, authorization values and URL userinfo and quote all Markdown lines', async () => {
   const response = new Response(
     JSON.stringify({
       error: `key=${env.UNISEARCH_EXA_API_KEY}\nAuthorization: Bearer hidden\nx-api-key: alternate\n{"Authorization": "Bearer quoted-secret", "x-api-key": "comma,secret"}\n'proxy-authorization': 'proxy-secret'\nhttps://user:password@example.com\n# fake success`,
@@ -753,7 +753,7 @@ test('Markdown highlights normalize CR, LF and CRLF without adding quote prefixe
   assert.equal(data.results[0].highlights?.[0], 'first\r# second\r\nthird\nfourth');
 });
 
-test('known network failures and programming exceptions are distinct and never expose native errors', async () => {
+test('Known network failures and programming exceptions are distinct and never expose native errors', async () => {
   for (const [code, expected, retry] of [
     ['EAI_AGAIN', 'NETWORK_ERROR', true],
     ['ECONNREFUSED', 'NETWORK_ERROR', true],

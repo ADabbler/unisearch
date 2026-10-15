@@ -22,7 +22,7 @@ function serviceConfig(...enabled: Provider[]) {
   };
 }
 
-test('bare doctor reports every service and diagnoses ready anonymous and authenticated services', async (t) => {
+test('Bare doctor reports every service and diagnoses ready anonymous and authenticated services', async (t) => {
   const f = await fixture(t);
   const responses: Record<string, unknown> = {
     '/model/models': { data: [{ id: 'fixture-model' }] },
@@ -154,7 +154,7 @@ test('bare doctor reports every service and diagnoses ready anonymous and authen
   assert.match(namedFailure.channels.err, /^Error:/);
 });
 
-test('bare doctor with no ready services reports skipped states without network checks', async (t) => {
+test('Bare doctor with no ready services reports skipped states without network checks', async (t) => {
   const f = await fixture(t);
   f.save(serviceConfig('exa'));
   const result = await f.run(['doctor', '--json']);
@@ -170,7 +170,7 @@ test('bare doctor with no ready services reports skipped states without network 
   );
 });
 
-test('batch doctor retains independent failures and applies aggregate exit codes without retries', async (t) => {
+test('Batch doctor retains independent failures and applies aggregate exit codes without retries', async (t) => {
   const f = await fixture(t);
   const env = {
     UNISEARCH_MODEL_API_KEY: 'fixture-model-key',
@@ -209,7 +209,7 @@ test('batch doctor retains independent failures and applies aggregate exit codes
   }
 });
 
-test('batch doctor runs ready services in parallel within one timeout and returns a JSON report', async (t) => {
+test('Batch doctor runs ready services in parallel within one timeout and returns a JSON report', async (t) => {
   const f = await fixture(t);
   f.handle((_call, res) => {
     res.writeHead(200);
@@ -234,7 +234,7 @@ test('batch doctor runs ready services in parallel within one timeout and return
   assert.equal(saved.meta.services.length, 2);
 });
 
-test('batch doctor exposes cancellation and invalid global timeout before any requests', async () => {
+test('Batch doctor exposes cancellation and invalid global timeout before any requests', async () => {
   let calls = 0;
   const transport: typeof fetch = async () => {
     calls++;
@@ -271,7 +271,7 @@ test('batch doctor exposes cancellation and invalid global timeout before any re
   );
 });
 
-test('batch doctor preserves completed checks when cancellation or an internal error stops pending work', async () => {
+test('Batch doctor preserves completed checks when cancellation or an internal error stops pending work', async () => {
   for (const internal of [false, true]) {
     let pending!: () => void;
     const entered = new Promise<void>((resolve) => {
@@ -321,7 +321,7 @@ test('batch doctor preserves completed checks when cancellation or an internal e
   }
 });
 
-test('each doctor check uses its fixed endpoint, method, auth and minimum input with compact results', async (t) => {
+test('Each doctor check uses its fixed endpoint, method, auth and minimum input with compact results', async (t) => {
   const f = await fixture(t);
   const bodies: Record<string, unknown> = {
     model: { data: [{ id: 'fixture-model' }] },
@@ -389,7 +389,7 @@ test('each doctor check uses its fixed endpoint, method, auth and minimum input 
   }
 });
 
-test('model listing ignores generation settings and never falls back; malformed and missing models fail', async (t) => {
+test('Model listing ignores generation settings and never falls back; malformed and missing models fail', async (t) => {
   const f = await fixture(t);
   f.save({
     providers: {
@@ -429,7 +429,7 @@ test('model listing ignores generation settings and never falls back; malformed 
   assert.ok(f.calls.every((call) => call.method === 'GET' && call.path === '/model/models'));
 });
 
-test('quota checks preserve null limits, reject known exhaustion and validate retained metadata regardless of verbose', async (t) => {
+test('Quota checks preserve null limits, reject known exhaustion and validate retained metadata regardless of verbose', async (t) => {
   const f = await fixture(t);
   const cases: [string, unknown, number][] = [
     [
@@ -482,7 +482,7 @@ test('quota checks preserve null limits, reject known exhaustion and validate re
     }
 });
 
-test('MCP doctor discovers tools through paginated JSON/SSE without tool calls', async (t) => {
+test('Zhipu MCP doctor discovers tools through paginated JSON/SSE without tool calls', async (t) => {
   const f = await mcpFixture(t);
   f.handle((call, res) => {
     assert.equal(call.body.method, 'tools/list');
@@ -509,7 +509,7 @@ test('MCP doctor discovers tools through paginated JSON/SSE without tool calls',
   assert.equal(missing.json().error.details.reason, 'tool_not_listed');
 });
 
-test('MCP doctor rejects cyclic pagination without requesting a visited cursor again', async (t) => {
+test('Zhipu MCP doctor rejects cyclic pagination without requesting a visited cursor again', async (t) => {
   const f = await mcpFixture(t);
   const cursors: unknown[] = [];
   f.handle((call, res) => {
@@ -528,7 +528,7 @@ test('MCP doctor rejects cyclic pagination without requesting a visited cursor a
   assert.deepEqual(cursors, [undefined, 'page-a', 'page-b']);
 });
 
-test('doctor rejects arguments and unsupported output before requests and enforces total budget', async (t) => {
+test('Doctor rejects arguments and unsupported output before requests and enforces total budget', async (t) => {
   const f = await fixture(t),
     output = join(f.root, 'result.json');
   writeFileSync(output, 'old');
@@ -578,7 +578,7 @@ test('Zhipu doctor keeps platform and engine, uses the minimum legal count and i
   }
 });
 
-test('doctor rejects malformed business responses and partial business results without exposing diagnostic content', async (t) => {
+test('Doctor rejects malformed business responses and partial business results without exposing diagnostic content', async (t) => {
   const f = await fixture(t);
   const env = { UNISEARCH_EXA_API_KEY: 'fixture-key' };
   f.handle((_call, res) => res.end('<html>not json</html>'));

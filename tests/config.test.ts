@@ -8,7 +8,7 @@ import { AppError } from '../src/errors.js';
 import { resolveLanguage, systemLanguage } from '../src/i18n/index.js';
 import { context, temporary } from './helpers.js';
 
-test('platform paths and explicit relative paths use their documented roots', () => {
+test('Platform paths and explicit relative paths use their documented roots', () => {
   const base = { cwd: '/work', home: () => '/home/alice', env: {} };
   assert.equal(
     selectConfigPath({ ...base, platform: 'linux' }).path,
@@ -57,7 +57,7 @@ test('platform paths and explicit relative paths use their documented roots', ()
   );
 });
 
-test('missing default configuration is empty without creating directories', (t) => {
+test('Missing default configuration is empty without creating directories', (t) => {
   const root = temporary(t);
   const selected = selectConfigPath(context(root));
   assert.deepEqual(readConfig(selected), { ...selected, exists: false, values: {} });
@@ -67,7 +67,7 @@ test('missing default configuration is empty without creating directories', (t) 
   });
 });
 
-test('configuration reads preserve contents and ignore unrelated fields for help', (t) => {
+test('Configuration reads preserve contents and ignore unrelated fields for help', (t) => {
   const root = temporary(t);
   const path = join(root, '设置.json');
   const contents = '\uFEFF' + JSON.stringify({ language: 'zh', providers: { model: 'invalid' } });
@@ -77,7 +77,7 @@ test('configuration reads preserve contents and ignore unrelated fields for help
   assert.deepEqual(readdirSync(root), ['设置.json']);
 });
 
-test('bad configuration fails explicitly without exposing its text', (t) => {
+test('Bad configuration fails explicitly without exposing its text', (t) => {
   const root = temporary(t);
   const path = join(root, 'config.json');
   for (const contents of ['{"api_key":"fake-secret",', '[]', 'null', 'true', Buffer.from([0xff])]) {
@@ -99,7 +99,7 @@ test('bad configuration fails explicitly without exposing its text', (t) => {
   });
 });
 
-test('language overrides bypass configuration and saved auto uses the system locale', (t) => {
+test('Language overrides bypass configuration and saved auto uses the system locale', (t) => {
   const root = temporary(t);
   const path = join(root, 'config.json');
   writeFileSync(path, '{broken');
@@ -125,7 +125,7 @@ test('language overrides bypass configuration and saved auto uses the system loc
   });
 });
 
-test('locale precedence and Chinese variants are deterministic', () => {
+test('Locale precedence and Chinese variants are deterministic', () => {
   assert.equal(systemLanguage({ LC_ALL: 'C', LC_MESSAGES: 'zh_TW', LANG: 'zh_CN' }), 'en');
   assert.equal(systemLanguage({ LC_MESSAGES: 'zh-TW', LANG: 'en_US.UTF-8' }), 'zh');
   for (const locale of ['zh', 'zh_CN.UTF-8', 'zh-TW', 'zh-Hans-CN'])

@@ -9,7 +9,7 @@ import { addContentOptions, createCli } from '../src/cli/program.js';
 import { TerminalHelp } from '../src/cli/help.js';
 import { capture, context, temporary } from './helpers.js';
 
-test('bare root, help aliases, and version follow Commander without configuration reads for version', async (t) => {
+test('Bare root, help aliases, and version follow Commander without configuration reads for version', async (t) => {
   const root = temporary(t);
   const outputs: string[] = [];
   for (const args of [[], ['--help'], ['-h'], ['-h', '--help']]) {
@@ -34,7 +34,7 @@ test('bare root, help aliases, and version follow Commander without configuratio
   }
 });
 
-test('saved Chinese language changes help, not option names', async (t) => {
+test('Saved Chinese language changes help, not option names', async (t) => {
   const root = temporary(t);
   const path = join(root, 'config.json');
   writeFileSync(path, '{"language":"zh","providers":false}');
@@ -52,7 +52,7 @@ test('saved Chinese language changes help, not option names', async (t) => {
   assert.equal(channels.err, '');
 });
 
-test('all help pages fit terminal columns in both languages without losing content', async (t) => {
+test('All help pages fit terminal columns in both languages without losing content', async (t) => {
   const root = temporary(t);
   const paths: string[][] = [];
   function collect(command: Command, path: string[]): void {
@@ -90,7 +90,7 @@ test('all help pages fit terminal columns in both languages without losing conte
   }
 });
 
-test('mixed help text uses Unicode line breaks', () => {
+test('Mixed help text uses Unicode line breaks', () => {
   const help = new TerminalHelp();
   const value = '中文说明。换行保留标点，括号（说明）与英文名称 Unicode';
   for (const width of [8, 12, 16]) {
@@ -105,7 +105,7 @@ test('mixed help text uses Unicode line breaks', () => {
   }
 });
 
-test('narrow help stacks descriptions and wide help aligns wrapped Chinese descriptions', async (t) => {
+test('Narrow help stacks descriptions and wide help aligns wrapped Chinese descriptions', async (t) => {
   const root = temporary(t);
   for (const columns of [60, 100]) {
     const channels = capture();
@@ -132,7 +132,7 @@ test('narrow help stacks descriptions and wide help aligns wrapped Chinese descr
   }
 });
 
-test('parent help shows summaries while command help retains details after usage', async (t) => {
+test('Parent help shows summaries while command help retains details after usage', async (t) => {
   const root = temporary(t);
   for (const language of ['zh', 'en']) {
     for (const [path, present] of [
@@ -158,7 +158,7 @@ test('parent help shows summaries while command help retains details after usage
   }
 });
 
-test('invalid input produces one result using the recognized format', async (t) => {
+test('Invalid input produces one result using the recognized format', async (t) => {
   const root = temporary(t);
   for (const args of [
     ['search', '--format', 'json'],
@@ -215,7 +215,7 @@ test('invalid input produces one result using the recognized format', async (t) 
   assert.equal(help.err, '');
 });
 
-test('language failures use the public error shell and do not expose config contents', async (t) => {
+test('Language failures use the public error shell and do not expose config contents', async (t) => {
   const root = temporary(t);
   const path = join(root, 'config.json');
   writeFileSync(path, '{"api_key":"fake-secret",');
@@ -230,7 +230,7 @@ test('language failures use the public error shell and do not expose config cont
   assert.equal(channels.err, '');
 });
 
-test('invalid format uses stderr when language selection also fails', async (t) => {
+test('Invalid format uses stderr when language selection also fails', async (t) => {
   const root = temporary(t);
   const channels = capture();
   const cli = createCli('1.2.3', {
@@ -242,7 +242,7 @@ test('invalid format uses stderr when language selection also fails', async (t) 
   assert.match(channels.err, /^Error: Interface language/);
 });
 
-test('operation options accept both argument positions, detect duplicates, and honor --', async (t) => {
+test('Operation options accept both argument positions, detect duplicates, and honor --', async (t) => {
   const root = temporary(t);
   for (const args of [
     ['source', 'read', '--format=json', 'hello'],
@@ -290,7 +290,7 @@ test('operation options accept both argument positions, detect duplicates, and h
   assert.match(outputs[0], /unisearch source/);
 });
 
-test('compiled entry works outside the source directory with UTF-8 paths', (t) => {
+test('Compiled entry works outside the source directory with UTF-8 paths', (t) => {
   const root = temporary(t);
   const path = join(root, '中文 config.json');
   writeFileSync(path, '{"language":"zh"}');
@@ -313,7 +313,7 @@ test('compiled entry works outside the source directory with UTF-8 paths', (t) =
   assert.equal(version.stdout, `unisearch ${manifest.version}\n`);
 });
 
-test('all 39 operations expose and enforce the confirmed option matrix', async (t) => {
+test('All 39 operations expose and enforce the confirmed option matrix', async (t) => {
   const root = temporary(t);
   const content = new Set([
     'search',
@@ -399,7 +399,7 @@ test('all 39 operations expose and enforce the confirmed option matrix', async (
   }
 });
 
-test('command handlers share output options and propagate failure exits to the CLI', async (t) => {
+test('Command handlers share output options and propagate failure exits to the CLI', async (t) => {
   const root = temporary(t);
   for (const save of [false, true]) {
     const channels = capture();

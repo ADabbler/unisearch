@@ -16,7 +16,7 @@ import { createCli } from '../src/cli/program.js';
 import type { Prompts } from '../src/cli/prompts.js';
 import { operationName } from '../src/i18n/providers.js';
 
-test('setup saved configuration and Codex Skill are usable by new CLI processes', async (t) => {
+test('Setup saved configuration and Codex Skill are usable by new CLI processes', async (t) => {
   const root = temporary(t),
     path = join(root, 'config.json');
   const calls: { path: string; key: string | string[] | undefined; body: unknown }[] = [];
@@ -177,7 +177,7 @@ test('setup saved configuration and Codex Skill are usable by new CLI processes'
   ]);
 });
 
-test('setup preserves existing defaults and environment credentials; service selection enables only selected saved false values', async (t) => {
+test('Setup preserves existing defaults and environment credentials; service selection enables only selected saved false values', async (t) => {
   const root = temporary(t),
     path = join(root, 'config.json');
   const original = {
@@ -214,7 +214,7 @@ test('setup preserves existing defaults and environment credentials; service sel
   });
 });
 
-test('prompt edit restarts at language, retains pending values, discards deselected edits, and never writes before save', async (t) => {
+test('Prompt edit restarts at language, retains pending values, discards deselected edits, and never writes before save', async (t) => {
   const root = temporary(t),
     path = join(root, 'config.json');
   const draft = new SetupDraft(
@@ -262,7 +262,7 @@ test('prompt edit restarts at language, retains pending values, discards deselec
   assert.deepEqual(draft.skills, []);
 });
 
-test('all service connection fields use common definitions; explicit default selections persist and keys stay redacted', async (t) => {
+test('All service connection fields use common definitions; explicit default selections persist and keys stay redacted', async (t) => {
   const root = temporary(t),
     path = join(root, 'config.json');
   const draft = new SetupDraft(
@@ -290,7 +290,7 @@ test('all service connection fields use common definitions; explicit default sel
   assert.equal(saved.result.data?.services, undefined);
 });
 
-test('model setup defaults new tools to xAI and preserves existing and edited choices', async (t) => {
+test('Model setup defaults new tools to xAI and preserves existing and edited choices', async (t) => {
   const root = temporary(t);
   const path = join(root, 'config.json');
   for (const [choice, original, expected, useShortcut = false] of [
@@ -359,7 +359,7 @@ test('model setup defaults new tools to xAI and preserves existing and edited ch
   }
 });
 
-test('setup preselects effective choices and preserves existing sources when confirmed', async (t) => {
+test('Setup preselects effective choices and preserves existing sources when confirmed', async (t) => {
   const root = temporary(t),
     path = join(root, 'config.json');
   for (const language of ['zh', 'en'] as const) {
@@ -495,7 +495,7 @@ test('setup preselects effective choices and preserves existing sources when con
   }
 });
 
-test('xAI setup saves the official URL and tools and retains model, effort and choices when editing', async (t) => {
+test('XAI setup saves the official URL and tools and retains model, effort and choices when editing', async (t) => {
   const root = temporary(t);
   const draft = new SetupDraft(
     { path: join(root, 'config.json'), source: 'default', exists: false, values: {} },
@@ -570,7 +570,7 @@ test('xAI setup saves the official URL and tools and retains model, effort and c
   });
 });
 
-test('setup credential previews mask short keys and never show invalid values', async (t) => {
+test('Setup credential previews mask short keys and never show invalid values', async (t) => {
   const root = temporary(t);
   for (const [key, expected] of [
     ['shortkey', 'configured: ••••••••'],
@@ -597,7 +597,7 @@ test('setup credential previews mask short keys and never show invalid values', 
   }
 });
 
-test('custom URL inputs preserve defaults on Enter and save only the edited Jina Reader URL', async (t) => {
+test('Custom URL inputs preserve defaults on Enter and save only the edited Jina Reader URL', async (t) => {
   const root = temporary(t);
   const original = { providers: { jina: { reader_url: 'https://example.org/saved-reader' } } };
   const env = { UNISEARCH_JINA_SEARCH_URL: 'https://example.org/environment-search' };
@@ -664,7 +664,7 @@ test('custom URL inputs preserve defaults on Enter and save only the edited Jina
   );
 });
 
-test('save failure prevents Skill writes; successful config and failed installation is partial; cancellation preserves saved state', async (t) => {
+test('Save failure prevents Skill writes; successful config and failed installation is partial; cancellation preserves saved state', async (t) => {
   const root = temporary(t),
     path = join(root, 'config.json'),
     source = join(root, 'source');
@@ -727,7 +727,7 @@ test('save failure prevents Skill writes; successful config and failed installat
   assert.ok(!output.err.includes(root));
 });
 
-test('setup no-op preserves mtime and non-TTY returns usage error', async (t) => {
+test('Setup no-op preserves mtime and non-TTY returns usage error', async (t) => {
   const root = temporary(t),
     path = join(root, 'config.json');
   await fs.writeFile(path, '{"language":"en"}');

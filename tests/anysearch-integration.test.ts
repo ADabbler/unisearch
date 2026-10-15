@@ -184,7 +184,7 @@ test('AnySearch fetch shares the deadline across retries and switching and stops
 });
 
 test(
-  'model, AnySearch and Exa start concurrently and keep explicit source order after reverse completion',
+  'Model, AnySearch and Exa start concurrently and keep explicit source order after reverse completion',
   { timeout: 5000 },
   async (t) => {
     const f = await fixture(t);
@@ -298,7 +298,7 @@ test('AnySearch search failures, valid empty supplements and model fallback reta
 });
 
 test(
-  'combined search cancellation and internal failures stop pending AnySearch work and preserve completed evidence',
+  'Combined search cancellation and internal failures stop pending AnySearch work and preserve completed evidence',
   { timeout: 5000 },
   async (t) => {
     const f = await fixture(t);

@@ -412,7 +412,7 @@ test('Firecrawl CLI help, invalid inputs and duplicate options never call HTTP',
   assert.equal(calls, 0);
 });
 
-test('local HTTP Firecrawl CLI sends exact paths, Bearer auth, saved limits, explicit flags and repeated selectors', async (t) => {
+test('Local HTTP Firecrawl CLI sends exact paths, Bearer auth, saved limits, explicit flags and repeated selectors', async (t) => {
   const requests: {
     url: string;
     method: string;
@@ -902,7 +902,7 @@ test('Firecrawl service switching retains cancellation policy when its upstream 
   }
 });
 
-test('late timeout handling preserves retry decisions learned from Firecrawl responses and transport errors', async () => {
+test('Late timeout handling preserves retry decisions learned from Firecrawl responses and transport errors', async () => {
   const permanentFailure: typeof fetch = async () => {
     const cause = Object.assign(new Error('fixture DNS failure'), { code: 'ENOTFOUND' });
     throw new TypeError('fetch failed', { cause });
@@ -1199,7 +1199,7 @@ test(
   },
 );
 
-test('root search concurrently executes real model, Exa and Firecrawl with saved settings and stable ordering', async (t) => {
+test('Root search concurrently executes real model, Exa and Firecrawl with saved settings and stable ordering', async (t) => {
   const held: ServerResponse[] = [];
   const requests: { url: string; body: JsonObject }[] = [];
   const base = await server(t, async (req, res) => {
@@ -1263,7 +1263,7 @@ test('root search concurrently executes real model, Exa and Firecrawl with saved
   }
 });
 
-test('root Firecrawl supplemental failures preserve other data and validate all prerequisites first', async (t) => {
+test('Root Firecrawl supplemental failures preserve other data and validate all prerequisites first', async (t) => {
   let calls = 0;
   let modelOk = true;
   let firecrawlOk = true;
@@ -1333,7 +1333,7 @@ test('root Firecrawl supplemental failures preserve other data and validate all 
   assert.equal(calls, 0);
 });
 
-test('root search redacts all known credentials in Firecrawl diagnostics while preserving source content', async () => {
+test('Root search redacts all known credentials in Firecrawl diagnostics while preserving source content', async () => {
   const settings = {
     ...env,
     UNISEARCH_MODEL_API_KEY: 'fixture-model-secret',
@@ -1382,7 +1382,7 @@ test('root search redacts all known credentials in Firecrawl diagnostics while p
   assert.equal(source.data.results[0].text, undefined);
 });
 
-test('unexpected Firecrawl programming errors stop the combined invocation and retain completed Exa data', async () => {
+test('Unexpected Firecrawl programming errors stop the combined invocation and retain completed Exa data', async () => {
   const values = { providers: { model: { model: { id: 'model' } } } };
   const settings = {
     ...env,

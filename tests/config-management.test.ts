@@ -46,7 +46,7 @@ function fixture(t: TestContext) {
   };
 }
 
-test('configuration writes use plain confirmations and queries retain types and sources', async (t) => {
+test('Configuration writes use plain confirmations and queries retain types and sources', async (t) => {
   const f = fixture(t);
   const saved = await f.run(['config', 'set', 'execution.retries', '0']);
   assert.equal(saved.exit, 0);
@@ -104,7 +104,7 @@ test('configuration writes use plain confirmations and queries retain types and 
   assert.ok(readFileSync(f.path, 'utf8').endsWith('\n'));
 });
 
-test('configuration confirmations preserve dollar substitution sequences literally', async (t) => {
+test('Configuration confirmations preserve dollar substitution sequences literally', async (t) => {
   const f = fixture(t);
   const key = 'providers.model.model.id';
   const value = "model-$&-$$-$`-$'";
@@ -120,7 +120,7 @@ test('configuration confirmations preserve dollar substitution sequences literal
   }
 });
 
-test('service lists and saved providers share display order without reordering settings', async (t) => {
+test('Service lists and saved providers share display order without reordering settings', async (t) => {
   const f = fixture(t);
   const order = [
     'model',
@@ -211,7 +211,7 @@ test('service lists and saved providers share display order without reordering s
   assert.deepEqual(saved, { ...original, execution: { retries: 1, timeout_seconds: 8 } });
 });
 
-test('provider sorting preserves unrelated invalid settings during repair', async (t) => {
+test('Provider sorting preserves unrelated invalid settings during repair', async (t) => {
   const f = fixture(t);
   const original = JSON.parse(
     '{"unknown":{"enabled":true},"exa":"invalid-parent","__proto__":{"enabled":false},"model":{"enabled":false}}',
@@ -225,7 +225,7 @@ test('provider sorting preserves unrelated invalid settings during repair', asyn
   assert.equal(({} as Record<string, unknown>).enabled, undefined);
 });
 
-test('declared credential and stream environment mappings preserve types and redact secrets', async (t) => {
+test('Declared credential and stream environment mappings preserve types and redact secrets', async (t) => {
   const f = fixture(t);
   f.save({});
   for (const field of fields.filter(
@@ -249,7 +249,7 @@ test('declared credential and stream environment mappings preserve types and red
   assert.equal(readFileSync(f.path, 'utf8'), '{}');
 });
 
-test('invalid CLI literals use stderr while query validation uses JSON without leaking values', async (t) => {
+test('Invalid CLI literals use stderr while query validation uses JSON without leaking values', async (t) => {
   const f = fixture(t);
   f.save({});
   for (const [key, invalid] of [
@@ -300,7 +300,7 @@ test('invalid CLI literals use stderr while query validation uses JSON without l
   assert.equal((await f.run(['config', 'set', 'execution.retries', '2'])).exit, 0);
 });
 
-test('queries validate shadowed saved settings while operations use effective settings', async (t) => {
+test('Queries validate shadowed saved settings while operations use effective settings', async (t) => {
   const f = fixture(t);
   f.save({
     providers: { model: 'invalid-secret', exa: { api_key: '' } },
@@ -326,7 +326,7 @@ test('queries validate shadowed saved settings while operations use effective se
   assert.equal((await f.json(['config', 'list'])).exit, 3);
 });
 
-test('repairs preserve unrelated fields, reject malformed parents and remove unknown own properties', async (t) => {
+test('Repairs preserve unrelated fields, reject malformed parents and remove unknown own properties', async (t) => {
   const f = fixture(t);
   f.save({
     providers: { exa: 'bad-parent-secret' },
@@ -361,7 +361,7 @@ test('repairs preserve unrelated fields, reject malformed parents and remove unk
   assert.equal(({} as Record<string, unknown>).polluted, undefined);
 });
 
-test('environment override confirmations report saved facts and invalid effective environment', async (t) => {
+test('Environment override confirmations report saved facts and invalid effective environment', async (t) => {
   const f = fixture(t);
   const result = await f.run(['config', 'set', 'execution.retries', '2'], {
     UNISEARCH_RETRIES: 'secret-invalid',
@@ -383,7 +383,7 @@ test('environment override confirmations report saved facts and invalid effectiv
   assert.deepEqual(f.saved(), {});
 });
 
-test('default and explicitly missing configurations retain distinct read and create behavior', async (t) => {
+test('Default and explicitly missing configurations retain distinct read and create behavior', async (t) => {
   const f = fixture(t);
   const explicit = join(f.root, 'private', 'nested', 'config.json');
   for (const args of [
@@ -453,7 +453,7 @@ test('default and explicitly missing configurations retain distinct read and cre
   assert.ok(existsSync(defaultPath));
 });
 
-test('no-op mutations preserve files and permissions and final removal saves an empty object', async (t) => {
+test('No-op mutations preserve files and permissions and final removal saves an empty object', async (t) => {
   const f = fixture(t);
   f.save({ execution: { retries: 2 } });
   const before = statSync(f.path, { bigint: true });
@@ -471,7 +471,7 @@ test('no-op mutations preserve files and permissions and final removal saves an 
   assert.equal(statSync(f.root).mode & 0o777, existingMode);
 });
 
-test('path bypasses broken files and language repair uses the original call language', async (t) => {
+test('Path bypasses broken files and language repair uses the original call language', async (t) => {
   const f = fixture(t);
   writeFileSync(f.path, '{broken-secret');
   assert.equal((await f.run(['config', 'path'], { UNISEARCH_LANG: undefined })).out, f.path + '\n');
@@ -499,7 +499,7 @@ test('path bypasses broken files and language repair uses the original call lang
   );
 });
 
-test('credential arguments, queries, confirmations and rejected options never expose secrets', async (t) => {
+test('Credential arguments, queries, confirmations and rejected options never expose secrets', async (t) => {
   const f = fixture(t);
   const secret = 'fixture-secret-never-display';
   const saved = await f.run(['config', 'set', 'providers.exa.api_key', secret]);
@@ -524,7 +524,7 @@ test('credential arguments, queries, confirmations and rejected options never ex
   }
 });
 
-test('fixed JSON queries report parameter and configuration failures as one object', async (t) => {
+test('Fixed JSON queries report parameter and configuration failures as one object', async (t) => {
   const f = fixture(t);
   f.save({ execution: { retries: 0 }, fetch: { providers: [] } });
   for (const args of [
@@ -544,7 +544,7 @@ test('fixed JSON queries report parameter and configuration failures as one obje
   assert.doesNotMatch(result.body.error.message, /[。.]$/);
 });
 
-test('unsupported output options fail before modifying configuration or result files', async (t) => {
+test('Unsupported output options fail before modifying configuration or result files', async (t) => {
   const f = fixture(t);
   f.save({ execution: { retries: 1 } });
   const original = readFileSync(f.path, 'utf8');
@@ -557,7 +557,7 @@ test('unsupported output options fail before modifying configuration or result f
   }
 });
 
-test('configuration symbolic links preserve links and resolve new files under linked directories', async (t) => {
+test('Configuration symbolic links preserve links and resolve new files under linked directories', async (t) => {
   const f = fixture(t);
   f.save({ execution: { retries: 1 } });
   const link = join(f.root, 'config-link.json');
@@ -601,7 +601,7 @@ test('configuration symbolic links preserve links and resolve new files under li
   });
 });
 
-test('unreadable files and unwritable directories fail without modifying old content', async (t) => {
+test('Unreadable files and unwritable directories fail without modifying old content', async (t) => {
   if (process.platform === 'win32' || process.getuid?.() === 0) {
     t.skip('Requires POSIX permissions and a non-root user');
     return;
@@ -625,7 +625,7 @@ test('unreadable files and unwritable directories fail without modifying old con
   }
 });
 
-test('write and replacement failures preserve old bytes and clean temporary files', async (t) => {
+test('Write and replacement failures preserve old bytes and clean temporary files', async (t) => {
   const f = fixture(t);
   f.save({ execution: { retries: 1 } });
   const original = readFileSync(f.path, 'utf8');
@@ -654,7 +654,7 @@ test('write and replacement failures preserve old bytes and clean temporary file
   }
 });
 
-test('configuration cleanup failure retains both causes and the temporary path', async (t) => {
+test('Configuration cleanup failure retains both causes and the temporary path', async (t) => {
   const f = fixture(t);
   f.save({});
   t.mock.method(fs, 'rename', async () => {
@@ -672,7 +672,7 @@ test('configuration cleanup failure retains both causes and the temporary path',
   assert.equal(readFileSync(f.path, 'utf8'), '{}');
 });
 
-test('stdout failure reports an already completed configuration modification through stderr', async (t) => {
+test('Stdout failure reports an already completed configuration modification through stderr', async (t) => {
   const f = fixture(t);
   f.save({});
   const channels = capture();

@@ -21,7 +21,7 @@ const modelResult = {
   ],
 };
 
-test('MCP unified fetch keeps the default position, uses one configuration and preserves fallback rules', async (t) => {
+test('Zhipu MCP unified fetch keeps the default position, uses one configuration and preserves fallback rules', async (t) => {
   const f = await fixture(t);
   const configured = (await f.run(['config', 'get', 'fetch.providers'])).json().data
     .value as string[];
@@ -75,7 +75,7 @@ test('MCP unified fetch keeps the default position, uses one configuration and p
   assert.equal(f.calls.length, 0);
 });
 
-test('MCP unified fetch retains verified body after later failures and shares its deadline', async (t) => {
+test('Zhipu MCP unified fetch retains verified body after later failures and shares its deadline', async (t) => {
   const f = await fixture(t);
   f.env.UNISEARCH_EXA_API_KEY = 'fixture-exa-key';
   f.env.UNISEARCH_EXA_BASE_URL = `${f.base}/exa`;
@@ -148,7 +148,7 @@ test('MCP unified fetch retains verified body after later failures and shares it
 });
 
 test(
-  'MCP supplement starts alongside model and Exa and preserves order when responses finish in reverse',
+  'Zhipu MCP supplement starts alongside model and Exa and preserves order when responses finish in reverse',
   { timeout: 5000 },
   async (t) => {
     const f = await fixture(t);
@@ -194,7 +194,7 @@ test(
   },
 );
 
-test('MCP failed supplements retain evidence even when every task fails, and model fallback never repeats the tool', async (t) => {
+test('Zhipu MCP failed supplements retain evidence even when every task fails, and model fallback never repeats the tool', async (t) => {
   const f = await fixture(t);
   Object.assign(f.env, {
     UNISEARCH_MODEL_API_KEY: 'fixture-model',
@@ -231,7 +231,7 @@ test('MCP failed supplements retain evidence even when every task fails, and mod
   }
 });
 
-test('MCP supplement cancellation and internal transport errors preserve completed evidence', async (t) => {
+test('Zhipu MCP supplement cancellation and internal transport errors preserve completed evidence', async (t) => {
   const f = await fixture(t);
   Object.assign(f.env, {
     UNISEARCH_MODEL_API_KEY: 'fixture-model',
@@ -267,7 +267,7 @@ test('MCP supplement cancellation and internal transport errors preserve complet
   }
 });
 
-test('MCP file output uses the same result and keeps existing files when no trustworthy data is returned', async (t) => {
+test('Zhipu MCP file output uses the same result and keeps existing files when no trustworthy data is returned', async (t) => {
   const f = await fixture(t);
   const output = join(f.root, 'result');
   for (const format of ['markdown', 'json']) {

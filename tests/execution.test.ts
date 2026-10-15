@@ -55,7 +55,7 @@ const unavailable = (): AttemptResult<JsonObject> => ({
   retry: true,
 });
 
-test('retry counts, capped exponential waits and one compact attempt history match the shared budget', async () => {
+test('Retry counts, capped exponential waits and one compact attempt history match the shared budget', async () => {
   for (const retries of [0, 2, 7]) {
     const time = controlled();
     const record: JsonObject = {};
@@ -175,7 +175,7 @@ test('Retry-After replaces backoff, invalid headers are explicit, and unfit wait
   }
 });
 
-test('single attempts cap at 30 seconds and retries consume the remaining total budget', async () => {
+test('Single attempts cap at 30 seconds and retries consume the remaining total budget', async () => {
   const time = controlled();
   const record: JsonObject = {};
   const outcome = await executeRequest(
@@ -219,7 +219,7 @@ test('single attempts cap at 30 seconds and retries consume the remaining total 
   assert.deepEqual(shorter.deadlines, [500]);
 });
 
-test('stream progress replaces the total deadline with a resettable idle window', async () => {
+test('Stream progress replaces the total deadline with a resettable idle window', async () => {
   const time = controlled();
   const result = await executeRequest(
     async (context) => {
@@ -246,7 +246,7 @@ test('stream progress replaces the total deadline with a resettable idle window'
   assert.equal(time.liveTimers(), 0);
 });
 
-test('late stream content and completion cannot escape expired deadlines before the timer callback', async () => {
+test('Late stream content and completion cannot escape expired deadlines before the timer callback', async () => {
   for (const phase of ['first', 'progress', 'completion']) {
     const time = controlled();
     let calls = 0;
@@ -283,7 +283,7 @@ test('late stream content and completion cannot escape expired deadlines before 
   }
 });
 
-test('a late wait callback cannot start another request and cancellation records the actual wait', async () => {
+test('A late wait callback cannot start another request and cancellation records the actual wait', async () => {
   for (const cancel of [false, true]) {
     const time = controlled();
     const abort = new AbortController();
@@ -315,7 +315,7 @@ test('a late wait callback cannot start another request and cancellation records
   }
 });
 
-test('fatal failures and programming exceptions terminate attempts immediately', async () => {
+test('Fatal failures and programming exceptions terminate attempts immediately', async () => {
   for (const throws of [false, true]) {
     const time = controlled();
     let calls = 0;
@@ -346,7 +346,7 @@ test('fatal failures and programming exceptions terminate attempts immediately',
   }
 });
 
-test('attempt observer failures release the request timer and abort listener', async () => {
+test('Attempt observer failures release the request timer and abort listener', async () => {
   const time = controlled();
   const abort = new AbortController();
   let calls = 0;
@@ -375,7 +375,7 @@ test('attempt observer failures release the request timer and abort listener', a
   assert.equal(getEventListeners(abort.signal, 'abort').length, 0);
 });
 
-test('verbose retry success has no duplicate provider, count or final request ID', async () => {
+test('Verbose retry success has no duplicate provider, count or final request ID', async () => {
   const time = controlled();
   const record: JsonObject = {};
   let calls = 0;
@@ -420,7 +420,7 @@ test('verbose retry success has no duplicate provider, count or final request ID
   );
 });
 
-test('native fetch aborts both pending headers and a stalled body within a fractional total budget', async (t) => {
+test('Native fetch aborts both pending headers and a stalled body within a fractional total budget', async (t) => {
   let sendHeaders = false;
   let calls = 0;
   const instance = createServer((_req, res) => {
@@ -468,7 +468,7 @@ test('native fetch aborts both pending headers and a stalled body within a fract
   assert.equal(calls, 2);
 });
 
-test('a known non-retryable HTTP error cannot become retryable because its body times out', async () => {
+test('A known non-retryable HTTP error cannot become retryable because its body times out', async () => {
   const time = controlled();
   let calls = 0;
   const result = await executeRequest(
@@ -495,7 +495,7 @@ test('a known non-retryable HTTP error cannot become retryable because its body 
   assert.equal(result.result.error?.details?.http_status, 401);
 });
 
-test('huge finite budgets do not overflow timers or turn into immediate cancellation', async () => {
+test('Huge finite budgets do not overflow timers or turn into immediate cancellation', async () => {
   const result = await executeRequest(
     async () => {
       await new Promise((resolve) => setTimeout(resolve, 15));

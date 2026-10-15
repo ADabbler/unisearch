@@ -283,7 +283,7 @@ test('TinyFish retries use shared clocks and Retry-After without changing reques
   }
 });
 
-test('TinyFish retains explicit nonretryable error codes when the error message is malformed', async (t) => {
+test('TinyFish retains explicit non-retryable error codes when the error message is malformed', async (t) => {
   const f = await fixture(t);
   for (const [status, tag, message, code, exit] of [
     [429, 'DAILY_LIMIT_EXCEEDED', undefined, 'QUOTA_EXCEEDED', 4],

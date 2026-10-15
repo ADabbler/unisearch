@@ -56,7 +56,7 @@ async function body(req: IncomingMessage): Promise<JsonObject> {
   return JSON.parse(Buffer.concat(chunks).toString());
 }
 
-test('model config management stores typed tools and independent efforts and rejects duplicate candidates without modifying the file', async (t) => {
+test('Model config management stores typed tools and independent efforts and rejects duplicate candidates without modifying the file', async (t) => {
   const root = temporary(t);
   const file = join(root, 'config.json');
   const config = context(root, { UNISEARCH_CONFIG_PATH: file, UNISEARCH_LANG: 'en' });
@@ -114,7 +114,7 @@ test('model config management stores typed tools and independent efforts and rej
   ]);
 });
 
-test('root search help, scalar validation and all selected prerequisites fail locally with zero requests', async (t) => {
+test('Root search help, scalar validation and all selected prerequisites fail locally with zero requests', async (t) => {
   const root = temporary(t);
   let calls = 0;
   const base = await server(t, (_req, res) => {
@@ -188,7 +188,7 @@ test('root search help, scalar validation and all selected prerequisites fail lo
   assert.equal(calls, 0);
 });
 
-test('local HTTP barrier proves parallel execution and exact model/Exa mappings without feeding supplemental data to the model', async (t) => {
+test('Local HTTP barrier proves parallel execution and exact model/Exa mappings without feeding supplemental data to the model', async (t) => {
   const root = temporary(t);
   const waiting: ServerResponse[] = [];
   const requests: { url: string; headers: IncomingMessage['headers']; body: JsonObject }[] = [];
@@ -255,7 +255,7 @@ test('local HTTP barrier proves parallel execution and exact model/Exa mappings 
   assert.equal(channels.err, '');
 });
 
-test('four actual combinations preserve data, deterministic failure order and model exit classification in JSON and files', async (t) => {
+test('Four actual combinations preserve data, deterministic failure order and model exit classification in JSON and files', async (t) => {
   const root = temporary(t);
   const file = join(root, 'result.json');
   for (const [modelOk, exaOk, expected, status] of [
@@ -361,7 +361,7 @@ test('CLI stream overrides are independent of stored defaults and both protocols
       }
 });
 
-test('transport format mismatches, bad UTF-8 and JSON are explicit and never trigger protocol switches', async () => {
+test('Transport format mismatches, bad UTF-8 and JSON are explicit and never trigger protocol switches', async () => {
   for (const stream of [false, true]) {
     const request = prepareModel('q', { stream }, {}, env, 'en');
     let calls = 0;
@@ -395,7 +395,7 @@ test('transport format mismatches, bad UTF-8 and JSON are explicit and never tri
   }
 });
 
-test('native SSE completes beyond its initial deadline with successful supplemental results', async (t) => {
+test('Native SSE completes beyond its initial deadline with successful supplemental results', async (t) => {
   const timers: NodeJS.Timeout[] = [];
   t.after(() => timers.forEach(clearTimeout));
   const base = await server(t, (req, res) => {
@@ -434,7 +434,7 @@ test('native SSE completes beyond its initial deadline with successful supplemen
   assert.deepEqual(result.result.data?.extra_sources, [{ provider: 'exa', data: { results: [] } }]);
 });
 
-test('slow native HTTP bodies and SSE honor deadlines while started model streams use idle timeouts', async (t) => {
+test('Slow native HTTP bodies and SSE honor deadlines while started model streams use idle timeouts', async (t) => {
   for (const stallModel of [false, true])
     for (const stream of [false, true]) {
       const base = await server(t, (req, res) => {
@@ -472,7 +472,7 @@ test('slow native HTTP bodies and SSE honor deadlines while started model stream
     }
 });
 
-test('internal programming failures cancel pending siblings with exit 5, never masquerade as user cancellation', async () => {
+test('Internal programming failures cancel pending siblings with exit 5, never masquerade as user cancellation', async () => {
   const plan = prepareCombinedSearch('q', { extraSources: 'exa' }, {}, env, 'en');
   let aborted = false;
   const result = await combinedSearch(
@@ -505,7 +505,7 @@ test('internal programming failures cancel pending siblings with exit 5, never m
   assert.doesNotMatch(JSON.stringify(result), /CANCELLED|private internal/);
 });
 
-test('internal failure after completed Exa retains its data and cancellation retains completed supplemental data without deltas', async () => {
+test('Internal failure after completed Exa retains its data and cancellation retains completed supplemental data without deltas', async () => {
   for (const cancel of [false, true]) {
     const plan = prepareCombinedSearch('q', { extraSources: 'exa', stream: true }, {}, env, 'en');
     const abort = new AbortController();
@@ -533,7 +533,7 @@ test('internal failure after completed Exa retains its data and cancellation ret
   }
 });
 
-test('all known credentials are redacted across provider failures and verbose request IDs', async () => {
+test('All known credentials are redacted across provider failures and verbose request IDs', async () => {
   const plan = prepareCombinedSearch(
     'q',
     { extraSources: 'exa' },
@@ -559,7 +559,7 @@ test('all known credentials are redacted across provider failures and verbose re
   assert.match(JSON.stringify(result), /REDACTED/);
 });
 
-test('verbose execution details remain outside Markdown files', async (t) => {
+test('Verbose execution details remain outside Markdown files', async (t) => {
   const root = temporary(t);
   const file = join(root, 'result.md');
   const channels = capture();
@@ -592,7 +592,7 @@ test('verbose execution details remain outside Markdown files', async (t) => {
 });
 
 test(
-  'search SIGINT cancels native SSE and preserves an old output file with completed Exa data',
+  'Search SIGINT cancels native SSE and preserves an old output file with completed Exa data',
   { skip: process.platform === 'win32' },
   async (t) => {
     const root = temporary(t);

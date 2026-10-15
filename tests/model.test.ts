@@ -38,7 +38,7 @@ const prepare = (values = {}, options = {}, env = modelEnv) =>
 const rejects = (fn: () => unknown, code = 'INVALID_CONFIG') =>
   assert.throws(fn, (error) => error instanceof AppError && error.code === code);
 
-test('model connection requires explicit ID, address and key, supports independent environment fields and both protocols', () => {
+test('Model connection requires explicit ID, address and key, supports independent environment fields and both protocols', () => {
   for (const field of [
     'UNISEARCH_MODEL_ID',
     'UNISEARCH_MODEL_BASE_URL',
@@ -69,7 +69,7 @@ test('model connection requires explicit ID, address and key, supports independe
   rejects(() => prepare({ providers: { model: { protocol: 'guess' } } }));
 });
 
-test('tools mechanically expand strings, preserve objects and order, replace defaults and reject complete duplicates', () => {
+test('Tools mechanically expand strings, preserve objects and order, replace defaults and reject complete duplicates', () => {
   const tools = [
     'arbitrary_hosted',
     { type: 'code_interpreter', container: { type: 'auto' } },
@@ -98,7 +98,7 @@ test('tools mechanically expand strings, preserve objects and order, replace def
   assert.equal(parseInput(fieldAt('providers.model.model.effort'), 'none'), 'none');
 });
 
-test('candidate identity includes each effort and forbids saved duplicates including omitted/default', () => {
+test('Candidate identity includes each effort and forbids saved duplicates including omitted/default', () => {
   const values = {
     providers: {
       model: {
@@ -175,7 +175,7 @@ test('CLI selection uses first matching saved effort, independent backups and ex
   rejects(() => prepare(values, { model: '' }), 'INVALID_ARGUMENT');
 });
 
-test('selection validates only visited IDs and selected effort, but never skips malformed visited structures', () => {
+test('Selection validates only visited IDs and selected effort, but never skips malformed visited structures', () => {
   const make = (fallback_models: unknown) => ({
     providers: { model: { model: { id: 'primary', effort: 42 }, fallback_models } },
   });
@@ -200,7 +200,7 @@ test('selection validates only visited IDs and selected effort, but never skips 
   rejects(() => prepare({ providers: { model: { model: { id: 'primary', unknown: true } } } }));
 });
 
-test('model status validates all candidates and optional effort, exposing four local states without keys', () => {
+test('Model status validates all candidates and optional effort, exposing four local states without keys', () => {
   for (const [values, env, state] of [
     [{}, {}, 'missing'],
     [{}, modelEnv, 'ready'],
@@ -214,7 +214,7 @@ test('model status validates all candidates and optional effort, exposing four l
   }
 });
 
-test('request bodies match protocol fixtures and the exact search prompt', () => {
+test('Request bodies match protocol fixtures and the exact search prompt', () => {
   const instructions = readFileSync('tests/fixtures/contracts/model-prompt.txt', 'utf8').trimEnd();
   assert.equal(searchInstructions, instructions);
   const prompt = `${instructions}\n\nCurrent UTC time: 2026-09-30T00:00:00.000Z`;
@@ -246,7 +246,7 @@ test('request bodies match protocol fixtures and the exact search prompt', () =>
   }
 });
 
-test('both response protocols preserve complete text, actual model and structured citations only', () => {
+test('Both response protocols preserve complete text, actual model and structured citations only', () => {
   const content = '  # Heading\n```ts\nconst x = 1;\n```\n[link](https://example.org/plain) ';
   assert.deepEqual(responseAnswer(response(content)), { model: 'reported-model', text: content });
   assert.deepEqual(chatAnswer(chat(content)), { model: 'reported-model', text: content });
@@ -281,7 +281,7 @@ test('both response protocols preserve complete text, actual model and structure
   }
 });
 
-test('malformed, incomplete, refused and client-tool responses never return partial text', () => {
+test('Malformed, incomplete, refused and client-tool responses never return partial text', () => {
   for (const body of [
     {},
     { ...response(), model: '' },
@@ -534,7 +534,7 @@ function streamComplete(protocol: 'responses' | 'chat-completions'): string {
   return event({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }) + 'data: [DONE]\n\n';
 }
 
-test('both model protocols accept CR and fragmented CRLF and require complete SSE events', async () => {
+test('Both model protocols accept CR and fragmented CRLF and require complete SSE events', async () => {
   for (const protocol of ['responses', 'chat-completions'] as const)
     for (const ending of ['\r', '\r\n']) {
       const source = (
@@ -555,7 +555,7 @@ test('both model protocols accept CR and fragmented CRLF and require complete SS
     }
 });
 
-test('streaming models can complete beyond twice the timeout while supplements retain their original deadline', async () => {
+test('Streaming models can complete beyond twice the timeout while supplements retain their original deadline', async () => {
   for (const protocol of ['responses', 'chat-completions'] as const)
     for (const supplement of ['completed', 'pending']) {
       const time = controlledClock();
@@ -622,7 +622,7 @@ test('streaming models can complete beyond twice the timeout while supplements r
     }
 });
 
-test('heartbeats and empty model deltas never extend the initial or stream idle timeout', async () => {
+test('Heartbeats and empty model deltas never extend the initial or stream idle timeout', async () => {
   for (const protocol of ['responses', 'chat-completions'] as const)
     for (const started of [false, true]) {
       const time = controlledClock();
@@ -669,7 +669,7 @@ test('heartbeats and empty model deltas never extend the initial or stream idle 
     }
 });
 
-test('errors and incomplete streams after model text never retry or fall back', async () => {
+test('Errors and incomplete streams after model text never retry or fall back', async () => {
   for (const protocol of ['responses', 'chat-completions'] as const)
     for (const fault of [
       'data: {bad}\n\n',
@@ -710,7 +710,7 @@ test('errors and incomplete streams after model text never retry or fall back', 
     }
 });
 
-test('user cancellation still stops a model stream after its original deadline', async () => {
+test('User cancellation still stops a model stream after its original deadline', async () => {
   const time = controlledClock();
   const abort = new AbortController();
   const plan = prepareCombinedSearch('q', { stream: true, timeout: 1 }, {}, modelEnv, 'en');
@@ -736,7 +736,7 @@ test('user cancellation still stops a model stream after its original deadline',
   assert.equal(getEventListeners(abort.signal, 'abort').length, 0);
 });
 
-test('same-ID effort fallback uses independent settings, shared prompt/time, no text fragments and concise summaries', async () => {
+test('Same-ID effort fallback uses independent settings, shared prompt/time, no text fragments and concise summaries', async () => {
   const plan = prepareCombinedSearch(
     ' q ',
     {},
@@ -798,7 +798,7 @@ test('same-ID effort fallback uses independent settings, shared prompt/time, no 
   assert.equal(time.live(), 0);
 });
 
-test('model-wide unavailability skips other effort for the ID, Retry-After cannot be bypassed through fallback', async () => {
+test('Model-wide unavailability skips other effort for the ID, Retry-After cannot be bypassed through fallback', async () => {
   for (const limited of [false, true])
     for (const retries of [0, 2]) {
       const plan = prepareCombinedSearch(
@@ -848,7 +848,7 @@ test('model-wide unavailability skips other effort for the ID, Retry-After canno
     }
 });
 
-test('model retries preserve settings, per-candidate counts and Exa is never restarted by fallback', async () => {
+test('Model retries preserve settings, per-candidate counts and Exa is never restarted by fallback', async () => {
   for (const retries of [0, 2]) {
     const plan = prepareCombinedSearch(
       'q',
@@ -896,7 +896,7 @@ test('model retries preserve settings, per-candidate counts and Exa is never res
   }
 });
 
-test('generic connection failures, policy refusals and unsupported client workflows never cause model fallback', async () => {
+test('Generic connection failures, policy refusals and unsupported client workflows never cause model fallback', async () => {
   const plan = prepareCombinedSearch(
     'q',
     {},
@@ -948,7 +948,7 @@ test('generic connection failures, policy refusals and unsupported client workfl
   }
 });
 
-test('structured SSE errors retain safe upstream evidence and completed hosted shell output does not demand a local executor', async () => {
+test('Structured SSE errors retain safe upstream evidence and completed hosted shell output does not demand a local executor', async () => {
   const request = prepare({}, { stream: true });
   for (const [code, expected] of [
     ['model_not_found', 'MODEL_UNAVAILABLE'],
@@ -984,7 +984,7 @@ test('structured SSE errors retain safe upstream evidence and completed hosted s
   );
 });
 
-test('model attempts can exceed 30 seconds, explicit 600-second budgets remain shared and exhaustion prevents fallback', async () => {
+test('Model attempts can exceed 30 seconds, explicit 600-second budgets remain shared and exhaustion prevents fallback', async () => {
   for (const elapsed of [31000, 599000, 600000]) {
     const time = controlledClock();
     const record: JsonObject = {};
@@ -1011,7 +1011,7 @@ test('model attempts can exceed 30 seconds, explicit 600-second budgets remain s
   }
 });
 
-test('invalid model options are reported before missing connection settings', () => {
+test('Invalid model options are reported before missing connection settings', () => {
   for (const options of [{ model: '' }, { model: 'two words' }, { effort: ' ' }]) {
     assert.throws(
       () => prepareModel('q', options, {}, {}, 'en'),
@@ -1023,7 +1023,7 @@ test('invalid model options are reported before missing connection settings', ()
   }
 });
 
-test('null Chat tool calls mean no client action, while malformed declarations remain invalid', async () => {
+test('Null Chat tool calls mean no client action, while malformed declarations remain invalid', async () => {
   const body = chat() as any;
   body.choices[0].message.tool_calls = null;
   assert.deepEqual(chatAnswer(body), { model: 'reported-model', text: 'Complete answer.' });
@@ -1048,7 +1048,7 @@ test('null Chat tool calls mean no client action, while malformed declarations r
   rejects(() => chatAnswer(body), 'UPSTREAM_ERROR');
 });
 
-test('nonfinite nested tool parameters fail locally instead of being sent as null', () => {
+test('Non-finite nested tool parameters fail locally instead of being sent as null', () => {
   const tools = '[{"type":"hosted","options":{"limits":[1e400]}}]';
   rejects(() => parseInput(fieldAt('providers.model.tools'), tools), 'INVALID_ARGUMENT');
   rejects(() => prepare({ providers: { model: { tools: JSON.parse(tools) } } }));

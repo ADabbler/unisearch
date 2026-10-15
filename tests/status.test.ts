@@ -20,7 +20,7 @@ const definitions: OperationDefinition[] = [
   { provider: 'jina', operation: 'fetch', required: ['providers.jina.api_key'] },
 ];
 
-test('status checks four local states, collapses identical operations, and never exposes credentials', () => {
+test('Status checks four local states, collapses identical operations, and never exposes credentials', () => {
   const result = localStatus(
     {
       providers: {
@@ -57,7 +57,7 @@ test('status checks four local states, collapses identical operations, and never
   assert.match(md, /^firecrawl: 已禁用/m);
 });
 
-test('different operation states expand the complete list and shared issues are not duplicated', () => {
+test('Different operation states expand the complete list and shared issues are not duplicated', () => {
   const fixture: OperationDefinition[] = [
     { provider: 'exa', operation: 'public-read', required: [] },
     { provider: 'exa', operation: 'authenticated-search', required: ['providers.exa.api_key'] },
@@ -94,7 +94,7 @@ test('different operation states expand the complete list and shared issues are 
   assert.equal((renderStatus(common, 'en').match(/providers.exa.enabled/g) ?? []).length, 1);
 });
 
-test('status and doctor wrap Chinese reasons within terminal columns and retain hierarchy', (t) => {
+test('Status and doctor wrap Chinese reasons within terminal columns and retain hierarchy', (t) => {
   const descriptor = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
   Object.defineProperty(process.stdout, 'columns', { value: 40, configurable: true });
   t.after(() => {
@@ -128,7 +128,7 @@ test('status and doctor wrap Chinese reasons within terminal columns and retain 
   }
 });
 
-test('invalid required settings outrank disabled, while missing settings do not', () => {
+test('Invalid required settings outrank disabled, while missing settings do not', () => {
   const disabled = localStatus(
     { providers: { exa: { enabled: false } } },
     {},
@@ -161,7 +161,7 @@ test('invalid required settings outrank disabled, while missing settings do not'
   );
 });
 
-test('status readiness uses effective settings while retaining invalid overridden file settings', () => {
+test('Status readiness uses effective settings while retaining invalid overridden file settings', () => {
   const values = { providers: { exa: { api_key: 42 } } };
   const env = { UNISEARCH_EXA_API_KEY: 'fixture-valid' };
   const result = localStatus(values, env, 'en', definitions.slice(0, 2));
@@ -191,7 +191,7 @@ test('status readiness uses effective settings while retaining invalid overridde
   assert.equal(invalid.issues?.length, 1);
 });
 
-test('configuration issues remain at top level when no operation definitions are supplied', () => {
+test('Configuration issues remain at top level when no operation definitions are supplied', () => {
   const result = localStatus(
     {
       providers: { model: { api_key: 'valid-fixture' }, tinyfish: { enabled: 'secret' } },
@@ -219,7 +219,7 @@ test('configuration issues remain at top level when no operation definitions are
   );
 });
 
-test('actual status commands are read-only and distinguish field issues from unreadable JSON', async (t) => {
+test('Actual status commands are read-only and distinguish field issues from unreadable JSON', async (t) => {
   const root = temporary(t);
   const path = join(root, 'config.json');
   const config = context(root, { UNISEARCH_CONFIG_PATH: path, UNISEARCH_LANG: 'en' });
@@ -243,7 +243,7 @@ test('actual status commands are read-only and distinguish field issues from unr
   assert.doesNotMatch(bad.out, /broken-secret|"services"/);
 });
 
-test('plain configuration confirmations preserve values and localize public errors', () => {
+test('Plain configuration confirmations preserve values and localize public errors', () => {
   assert.equal(renderConfig('path', { path: '/tmp/a-b.json' }, 'zh'), '/tmp/a-b.json');
   assert.equal(
     renderConfig('set', { key: 'execution.retries', value: 0, changed: true }, 'zh'),

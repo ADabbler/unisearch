@@ -75,7 +75,7 @@ test('Zhipu REST and MCP platform defaults, overrides and credentials remain ind
 });
 
 test(
-  'model, Zhipu, Zhipu MCP and TinyFish run concurrently with stable output, retained failed evidence and isolated credentials',
+  'Model, Zhipu, Zhipu MCP and TinyFish run concurrently with stable output, retained failed evidence and isolated credentials',
   { timeout: 5000 },
   async (t) => {
     const f = await fixture(t);
@@ -192,7 +192,7 @@ test(
   },
 );
 
-test('default fetch tries configured services in order including REST before MCP and preserves explicit replacement', async (t) => {
+test('Default fetch tries configured services in order including REST before MCP and preserves explicit replacement', async (t) => {
   const f = await fixture(t);
   Object.assign(f.env, {
     UNISEARCH_FIRECRAWL_API_KEY: 'fixture-firecrawl',

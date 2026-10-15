@@ -209,7 +209,7 @@ test('Tavily configuration management, operation scopes and status share validat
   assert.throws(() => prepareMap(a, {}, values, env, 'en'), AppError);
 });
 
-test('native HTTP requests send exact default bodies, path prefixes and Bearer headers', async (t) => {
+test('Native HTTP requests send exact default bodies, path prefixes and Bearer headers', async (t) => {
   const root = temporary(t);
   const requests: JsonObject[] = [];
   const base = await server(t, async (req, res) => {
@@ -670,7 +670,7 @@ test('Tavily standalone diagnostics redact all configured credentials without re
   for (const secret of secrets) assert.ok(!JSON.stringify(failed).includes(secret));
 });
 
-test('native HTTP errors preserve status classification, diagnostic IDs, validation messages and no redirects', async (t) => {
+test('Native HTTP errors preserve status classification, diagnostic IDs, validation messages and no redirects', async (t) => {
   const root = temporary(t);
   let calls = 0;
   let status = 200;
@@ -863,7 +863,7 @@ test('Extract partial and successful data save with compact diagnostics; failure
   assert.deepEqual(renderFailure.outcome.result.data?.results, [a]);
 });
 
-test('all three real operations reuse bounded retry budgets and never retry parsed content failures', async (t) => {
+test('All three real operations reuse bounded retry budgets and never retry parsed content failures', async (t) => {
   const root = temporary(t);
   let calls = 0;
   let status = 503;
@@ -904,7 +904,7 @@ test('all three real operations reuse bounded retry budgets and never retry pars
   assert.equal(calls - before, 1);
 });
 
-test('late timeouts cannot re-enable retries after Tavily content, response or permanent transport failures', async () => {
+test('Late timeouts cannot re-enable retries after Tavily content, response or permanent transport failures', async () => {
   const request = prepareExtract([a], {}, {}, env, 'en');
   const cases: [string, typeof fetch, number][] = [
     ['invalid response', async () => Response.json({}), 1],
@@ -960,7 +960,7 @@ test('late timeouts cannot re-enable retries after Tavily content, response or p
   }
 });
 
-test('controlled clocks enforce 30/60/160-second request caps, fixed upstream timeouts and shared Retry-After budget', async () => {
+test('Controlled clocks enforce 30/60/160-second request caps, fixed upstream timeouts and shared Retry-After budget', async () => {
   for (const operation of ['search', 'extract', 'map'] as const)
     for (const timeout of [0.5, 600]) {
       let now = 0;
@@ -1072,7 +1072,7 @@ test('controlled clocks enforce 30/60/160-second request caps, fixed upstream ti
   }
 });
 
-test('known transport errors remain separate from programming errors and invalid UTF-8', async () => {
+test('Known transport errors remain separate from programming errors and invalid UTF-8', async () => {
   for (const [code, expected, retry] of [
     ['EAI_AGAIN', 'NETWORK_ERROR', true],
     ['ECONNRESET', 'NETWORK_ERROR', true],
@@ -1112,7 +1112,7 @@ test('known transport errors remain separate from programming errors and invalid
   assert.equal(invalid.outcome.result.error?.code, 'INVALID_RESPONSE');
 });
 
-test('native slow bodies respect cancellation and non-retryable HTTP failures do not retry on body timeout', async (t) => {
+test('Native slow bodies respect cancellation and non-retryable HTTP failures do not retry on body timeout', async (t) => {
   const root = temporary(t);
   let calls = 0;
   let status = 200;

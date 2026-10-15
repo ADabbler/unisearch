@@ -8,7 +8,7 @@ import { temporary, context, capture } from './helpers.js';
 import { createCli } from '../src/cli/program.js';
 import { AppError } from '../src/errors.js';
 
-test('target paths use platform roots and Devin overrides, and IDs are strict', () => {
+test('Target paths use platform roots and Devin overrides, and IDs are strict', () => {
   const config = { ...context('/home/test'), platform: 'linux' as const };
   assert.deepEqual(targetPaths(['codex', 'opencode', 'devin'], config), [
     { target: 'codex', path: '/home/test/.codex/skills/unisearch' },
@@ -42,7 +42,7 @@ test('target paths use platform roots and Devin overrides, and IDs are strict', 
   );
 });
 
-test('complete copies compare bytes, directories and types; update does not create absent targets', async (t) => {
+test('Complete copies compare bytes, directories and types; update does not create absent targets', async (t) => {
   const root = temporary(t),
     source = join(root, 'source');
   await fs.mkdir(join(source, 'references'), { recursive: true });
@@ -84,7 +84,7 @@ test('complete copies compare bytes, directories and types; update does not crea
   );
 });
 
-test('root and internal links never modify external targets; parent links are supported', async (t) => {
+test('Root and internal links never modify external targets; parent links are supported', async (t) => {
   const root = temporary(t),
     source = join(root, 'source'),
     outside = join(root, 'outside');
@@ -107,7 +107,7 @@ test('root and internal links never modify external targets; parent links are su
   assert.equal(await fs.readFile(join(outside, 'sentinel'), 'utf8'), 'untouched');
 });
 
-test('status compares the contents behind a root skill symlink', async (t) => {
+test('Status compares the contents behind a root skill symlink', async (t) => {
   const root = temporary(t),
     source = join(root, 'source'),
     outside = join(root, 'outside');
@@ -127,7 +127,7 @@ test('status compares the contents behind a root skill symlink', async (t) => {
   assert.equal((await fs.lstat(target.path)).isSymbolicLink(), true);
 });
 
-test('independent failures, cancellation, source validation and overlap preflight', async (t) => {
+test('Independent failures, cancellation, source validation and overlap preflight', async (t) => {
   const root = temporary(t),
     source = join(root, 'source');
   await fs.mkdir(source);
@@ -154,7 +154,7 @@ test('independent failures, cancellation, source validation and overlap prefligh
   await assert.rejects(manageSkills('install', targets, 'en', undefined, source));
 });
 
-test('failed removal and rename retain actual side effects and cleanup errors', async (t) => {
+test('Failed removal and rename retain actual side effects and cleanup errors', async (t) => {
   const root = await fs.realpath(temporary(t)),
     source = join(root, 'source');
   await fs.mkdir(source);
@@ -187,7 +187,7 @@ test('failed removal and rename retain actual side effects and cleanup errors', 
   await assert.rejects(fs.stat(targets[0].path));
 });
 
-test('cancellation during replacement finishes current target and does not start the next', async (t) => {
+test('Cancellation during replacement finishes current target and does not start the next', async (t) => {
   const root = await fs.realpath(temporary(t)),
     source = join(root, 'source');
   await fs.mkdir(source);
@@ -243,7 +243,7 @@ test('Skill CLI uses plain text and rejects unsupported result options before wr
   assert.equal((await run(['skills', 'remove', '--targets', 'codex'])).exit, 0);
 });
 
-test('unexpected read failures stop subsequent Skill targets', async (t) => {
+test('Unexpected read failures stop subsequent Skill targets', async (t) => {
   const root = await fs.realpath(temporary(t)),
     source = join(root, 'source');
   await fs.mkdir(source);

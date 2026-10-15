@@ -58,7 +58,7 @@ Run \`npm install\` before building.
 \`\`\``,
   },
   {
-    name: 'tree',
+    name: 'repository tree listing',
     renderer: 'mcp-tree',
     result: {
       status: 'success',
@@ -82,7 +82,7 @@ src/
 \`\`\``,
   },
   {
-    name: 'read-file',
+    name: 'file content reading',
     renderer: 'mcp-read-file',
     result: {
       status: 'success',

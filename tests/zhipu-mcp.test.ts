@@ -9,7 +9,7 @@ import { renderMcp } from '../src/output/zhipu-mcp.js';
 import { render } from '../src/output/render.js';
 import type { JsonObject } from '../src/result.js';
 
-test('MCP config CRUD resolves platforms, environment precedence and explicit gateway independently', async (t) => {
+test('Zhipu MCP config CRUD resolves platforms, environment precedence and explicit gateway independently', async (t) => {
   const f = await fixture(t);
   const field = fieldAt('providers.zhipu-mcp.base_url');
   assert.equal(resolveField({}, {}, field).value, 'https://open.bigmodel.cn/api/mcp');
@@ -67,7 +67,7 @@ test('MCP config CRUD resolves platforms, environment precedence and explicit ga
   assert.equal(f.calls.length, 0);
 });
 
-test('five MCP CLI operations preserve arguments and use three endpoints with a single handshake', async (t) => {
+test('Five Zhipu MCP CLI operations preserve arguments and use three endpoints with a single handshake', async (t) => {
   const f = await fixture(t);
   const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
   for (const [args, tool, params, endpoint] of [
@@ -126,7 +126,7 @@ test('five MCP CLI operations preserve arguments and use three endpoints with a 
   }
 });
 
-test('MCP validates parameters, configuration and output paths before initialization', async (t) => {
+test('Zhipu MCP validates parameters, configuration and output paths before initialization', async (t) => {
   const f = await fixture(t);
   for (const args of [
     ['search', ' '],
@@ -157,7 +157,7 @@ test('MCP validates parameters, configuration and output paths before initializa
   }
 });
 
-test('MCP accepts supported negotiated versions and stateless servers, and rejects invalid initialization', async (t) => {
+test('Zhipu MCP accepts supported negotiated versions and stateless servers, and rejects invalid initialization', async (t) => {
   const f = await fixture(t);
   for (const version of ['2025-11-25', '2025-06-18', '2025-03-26']) {
     f.initialize((call, res) =>
@@ -182,7 +182,7 @@ test('MCP accepts supported negotiated versions and stateless servers, and rejec
   }
 });
 
-test('MCP rich content retains ordered blocks, structured data, metadata and exact JSON mirror rules', () => {
+test('Zhipu MCP rich content retains ordered blocks, structured data, metadata and exact JSON mirror rules', () => {
   const structured = {
     total: 0,
     more: false,
@@ -247,7 +247,7 @@ test('MCP rich content retains ordered blocks, structured data, metadata and exa
   assert.deepEqual(file.result.data?.structured_content, structured);
 });
 
-test('MCP empty results, file links and Reader unknown envelopes never manufacture body content', async (t) => {
+test('Zhipu MCP empty results, file links and Reader unknown envelopes never manufacture body content', async (t) => {
   const f = await fixture(t);
   for (const operation of ['search', 'docs', 'tree', 'read-file'] as const) {
     const outcome = toolResult(
@@ -290,7 +290,7 @@ test('MCP empty results, file links and Reader unknown envelopes never manufactu
   });
 });
 
-test('MCP malformed blocks retain independent evidence and isError preserves diagnostics once', async (t) => {
+test('Zhipu MCP malformed blocks retain independent evidence and isError preserves diagnostics once', async (t) => {
   const f = await fixture(t);
   f.result({
     content: [
@@ -333,7 +333,7 @@ test('MCP malformed blocks retain independent evidence and isError preserves dia
   assert.equal((await f.run(['zhipu-mcp', 'search', 'q', '--format=json'])).json().data, undefined);
 });
 
-test('MCP output redacts known credentials and sessions even in upstream keys, code and provider', async (t) => {
+test('Zhipu MCP output redacts known credentials and sessions even in upstream keys, code and provider', async (t) => {
   const f = await fixture(t);
   f.save({ providers: { exa: { api_key: 'other-secret' } } });
   f.result({
@@ -360,7 +360,7 @@ test('MCP output redacts known credentials and sessions even in upstream keys, c
   }
 });
 
-test('MCP invalid error flags and metadata cannot create successful evidence or hide malformed values', () => {
+test('Zhipu MCP invalid error flags and metadata cannot create successful evidence or hide malformed values', () => {
   for (const isError of ['false', null, 1]) {
     const result = toolResult(
       { isError, content: [{ type: 'text', text: 'untrusted status' }] },
@@ -388,7 +388,7 @@ test('MCP invalid error flags and metadata cannot create successful evidence or 
   assert.equal(invalid.result.data?.structured_content, undefined);
 });
 
-test('MCP opaque session IDs cannot rename public fields or protocol tags during redaction', async (t) => {
+test('Zhipu MCP opaque session IDs cannot rename public fields or protocol tags during redaction', async (t) => {
   const f = await fixture(t);
   for (const session of [
     'provider',
@@ -434,7 +434,7 @@ test('MCP opaque session IDs cannot rename public fields or protocol tags during
   }
 });
 
-test('MCP redaction preserves values when secret-bearing keys collide with each other or existing keys', async (t) => {
+test('Zhipu MCP redaction preserves values when secret-bearing keys collide with each other or existing keys', async (t) => {
   const f = await fixture(t);
   f.save({ providers: { exa: { api_key: 'secret-one' } } });
   f.env.UNISEARCH_EXA_API_KEY = 'secret-two';
@@ -455,7 +455,7 @@ test('MCP redaction preserves values when secret-bearing keys collide with each 
   assert.doesNotMatch(result.channels.out, /secret-one|secret-two/);
 });
 
-test('MCP Markdown renders large files with many backticks without dropping content', () => {
+test('Zhipu MCP Markdown renders large files with many backticks without dropping content', () => {
   const body = '`x` '.repeat(150000) + '\n`````\n';
   const outcome = toolResult(
     { content: [{ type: 'text', text: body }] },

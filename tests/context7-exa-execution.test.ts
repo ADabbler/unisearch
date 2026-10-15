@@ -56,7 +56,7 @@ test('Context7 and Exa classify invalid encodings, network failures and internal
   }
 });
 
-test('late timeouts do not restart complete failures or permanent transport errors', async () => {
+test('Late timeouts do not restart complete failures or permanent transport errors', async () => {
   for (const provider of providers)
     for (const mode of ['invalid', 'content', 'permanent', 'temporary'] as const) {
       let now = 0;
@@ -171,7 +171,7 @@ test('Context7 and Exa respect Retry-After, remaining budget and cancellation du
     }
 });
 
-test('native Context7 and Exa requests cancel during headers or body, preserving existing files and listeners', async (t) => {
+test('Native Context7 and Exa requests cancel during headers or body, preserving existing files and listeners', async (t) => {
   const root = temporary(t);
   const output = join(root, 'saved.json');
   let stage: 'headers' | 'body' = 'headers';

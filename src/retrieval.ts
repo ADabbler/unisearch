@@ -305,7 +305,11 @@ function canSwitch(
     case 'TIMEOUT':
       return error.details?.timeout_scope === 'request';
     case 'CONTENT_UNAVAILABLE':
-      return operation === 'fetch';
+      return (
+        operation === 'fetch' &&
+        error.details?.page_status !== 404 &&
+        error.details?.page_status !== 410
+      );
     case 'UPSTREAM_ERROR':
       if (provider === 'zhipu') return zhipu.canSwitchUpstream(error);
       // The request classified cancellation before redacting the upstream code.

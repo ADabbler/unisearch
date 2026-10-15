@@ -309,12 +309,37 @@ test('content failures switch; unknown upstream and parameter failures terminate
   });
   assert.equal((await f.run(['fetch', url])).exit, 4);
   assert.equal(f.calls.length, 1);
+});
+
+test('target page statuses control fetch fallback: 403 switches, 404 and 410 stop', async (t) => {
+  const f = await fixture(t);
+  f.save({ fetch: { providers: ['firecrawl', 'tavily'] } });
+  for (const { statusCode, message } of [
+    { statusCode: 404, message: 'Not Found' },
+    { statusCode: 410, message: 'Gone' },
+  ]) {
+    f.calls.length = 0;
+    f.reply({
+      '/firecrawl/scrape': {
+        body: { success: true, data: { metadata: { statusCode, error: message } } },
+      },
+    });
+    const result = await f.run(['fetch', url, '--format=json']);
+    assert.equal(result.exit, 4);
+    assert.equal(result.json().error.code, 'CONTENT_UNAVAILABLE');
+    assert.equal(result.json().error.details.page_status, statusCode);
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls[0].path, '/firecrawl/scrape');
+  }
+  f.calls.length = 0;
   f.reply({
     '/firecrawl/scrape': {
-      body: { success: true, data: { markdown: 'error page', metadata: { statusCode: 404 } } },
+      body: { success: true, data: { markdown: 'blocked page', metadata: { statusCode: 403 } } },
     },
   });
-  assert.equal((await f.run(['fetch', url, '--format=json'])).json().data.provider, 'tavily');
+  const blocked = await f.run(['fetch', url, '--format=json']);
+  assert.equal(blocked.json().data.provider, 'tavily');
+  assert.equal(f.calls.length, 2);
 });
 
 test('malformed extraction preserves complete pages across later failure and output files', async (t) => {

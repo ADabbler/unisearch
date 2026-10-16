@@ -1,6 +1,6 @@
 {
   "name": "unisearch-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Unified CLI for AI agents to search the web, read pages, discover site links, and look up documentation.",
   "keywords": [
     "cli",

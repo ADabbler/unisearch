@@ -1,5 +1,5 @@
 import { AppError, failure } from './errors.js';
-import { clock, executeRequest, retryAfterSeconds } from './execution.js';
+import { clock, executeRequest } from './execution.js';
 import type { ExecutionClock } from './execution.js';
 import { text } from './i18n/messages.js';
 import type { Language } from './i18n/messages.js';
@@ -67,6 +67,9 @@ export type CombinedData = JsonObject & {
   answer?: ModelAnswer;
   extra_sources?: ExtraSource[];
 };
+
+/** Share of the remaining budget a retry wait may consume. */
+const retryWaitShare = 0.5;
 
 export function prepareCombinedSearch(
   query: string,
@@ -162,6 +165,14 @@ export function prepareCombinedSearch(
 export function modelLabel(candidate: ModelCandidate): string {
   return `${candidate.id}${candidate.effort ? `(${candidate.effort})` : ''}`;
 }
+/** The latest attempt decides the verdict; an attempt with none keeps the earlier one. */
+function latestFallback(
+  current: ModelAttempt['fallback'],
+  next: ModelAttempt['fallback'],
+): ModelAttempt['fallback'] {
+  return next ?? current;
+}
+
 export async function combinedSearch(
   plan: SearchPlan,
   signal: AbortSignal,
@@ -202,12 +213,20 @@ export async function combinedSearch(
       new AppError('INTERNAL_ERROR', 'internal'),
       language,
     );
-    for (const candidate of plan.model.candidates) {
+    // A model-level verdict blocks the rest of the ID, a candidate-level one does not.
+    const attemptable = (index: number, verdict: 'candidate' | 'model'): boolean =>
+      plan.model.candidates
+        .slice(index + 1)
+        .some(
+          (other) =>
+            !blockedIds.has(other.id) &&
+            (verdict === 'candidate' || other.id !== plan.model.candidates[index].id),
+        );
+    for (const [index, candidate] of plan.model.candidates.entries()) {
       if (blockedIds.has(candidate.id)) continue;
       if (controller.signal.aborted || time.now() >= deadline) break;
       let attempted = false;
       let policy: ModelAttempt['fallback'];
-      let retryAfter: string | undefined;
       const localRecord: JsonObject = {};
       outcome = await executeRequest(
         async (context) => {
@@ -219,8 +238,7 @@ export async function combinedSearch(
             language,
             options.transport,
           );
-          policy = result.fallback;
-          retryAfter = result.retry ? result.retryAfter : undefined;
+          policy = latestFallback(policy, result.fallback);
           if (result.outcome.result.error) {
             result.outcome.result.error.details = {
               ...result.outcome.result.error.details,
@@ -237,6 +255,8 @@ export async function combinedSearch(
           provider: 'model',
           retries: plan.model.retries,
           requestLimit: Infinity,
+          declineRetryWait: (wait, budget) =>
+            policy !== undefined && attemptable(index, policy) && wait >= budget * retryWaitShare,
           record: localRecord,
           onAttempt: (entry) => {
             if (previous && !attempted) {
@@ -262,27 +282,10 @@ export async function combinedSearch(
       stopInternal(outcome);
       const error = outcome.result.error;
       if (
-        error &&
-        policy &&
-        retryAfter !== undefined &&
-        error.details?.reason !== 'retry_wait_exceeds_budget'
-      ) {
-        const seconds = retryAfterSeconds(retryAfter, time.wallNow());
-        if (seconds !== undefined && seconds * 1000 >= deadline - time.now()) {
-          error.message += `${language === 'zh' ? '' : ' '}${text(language, 'retryBudget')}`;
-          error.details = {
-            ...error.details,
-            reason: 'retry_wait_exceeds_budget',
-            retry_after_seconds: seconds,
-          };
-        }
-      }
-      if (
         !error ||
         !policy ||
         controller.signal.aborted ||
         time.now() >= deadline ||
-        error.details?.reason === 'retry_wait_exceeds_budget' ||
         error.details?.timeout_scope === 'total'
       )
         return outcome;

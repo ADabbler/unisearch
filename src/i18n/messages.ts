@@ -1133,6 +1133,10 @@ const messages = {
     '所需重试等待超过剩余总预算',
     'The required retry wait exceeds the remaining total budget',
   ],
+  retryWaitShare: [
+    '所需重试等待占剩余预算过多',
+    'The required retry wait takes too much of the remaining budget',
+  ],
   errorBodyInvalid: ['上游错误体无法解析', 'The upstream error body could not be parsed'],
   cancelledSaved: [
     '操作已取消，但结果文件已完成替换',

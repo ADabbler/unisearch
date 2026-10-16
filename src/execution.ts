@@ -97,6 +97,11 @@ export interface ExecutionOptions {
   deadline?: number;
   requestLimit: number;
   onAttempt?: (entry: JsonObject) => void;
+  /**
+   * Ending the request instead of waiting when this returns true reports
+   * `retry_wait_exceeds_share`. A wait reaching the whole budget ends it anyway.
+   */
+  declineRetryWait?: (wait: number, budget: number) => boolean;
 }
 
 function abortError(signal: AbortSignal): AppError {
@@ -200,6 +205,7 @@ export async function executeRequest<T extends JsonValue>(
       final = attempt.outcome;
       if (streamStarted || !attempt.retry || attempts.length > options.retries) break;
       check();
+      const budget = remaining();
       const seconds =
         attempt.retryAfter === undefined
           ? undefined
@@ -210,12 +216,14 @@ export async function executeRequest<T extends JsonValue>(
         seconds === undefined
           ? Math.min(2 ** Math.min(attempts.length - 1, 4), 10) * 1000
           : seconds * 1000;
-      if (wait >= remaining()) {
+      const overBudget = wait >= budget;
+      if (overBudget || options.declineRetryWait?.(wait, budget)) {
         if (final.result.error) {
-          final.result.error.message += `${options.language === 'zh' ? '' : ' '}${text(options.language, 'retryBudget')}`;
+          const key = overBudget ? 'retryBudget' : 'retryWaitShare';
+          final.result.error.message += `${options.language === 'zh' ? '' : ' '}${text(options.language, key)}`;
           final.result.error.details = {
             ...final.result.error.details,
-            reason: 'retry_wait_exceeds_budget',
+            reason: overBudget ? 'retry_wait_exceeds_budget' : 'retry_wait_exceeds_share',
             ...(seconds === undefined ? {} : { retry_after_seconds: seconds }),
           };
         }

@@ -540,7 +540,7 @@ test('HTTP error classification uses structured facts, never infers model scope 
     [429, { code: 'insufficient_quota' }, 'QUOTA_EXCEEDED', false, undefined],
     [404, { code: 'model_not_found' }, 'MODEL_UNAVAILABLE', false, 'model'],
     [404, { message: 'model not found' }, 'UPSTREAM_ERROR', false, undefined],
-    [429, {}, 'RATE_LIMITED', true, undefined],
+    [429, {}, 'RATE_LIMITED', true, 'model'],
     [429, { param: 'model' }, 'RATE_LIMITED', true, 'model'],
     [503, {}, 'UPSTREAM_ERROR', true, undefined],
     [503, { param: 'model' }, 'UPSTREAM_ERROR', true, 'model'],
@@ -929,7 +929,7 @@ test('Same-ID effort fallback uses independent settings, shared prompt/time, no 
   assert.equal(time.live(), 0);
 });
 
-test('Model-wide unavailability skips other effort for the ID, Retry-After cannot be bypassed through fallback', async () => {
+test('Model-wide unavailability skips other effort for the ID and an unaffordable retry wait switches models', async () => {
   for (const limited of [false, true])
     for (const retries of [0, 2]) {
       const plan = prepareCombinedSearch(
@@ -947,7 +947,7 @@ test('Model-wide unavailability skips other effort for the ID, Retry-After canno
         modelEnv,
         'en',
       );
-      const ids: string[] = [];
+      const calls: string[] = [];
       const time = controlledClock();
       const result = await combinedSearch(
         plan,
@@ -957,26 +957,148 @@ test('Model-wide unavailability skips other effort for the ID, Retry-After canno
         {
           clock: time.clock,
           transport: async (_url, init) => {
-            ids.push(JSON.parse(init!.body as string).model);
+            const body = JSON.parse(init!.body as string);
+            calls.push(
+              `${body.model}${body.reasoning?.effort ? `(${body.reasoning.effort})` : ''}`,
+            );
             if (limited)
               return Response.json(
                 { error: { param: 'model' } },
                 { status: 429, headers: { 'retry-after': '300' } },
               );
-            return ids.length === 1
+            return calls.length === 1
               ? Response.json({ error: { code: 'model_not_found' } }, { status: 404 })
               : Response.json(response());
           },
         },
       );
-      assert.deepEqual(ids, limited ? ['primary'] : ['primary', 'backup']);
+      assert.deepEqual(calls, ['primary(high)', 'backup']);
       assert.equal(result.exitCode, limited ? 4 : 0);
-      if (limited)
-        assert.equal(
-          result.result.error?.details?.failures?.[0].details?.reason,
-          'retry_wait_exceeds_budget',
-        );
+      assert.deepEqual(time.waits, []);
+      assert.equal(
+        result.result.error?.details?.failures?.[0].details?.reason,
+        limited && retries ? 'retry_wait_exceeds_budget' : undefined,
+      );
+      assert.deepEqual(
+        (result.result.meta?.model_fallbacks as JsonObject[]).map(({ from, to }) => [from, to]),
+        [['primary(high)', 'backup']],
+      );
     }
+});
+
+test('A retry wait taking too much of the budget switches models, and the latest verdict decides the fallback', async () => {
+  const run = async (
+    fallbacks: { id: string; effort?: string }[],
+    replies: Record<string, (step: number) => Response>,
+    main: { id: string; effort?: string } = { id: 'primary' },
+  ) => {
+    const plan = prepareCombinedSearch(
+      'q',
+      {},
+      {
+        execution: { retries: 2 },
+        providers: { model: { model: main, fallback_models: fallbacks } },
+      },
+      modelEnv,
+      'en',
+    );
+    const calls: string[] = [];
+    const time = controlledClock();
+    const outcome = await combinedSearch(
+      plan,
+      new AbortController().signal,
+      'en',
+      {},
+      {
+        clock: time.clock,
+        transport: async (_url, init) => {
+          const body = JSON.parse(init!.body as string);
+          const label = `${body.model}${body.reasoning?.effort ? `(${body.reasoning.effort})` : ''}`;
+          const step = calls.filter((entry) => entry === label).length;
+          calls.push(label);
+          return replies[label]!(step);
+        },
+      },
+    );
+    return { calls, time, outcome };
+  };
+  const retry = (status: number, retryAfter: string) =>
+    Response.json(
+      { error: { param: 'model' } },
+      { status, headers: { 'retry-after': retryAfter } },
+    );
+  const effort = () =>
+    Response.json(
+      { error: { code: 'unsupported_value', param: 'reasoning_effort' } },
+      { status: 422 },
+    );
+  const large = await run([{ id: 'backup' }], {
+    primary: () => retry(429, '180'),
+    backup: () => Response.json(response()),
+  });
+  assert.deepEqual(large.calls, ['primary', 'backup']);
+  assert.deepEqual(large.time.waits, []);
+  assert.equal(large.outcome.exitCode, 0);
+  const small = await run([{ id: 'backup' }], {
+    primary: (step) => (step ? Response.json(response()) : retry(429, '60')),
+    backup: () => Response.json(response()),
+  });
+  assert.deepEqual(small.calls, ['primary', 'primary']);
+  assert.deepEqual(small.time.waits, [60_000]);
+  assert.equal(small.outcome.exitCode, 0);
+  const undecided = await run([{ id: 'backup' }], {
+    primary: (step) =>
+      step
+        ? Response.json(response())
+        : Response.json({ error: {} }, { status: 503, headers: { 'retry-after': '200' } }),
+    backup: () => Response.json(response()),
+  });
+  assert.deepEqual(undecided.calls, ['primary', 'primary']);
+  assert.deepEqual(undecided.time.waits, [200_000]);
+  assert.equal(undecided.outcome.exitCode, 0);
+  const mixed = await run([{ id: 'backup' }], {
+    primary: (step) => (step ? Response.json({ error: {} }, { status: 500 }) : retry(429, '1')),
+    backup: () => Response.json(response()),
+  });
+  assert.deepEqual(mixed.calls, ['primary', 'primary', 'primary', 'backup']);
+  assert.equal(mixed.outcome.exitCode, 0);
+  const later = await run([{ id: 'backup' }, { id: 'third' }], {
+    primary: effort,
+    backup: () => retry(429, '200'),
+    third: () => Response.json(response()),
+  });
+  assert.deepEqual(later.calls, ['primary', 'backup', 'third']);
+  assert.deepEqual(later.time.waits, []);
+  assert.equal(later.outcome.exitCode, 0);
+  const last = await run([{ id: 'backup' }], {
+    primary: effort,
+    backup: (step) => (step ? Response.json(response()) : retry(429, '200')),
+  });
+  assert.deepEqual(last.calls, ['primary', 'backup', 'backup']);
+  assert.deepEqual(last.time.waits, [200_000]);
+  assert.equal(last.outcome.exitCode, 0);
+  const alone = await run([], {
+    primary: () => retry(429, '100'),
+  });
+  assert.deepEqual(alone.calls, ['primary', 'primary', 'primary']);
+  assert.deepEqual(alone.time.waits, [100_000, 100_000]);
+  assert.equal(alone.outcome.exitCode, 4);
+  const replaced = await run(
+    [{ id: 'primary', effort: 'low' }],
+    {
+      'primary(high)': (step) =>
+        step === 0
+          ? Response.json(
+              { error: { param: 'model' } },
+              { status: 429, headers: { 'retry-after': '1' } },
+            )
+          : effort(),
+      'primary(low)': () => Response.json(response()),
+    },
+    { id: 'primary', effort: 'high' },
+  );
+  assert.deepEqual(replaced.calls, ['primary(high)', 'primary(high)', 'primary(low)']);
+  assert.equal(replaced.outcome.exitCode, 0);
 });
 
 test('Model retries preserve settings, per-candidate counts and Exa is never restarted by fallback', async () => {

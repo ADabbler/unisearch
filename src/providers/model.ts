@@ -77,12 +77,7 @@ export function httpError(status: number, error?: Record<string, unknown>): Http
     };
   }
   if (status === 429)
-    return {
-      code: 'RATE_LIMITED',
-      key: 'modelRate',
-      retry: true,
-      ...(error?.param === 'model' ? { fallback: 'model' as const } : {}),
-    };
+    return { code: 'RATE_LIMITED', key: 'modelRate', retry: true, fallback: 'model' };
   if (status === 408 || status === 504)
     return { code: 'TIMEOUT', key: 'requestTimeout', retry: true };
   return {

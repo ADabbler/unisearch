@@ -321,6 +321,123 @@ test('Malformed, incomplete, refused and client-tool responses never return part
   rejects(() => chatAnswer(duplicated), 'INVALID_RESPONSE');
 });
 
+test('Top-level citations are read strictly and merged with annotations', () => {
+  const citations = ['https://example.org/a', 'https://example.org/b', 'https://example.org/a'];
+  const body = response() as any;
+  body.citations = citations;
+  body.output[0].content[0].annotations = [
+    { type: 'url_citation', url: 'https://example.org/b', title: 'B' },
+    { type: 'url_citation', url: 'https://example.org/c' },
+  ];
+  assert.deepEqual(responseAnswer(body).sources, [
+    { url: 'https://example.org/a' },
+    { url: 'https://example.org/b', title: 'B' },
+    { url: 'https://example.org/c' },
+  ]);
+  const chatBody = chat() as any;
+  chatBody.citations = citations;
+  chatBody.choices[0].message.annotations = [
+    { type: 'url_citation', url_citation: { url: 'https://example.org/b', title: 'B' } },
+  ];
+  assert.deepEqual(chatAnswer(chatBody).sources, [
+    { url: 'https://example.org/a' },
+    { url: 'https://example.org/b', title: 'B' },
+  ]);
+  const empty = response() as any;
+  empty.citations = null;
+  assert.deepEqual(responseAnswer(empty), { model: 'reported-model', text: 'Complete answer.' });
+  const emptyChat = chat() as any;
+  emptyChat.citations = null;
+  assert.deepEqual(chatAnswer(emptyChat), { model: 'reported-model', text: 'Complete answer.' });
+  for (const value of ['https://example.org', [42], ['ftp://example.org'], [''], 'text']) {
+    rejects(() => responseAnswer({ ...response(), citations: value }), 'INVALID_RESPONSE');
+    rejects(() => chatAnswer({ ...chat(), citations: value }), 'INVALID_RESPONSE');
+  }
+});
+
+test('Inline reasoning and model-written sources leave the answer text', () => {
+  const answer = 'Answer before.<think>secret</think>Answer after.';
+  assert.equal(responseAnswer(response(answer)).text, 'Answer before.Answer after.');
+  assert.equal(chatAnswer(chat(answer)).text, 'Answer before.Answer after.');
+  assert.equal(chatAnswer(chat('Body<think>a</think><think>b</think>Text')).text, 'BodyText');
+  assert.equal(
+    responseAnswer(response('No block <thinking>x</thinking> here')).text,
+    'No block <thinking>x</thinking> here',
+  );
+  rejects(() => responseAnswer(response('<think>only</think>')), 'INVALID_RESPONSE');
+  rejects(() => chatAnswer(chat('<think>only</think>')), 'INVALID_RESPONSE');
+  const refused = chat() as any;
+  refused.choices[0].message = { content: '<think>only</think>', refusal: 'No.' };
+  rejects(() => chatAnswer(refused), 'UPSTREAM_ERROR');
+});
+
+test('Sources headings, trailing link blocks and inline citations become structured sources', () => {
+  const answer =
+    'Body text.\n\n## Sources\n- [Example](https://example.org/a)\n- [Test](https://example.org/b)';
+  assert.deepEqual(responseAnswer(response(answer)), {
+    model: 'reported-model',
+    text: 'Body text.',
+    sources: [
+      { url: 'https://example.org/a', title: 'Example' },
+      { url: 'https://example.org/b', title: 'Test' },
+    ],
+  });
+  const links = 'Body text.\n\nhttps://example.org/a\nhttps://example.org/b';
+  assert.deepEqual(chatAnswer(chat(links)), {
+    model: 'reported-model',
+    text: 'Body text.',
+    sources: [{ url: 'https://example.org/a' }, { url: 'https://example.org/b' }],
+  });
+  const inline = 'Cites [[1]](https://example.org/a) and [[2]](https://example.org/b).';
+  assert.deepEqual(responseAnswer(response(inline)), {
+    model: 'reported-model',
+    text: inline,
+    sources: [{ url: 'https://example.org/a' }, { url: 'https://example.org/b' }],
+  });
+  const prose =
+    'Body text.\n\n## Sources\nSee the [Example](https://example.org/a) page for details.';
+  assert.deepEqual(responseAnswer(response(prose)), { model: 'reported-model', text: prose });
+  const zh = '正文。\n\n参考资料：\n- [A](https://example.org/a)\n- B https://example.org/b';
+  assert.deepEqual(chatAnswer(chat(zh)), {
+    model: 'reported-model',
+    text: '正文。',
+    sources: [{ url: 'https://example.org/a', title: 'A' }, { url: 'https://example.org/b' }],
+  });
+  const trailing = 'Body text.\n\nhttps://example.org/a.';
+  assert.deepEqual(chatAnswer(chat(trailing)), { model: 'reported-model', text: trailing });
+  const named = 'Body.\n\n## Sources\n- [Example](https://example.org/a)';
+  assert.deepEqual(chatAnswer(chat(named)), {
+    model: 'reported-model',
+    text: 'Body.',
+    sources: [{ url: 'https://example.org/a', title: 'Example' }],
+  });
+  const single = 'Body text.\n\nhttps://example.org/a';
+  assert.deepEqual(chatAnswer(chat(single)), { model: 'reported-model', text: single });
+  const proseItem =
+    'Body.\n\n## References\n- Links below are official\n- [Example](https://example.org/a)';
+  assert.deepEqual(chatAnswer(chat(proseItem)), { model: 'reported-model', text: proseItem });
+  const ordered =
+    'Body.\n\n## Sources\n- bare https://example.org/a\n- [Titled](https://example.org/b)';
+  assert.deepEqual(chatAnswer(chat(ordered)).sources, [
+    { url: 'https://example.org/a' },
+    { url: 'https://example.org/b', title: 'Titled' },
+  ]);
+  const parens =
+    'Body.\n\n[Company](https://en.wikipedia.org/wiki/X_(company))\nhttps://example.org/b';
+  assert.deepEqual(chatAnswer(chat(parens)), {
+    model: 'reported-model',
+    text: 'Body.',
+    sources: [
+      { url: 'https://en.wikipedia.org/wiki/X_(company)', title: 'Company' },
+      { url: 'https://example.org/b' },
+    ],
+  });
+  rejects(
+    () => chatAnswer(chat('## Sources\n- [Example](https://example.org/a)')),
+    'INVALID_RESPONSE',
+  );
+});
+
 function byteStream(content: string | Uint8Array, chunkSize = 1, close = true) {
   const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
   let cancelled = false;
@@ -367,6 +484,20 @@ test('Chat SSE requires stop plus DONE, closes without EOF and uses only index z
     text: '中文 answer',
   });
   assert.equal(stream.cancelled(), true);
+  const cited =
+    event({ model: 'actual', choices: [{ index: 0, delta: { content: 'Body' } }] }) +
+    event({
+      model: 'actual',
+      citations: ['https://example.org/a'],
+      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+    }) +
+    event({ model: 'actual', citations: ['https://example.org/b'], choices: [], usage: {} }) +
+    'data: [DONE]\n\n';
+  assert.deepEqual(await streamAnswer(byteStream(cited).stream, 'chat-completions'), {
+    model: 'actual',
+    text: 'Body',
+    sources: [{ url: 'https://example.org/a' }, { url: 'https://example.org/b' }],
+  });
   for (const text of [
     'data: [DONE]\n\n',
     event(chunk({ content: 'partial' })),

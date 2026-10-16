@@ -5,8 +5,9 @@ import type { JsonObject } from '../result.js';
 export type ModelAnswer = JsonObject & {
   model: string;
   text: string;
-  sources?: (JsonObject & { url: string; title?: string })[];
+  sources?: AnswerSource[];
 };
+type AnswerSource = JsonObject & { url: string; title?: string };
 export function invalidResponse(): never {
   throw new AppError('INVALID_RESPONSE', 'modelResponse');
 }
@@ -40,10 +41,27 @@ function upstreamError(value: unknown): never {
 function nonempty(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
+function validSourceUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || !value || /\s/u.test(value) || !/^https?:\/\//.test(value))
+    return false;
+  try {
+    return Boolean(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+}
+function addSource(sources: AnswerSource[], url: string, title?: string): void {
+  const existing = sources.find((source) => source.url === url);
+  if (!existing) {
+    sources.push({ url, ...(title ? { title } : {}) });
+    return;
+  }
+  if (!existing.title && title) existing.title = title;
+}
 function annotations(
   value: unknown,
   protocol: 'responses' | 'chat-completions',
-  sources: NonNullable<ModelAnswer['sources']>,
+  sources: AnswerSource[],
 ): void {
   if (value === undefined || value === null) return;
   if (!Array.isArray(value)) invalidResponse();
@@ -51,30 +69,143 @@ function annotations(
     if (!isObject(item) || typeof item.type !== 'string') invalidResponse();
     if (item.type !== 'url_citation') continue;
     const citation = protocol === 'responses' ? item : item.url_citation;
-    if (
-      !isObject(citation) ||
-      !nonempty(citation.url) ||
-      /\s/u.test(citation.url) ||
-      !/^https?:\/\//.test(citation.url)
-    )
-      invalidResponse();
-    try {
-      if (!new URL(citation.url).hostname) invalidResponse();
-    } catch {
-      invalidResponse();
-    }
+    if (!isObject(citation) || !validSourceUrl(citation.url)) invalidResponse();
     if (
       citation.title !== undefined &&
       citation.title !== null &&
       typeof citation.title !== 'string'
     )
       invalidResponse();
-    if (!sources.some((source) => source.url === citation.url))
-      sources.push({
-        url: citation.url,
-        ...(citation.title ? { title: citation.title as string } : {}),
-      });
+    addSource(sources, citation.url, citation.title ? (citation.title as string) : undefined);
   }
+}
+
+/** Reasoning blocks emitted inside the answer text. */
+const thinkingBlock = /<think\b[^>]*>[\s\S]*?<\/think\s*>/gi;
+
+/** Characters a URL can contain, excluding parentheses, which are balanced separately. */
+const urlChar = String.raw`[^\s()<>"'\`，。、；：！？》）】]`;
+
+/** A URL body with balanced parentheses, as used by paths such as `X_(company)`. */
+const urlBody = String.raw`${urlChar}*(?:\(${urlChar}*\)${urlChar}*)*`;
+
+/** xAI inline citations, for example `[[1]](https://example.org/page)`. */
+const inlineCitation = new RegExp(String.raw`\[\[(\d+)\]\]\((https?:\/\/${urlBody})\)`, 'g');
+
+/** Markdown links and bare URLs matched in text order. */
+const linkOrUrl = new RegExp(
+  String.raw`\[([^\]]*)\]\((https?:\/\/${urlBody})\)|https?:\/\/${urlBody}`,
+  'g',
+);
+
+/** A standalone line naming the source list, such as `## Sources` or `参考资料：`. */
+const sourceHeading =
+  /^(?:#{1,6}[ \t]*)?(?:\*\*|__)?[ \t]*(sources?|references?|citations?|信源|参考资料|参考|引用|来源列表|来源)[ \t]*(?:\*\*|__)?(?:[ \t]*[（(][^)\n]*[)）])?[ \t]*[:：]?[ \t]*$/gim;
+
+const listMarker = /^[ \t]*(?:[-*]|\d+\.)[ \t]*/;
+
+const linkLine = /^(?:https?:\/\/|\[[^\]]*\]\(https?:\/\/)/;
+
+/** Any URL in a line, used to tell source lines from prose list items. */
+const anyUrl = new RegExp(String.raw`https?:\/\/${urlBody}`);
+
+/**
+ * Remove inline reasoning blocks and collapse the blank lines they leave
+ * behind. Text without a block keeps its original spacing.
+ */
+function stripThinking(text: string): string {
+  const stripped = text.replace(thinkingBlock, '');
+  if (stripped === text) return text;
+  return stripped.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Separate sources the model wrote into the answer text from the answer itself.
+ * Sources in a heading block or a trailing block of link-only lines leave the
+ * text; inline `[[n]](url)` citations are collected but stay.
+ */
+function extractAnswerSources(text: string): { text: string; sources: AnswerSource[] } {
+  const sources: AnswerSource[] = [];
+  for (const match of text.matchAll(inlineCitation)) addSource(sources, match[2]);
+  const block = headingBlock(text) ?? linkBlock(text);
+  if (!block) return { text, sources };
+  for (const source of block.sources) addSource(sources, source.url, source.title);
+  return { text: block.text, sources };
+}
+
+/**
+ * Every non-blank line below the heading must be a source line carrying a URL.
+ */
+function headingBlock(text: string): { text: string; sources: AnswerSource[] } | undefined {
+  const starts = [...text.matchAll(sourceHeading)].map((match) => match.index);
+  for (const start of starts.reverse()) {
+    const body = text
+      .slice(start)
+      .split('\n')
+      .slice(1)
+      .filter((line) => line.trim());
+    if (!body.length || body.some((line) => !isSourceLine(line))) continue;
+    const sources = linksIn(body.join('\n'));
+    if (sources.length) return { text: text.slice(0, start).trimEnd(), sources };
+  }
+  return undefined;
+}
+
+/** A source line is a list item or a link line that carries a URL. */
+function isSourceLine(line: string): boolean {
+  return (listMarker.test(line) || isLinkLine(line)) && anyUrl.test(line);
+}
+
+function linkBlock(text: string): { text: string; sources: AnswerSource[] } | undefined {
+  const lines = text.split('\n');
+  let end = lines.length - 1;
+  while (end >= 0 && !lines[end].trim()) end -= 1;
+  if (end < 0) return undefined;
+  let first = end;
+  while (first >= 0 && (!lines[first].trim() || isLinkLine(lines[first]))) first -= 1;
+  first += 1;
+  if (lines.slice(first, end + 1).filter((line) => isLinkLine(line)).length < 2) return undefined;
+  const sources = linksIn(lines.slice(first, end + 1).join('\n'));
+  if (!sources.length) return undefined;
+  return { text: lines.slice(0, first).join('\n').trimEnd(), sources };
+}
+
+function isLinkLine(line: string): boolean {
+  return linkLine.test(line.replace(listMarker, '').trim());
+}
+
+function linksIn(text: string): AnswerSource[] {
+  const sources: AnswerSource[] = [];
+  for (const match of text.matchAll(linkOrUrl)) {
+    const link = match[2] === undefined ? undefined : { url: match[2], title: match[1].trim() };
+    const url = link ? link.url : match[0].replace(/[.,;:!?]+$/, '');
+    if (validSourceUrl(url)) addSource(sources, url, link?.title);
+  }
+  return sources;
+}
+
+/** The top-level `citations` URL list both protocols return. */
+function citations(value: unknown, sources: AnswerSource[]): void {
+  if (value === undefined || value === null) return;
+  if (!Array.isArray(value)) invalidResponse();
+  for (const url of value) {
+    if (!validSourceUrl(url)) invalidResponse();
+    addSource(sources, url);
+  }
+}
+
+/**
+ * Replace model-written sources and inline reasoning with structured output.
+ * Protocol sources keep priority over sources recovered from prose.
+ */
+function finalize(
+  text: string,
+  sources: AnswerSource[],
+): { text: string; sources: AnswerSource[] } {
+  const answer = extractAnswerSources(stripThinking(text));
+  const merged: AnswerSource[] = [];
+  for (const source of [...sources, ...answer.sources]) addSource(merged, source.url, source.title);
+  return { text: answer.text, sources: merged };
 }
 
 const clientTools = new Set([
@@ -97,7 +228,8 @@ export function responseAnswer(body: unknown): ModelAnswer {
   }
   if (!nonempty(body.model) || !Array.isArray(body.output)) invalidResponse();
   const parts: string[] = [];
-  const sources: NonNullable<ModelAnswer['sources']> = [];
+  const sources: AnswerSource[] = [];
+  citations(body.citations, sources);
   let refusal = false;
   for (const item of body.output) {
     if (!isObject(item) || typeof item.type !== 'string') invalidResponse();
@@ -130,12 +262,16 @@ export function responseAnswer(body: unknown): ModelAnswer {
       annotations(part.annotations, 'responses', sources);
     }
   }
-  const text = parts.join('\n\n');
-  if (!text.trim()) {
+  const answer = finalize(parts.join('\n\n'), sources);
+  if (!answer.text.trim()) {
     if (refusal) incomplete('refusal');
     invalidResponse();
   }
-  return { model: body.model, text, ...(sources.length ? { sources } : {}) };
+  return {
+    model: body.model,
+    text: answer.text,
+    ...(answer.sources.length ? { sources: answer.sources } : {}),
+  };
 }
 
 function chatFinish(reason: unknown): void {
@@ -173,9 +309,19 @@ export function chatAnswer(body: unknown): ModelAnswer {
     if (nonempty(choice.message.refusal)) incomplete('refusal');
     invalidResponse();
   }
-  const sources: NonNullable<ModelAnswer['sources']> = [];
+  const sources: AnswerSource[] = [];
+  citations(body.citations, sources);
   annotations(choice.message.annotations, 'chat-completions', sources);
-  return { model: body.model, text: content, ...(sources.length ? { sources } : {}) };
+  const answer = finalize(content, sources);
+  if (!answer.text.trim()) {
+    if (nonempty(choice.message.refusal)) incomplete('refusal');
+    invalidResponse();
+  }
+  return {
+    model: body.model,
+    text: answer.text,
+    ...(answer.sources.length ? { sources: answer.sources } : {}),
+  };
 }
 
 async function* events(
@@ -236,15 +382,20 @@ export async function streamAnswer(
   let content = '';
   let stopped = false;
   let refused = false;
-  const sources: NonNullable<ModelAnswer['sources']> = [];
+  const sources: AnswerSource[] = [];
   for await (const event of events(body)) {
     if (event.data === '[DONE]') {
       if (protocol !== 'chat-completions' || !stopped || !model) invalidResponse();
-      if (!content.trim()) {
+      const answer = finalize(content, sources);
+      if (!answer.text.trim()) {
         if (refused) incomplete('refusal');
         invalidResponse();
       }
-      return { model, text: content, ...(sources.length ? { sources } : {}) };
+      return {
+        model,
+        text: answer.text,
+        ...(answer.sources.length ? { sources: answer.sources } : {}),
+      };
     }
     let value: unknown;
     try {
@@ -277,6 +428,8 @@ export async function streamAnswer(
       }
       continue;
     }
+    if (value.citations !== undefined && value.citations !== null)
+      citations(value.citations, sources);
     if (value.model !== undefined) {
       if (!nonempty(value.model) || (model !== undefined && value.model !== model))
         invalidResponse();

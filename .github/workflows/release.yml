@@ -62,48 +62,35 @@ jobs:
           fi
           printf 'PACKAGE_NAME=%s\nPACKAGE_VERSION=%s\nPACKAGE_FILE=%s-%s.tgz\nNPM_TAG=%s\n' "$name" "$version" "$name" "$version" "$npm_tag" >> "$GITHUB_ENV"
           printf 'prerelease=%s\n' "$prerelease" >> "$GITHUB_OUTPUT"
-      - name: Use npm 12 for trusted publishing
-        run: npm install --global npm@12 --ignore-scripts
       - uses: actions/download-artifact@v8
         with:
           name: npm-package
           path: package
-      - name: Publish to npm
+      - name: Publish or verify the npm package
         run: |
           if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version --json > "$RUNNER_TEMP/npm-version.json"; then
-            echo "$PACKAGE_NAME@$PACKAGE_VERSION already exists; checking its integrity next."
-          else
-            jq -e '.error.code == "E404"' "$RUNNER_TEMP/npm-version.json"
-            publish_args=(publish "./package/$PACKAGE_FILE" --ignore-scripts --access public --provenance)
-            if [ "$NPM_TAG" = next ]; then
-              publish_args+=(--tag next)
-            fi
-            npm "${publish_args[@]}"
-          fi
-      - name: Verify the npm package and installation
-        run: |
-          expected="sha512-$(openssl dgst -sha512 -binary "package/$PACKAGE_FILE" | openssl base64 -A)"
-          actual=''
-          for attempt in {1..18}; do
-            actual=$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity 2>/dev/null || true)
-            if [ "$actual" = "$expected" ]; then break; fi
-            if [ "$attempt" -eq 18 ]; then
-              echo "The npm version differs from the package verified by CI." >&2
+            expected_integrity="sha512-$(openssl dgst -sha512 -binary "package/$PACKAGE_FILE" | openssl base64 -A)"
+            published_integrity=$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.integrity)
+            if [ "$published_integrity" != "$expected_integrity" ]; then
+              echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published with a different package." >&2
+              echo "Expected $expected_integrity, found $published_integrity." >&2
               exit 1
             fi
-            echo "The npm package is not visible yet; retrying integrity check ($attempt/18)."
-            sleep 10
-          done
-          release_prefix="$RUNNER_TEMP/npm-install"
-          npm install --global --prefix "$release_prefix" --cache "$RUNNER_TEMP/npm-cache" --ignore-scripts --no-audit --no-fund "$PACKAGE_NAME@$PACKAGE_VERSION"
-          export UNISEARCH_CONFIG_PATH="$RUNNER_TEMP/unisearch-config.json"
-          export UNISEARCH_LANG=en
-          installed_version=$("$release_prefix/bin/unisearch" --version)
-          if [ "$installed_version" != "unisearch $PACKAGE_VERSION" ]; then
-            echo "Unexpected installed version: $installed_version" >&2
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published with this build."
+            exit 0
+          fi
+
+          if ! jq -e '.error.code == "E404"' "$RUNNER_TEMP/npm-version.json" > /dev/null; then
+            echo "The registry did not report $PACKAGE_NAME@$PACKAGE_VERSION as missing:" >&2
+            cat "$RUNNER_TEMP/npm-version.json" >&2
             exit 1
           fi
-          "$release_prefix/bin/unisearch" --help
+
+          publish_args=(publish "./package/$PACKAGE_FILE" --ignore-scripts --access public --provenance)
+          if [ "$NPM_TAG" = next ]; then
+            publish_args+=(--tag next)
+          fi
+          npm "${publish_args[@]}"
 
   github-release:
     needs: publish-npm

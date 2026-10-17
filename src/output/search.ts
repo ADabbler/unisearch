@@ -2,7 +2,7 @@ import type { Language } from '../i18n/messages.js';
 import { text } from '../i18n/messages.js';
 import type { JsonObject } from '../result.js';
 import type { CombinedData } from '../search.js';
-import { inline, renderPageLatencies, renderSearch } from './exa.js';
+import { inline, linkTarget, renderPageLatencies, renderSearch } from './exa.js';
 import { renderTavilySearch } from './tavily.js';
 import { renderSearch as renderFirecrawlSearch } from './firecrawl.js';
 import { renderJina } from './jina.js';
@@ -21,12 +21,11 @@ export function renderCombinedSearch(data: CombinedData, language: Language): st
       data.answer.text,
     );
     if (data.answer.sources) {
-      const sources = data.answer.sources.map((source) => {
-        const url = source.url.replace(/[<>\s()\\]/g, (value) =>
-          encodeURIComponent(value).replace(/\(/g, '%28').replace(/\)/g, '%29'),
-        );
-        return `- [${inline(source.title ?? source.url)}](${url})`;
-      });
+      const sources = data.answer.sources.map((source) =>
+        source.title
+          ? `- [${inline(source.title)}](${linkTarget(source.url)})`
+          : `- <${linkTarget(source.url)}>`,
+      );
       sections.push(`### ${text(language, 'modelSourcesLabel')}\n\n${sources.join('\n')}`);
     }
   }
@@ -81,6 +80,15 @@ export function renderCombinedSearch(data: CombinedData, language: Language): st
 export function renderSearchExecution(data: JsonObject, language: Language): string {
   if (!Array.isArray(data.attempts)) return '';
   const separator = language === 'zh' ? '：' : ': ';
+  const searched =
+    Array.isArray(data.searched_sources) && data.searched_sources.length
+      ? [
+          '',
+          `### ${text(language, 'searchedSourcesLabel')}`,
+          '',
+          ...data.searched_sources.map((url) => `- <${linkTarget(String(url))}>`),
+        ]
+      : [];
   return [
     `${text(language, 'elapsedLabel')}${separator}${data.elapsed_ms} ms`,
     ...data.attempts.map((value) => {
@@ -109,5 +117,6 @@ export function renderSearchExecution(data: JsonObject, language: Language): str
         .join(' · ');
       return [summary, ...renderPageLatencies(item, language)].join('\n');
     }),
+    ...searched,
   ].join('\n');
 }

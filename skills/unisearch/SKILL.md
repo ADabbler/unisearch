@@ -87,6 +87,6 @@ Both `partial` and `error` may contain usable `data`. Preserve relevant errors a
 
 Check for truncated or missing content even when `status` is `success`.
 
-`search` keeps `data.answer` and `data.extra_sources` separate; supplements do not automatically update or verify the answer.
+`search` keeps `data.answer` and `data.extra_sources` separate; supplements do not automatically update or verify the answer. `data.answer.sources` lists only the sources the answer cites; `--verbose` adds the other pages the model searched to `meta.searched_sources`.
 
 Cite source URLs. Read the page when a claim depends on details beyond a search snippet; `map` returns links, not page content.

@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createCli } from '../src/cli/program.js';
 import { combinedSearch, prepareCombinedSearch } from '../src/search.js';
+import type { CombinedData } from '../src/search.js';
 import { requestModel } from '../src/providers/model.js';
 import { prepareModel } from '../src/providers/model-config.js';
 import { renderCombinedSearch, renderSearchExecution } from '../src/output/search.js';
@@ -661,3 +662,43 @@ test(
     }
   },
 );
+
+test('Search sources render titled links, bare autolinks and no empty heading', () => {
+  const data = {
+    answer: {
+      model: 'm',
+      text: 'Body.',
+      sources: [
+        { url: 'https://example.org/a' },
+        { url: 'https://example.org/b_(c)', title: 'B (c)' },
+      ],
+    },
+  } as unknown as CombinedData;
+  assert.equal(
+    renderCombinedSearch(data, 'en'),
+    `Model: m
+
+Body.
+
+### Model-provided sources
+
+- <https://example.org/a>
+- [B (c)](https://example.org/b_%28c%29)`,
+  );
+});
+
+test('Verbose searched sources list only unused URLs and skip an empty list', () => {
+  const base: JsonObject = { elapsed_ms: 5, attempts: [{ provider: 'model', duration_ms: 5 }] };
+  assert.equal(renderSearchExecution(base, 'en'), 'Execution time: 5 ms\nmodel · 5 ms');
+  assert.equal(
+    renderSearchExecution({ ...base, searched_sources: [] }, 'en'),
+    'Execution time: 5 ms\nmodel · 5 ms',
+  );
+  assert.equal(
+    renderSearchExecution(
+      { ...base, searched_sources: ['https://example.org/a', 'https://example.org/b_(c)'] },
+      'en',
+    ),
+    'Execution time: 5 ms\nmodel · 5 ms\n\n### Searched sources\n\n- <https://example.org/a>\n- <https://example.org/b_%28c%29>',
+  );
+});

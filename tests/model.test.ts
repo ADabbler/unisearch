@@ -321,7 +321,7 @@ test('Malformed, incomplete, refused and client-tool responses never return part
   rejects(() => chatAnswer(duplicated), 'INVALID_RESPONSE');
 });
 
-test('Top-level citations are read strictly and merged with annotations', () => {
+test('Top-level citations are read strictly and keep only uncited URLs as searched sources', () => {
   const citations = ['https://example.org/a', 'https://example.org/b', 'https://example.org/a'];
   const body = response() as any;
   body.citations = citations;
@@ -329,20 +329,29 @@ test('Top-level citations are read strictly and merged with annotations', () => 
     { type: 'url_citation', url: 'https://example.org/b', title: 'B' },
     { type: 'url_citation', url: 'https://example.org/c' },
   ];
-  assert.deepEqual(responseAnswer(body).sources, [
-    { url: 'https://example.org/a' },
+  const answer = responseAnswer(body);
+  assert.deepEqual(answer.sources, [
     { url: 'https://example.org/b', title: 'B' },
     { url: 'https://example.org/c' },
   ]);
+  assert.deepEqual(answer.searchedSources, ['https://example.org/a']);
   const chatBody = chat() as any;
   chatBody.citations = citations;
   chatBody.choices[0].message.annotations = [
     { type: 'url_citation', url_citation: { url: 'https://example.org/b', title: 'B' } },
   ];
-  assert.deepEqual(chatAnswer(chatBody).sources, [
+  const chatResult = chatAnswer(chatBody);
+  assert.deepEqual(chatResult.sources, [{ url: 'https://example.org/b', title: 'B' }]);
+  assert.deepEqual(chatResult.searchedSources, ['https://example.org/a']);
+  const uncited = response() as any;
+  uncited.citations = citations;
+  uncited.output[0].content[0].annotations = [];
+  const fallback = responseAnswer(uncited);
+  assert.deepEqual(fallback.sources, [
     { url: 'https://example.org/a' },
-    { url: 'https://example.org/b', title: 'B' },
+    { url: 'https://example.org/b' },
   ]);
+  assert.equal(fallback.searchedSources, undefined);
   const empty = response() as any;
   empty.citations = null;
   assert.deepEqual(responseAnswer(empty), { model: 'reported-model', text: 'Complete answer.' });
@@ -371,7 +380,7 @@ test('Inline reasoning and model-written sources leave the answer text', () => {
   rejects(() => chatAnswer(refused), 'UPSTREAM_ERROR');
 });
 
-test('Sources headings, trailing link blocks and inline citations become structured sources', () => {
+test('Sources headings and trailing link blocks become structured sources', () => {
   const answer =
     'Body text.\n\n## Sources\n- [Example](https://example.org/a)\n- [Test](https://example.org/b)';
   assert.deepEqual(responseAnswer(response(answer)), {
@@ -388,12 +397,10 @@ test('Sources headings, trailing link blocks and inline citations become structu
     text: 'Body text.',
     sources: [{ url: 'https://example.org/a' }, { url: 'https://example.org/b' }],
   });
+  // Inline citations carry their URL in the answer text, so they stay there
+  // without adding a second copy to the structured sources.
   const inline = 'Cites [[1]](https://example.org/a) and [[2]](https://example.org/b).';
-  assert.deepEqual(responseAnswer(response(inline)), {
-    model: 'reported-model',
-    text: inline,
-    sources: [{ url: 'https://example.org/a' }, { url: 'https://example.org/b' }],
-  });
+  assert.deepEqual(responseAnswer(response(inline)), { model: 'reported-model', text: inline });
   const prose =
     'Body text.\n\n## Sources\nSee the [Example](https://example.org/a) page for details.';
   assert.deepEqual(responseAnswer(response(prose)), { model: 'reported-model', text: prose });

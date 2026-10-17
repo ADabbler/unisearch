@@ -6,16 +6,13 @@ import type {
   ScrapeData,
   SearchData,
 } from '../providers/firecrawl-response.js';
-import { inline, resultTitle } from './exa.js';
+import { inline, linkTarget, resultTitle } from './exa.js';
 
 function separator(language: Language): string {
   return language === 'zh' ? '：' : ': ';
 }
 export function link(url: string, title = url): string {
-  const target = url.replace(/[<>\s()\\]/g, (value) =>
-    encodeURIComponent(value).replace(/\(/g, '%28').replace(/\)/g, '%29'),
-  );
-  return `[${inline(title)}](${target})`;
+  return `[${inline(title)}](${linkTarget(url)})`;
 }
 export function warnings(values: string[] | undefined, language: Language): string[] {
   return (values ?? []).map(

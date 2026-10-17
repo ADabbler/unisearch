@@ -8,6 +8,13 @@ export function inline(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').replace(/[\\`*_[\]<>]/g, '\\$&');
 }
 
+/** Percent-encode the characters that end a Markdown link destination. */
+export function linkTarget(url: string): string {
+  return url.replace(/[<>\s()\\]/g, (value) =>
+    encodeURIComponent(value).replace(/\(/g, '%28').replace(/\)/g, '%29'),
+  );
+}
+
 export function resultTitle(
   index: number,
   url: string,

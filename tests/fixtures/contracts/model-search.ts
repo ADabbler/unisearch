@@ -65,6 +65,28 @@ export const cases: ContractCase[] = [
 1. [示例文档](https://example.org/docs)`,
   },
   {
+    name: 'model sources without titles',
+    renderer: 'search',
+    result: {
+      status: 'success',
+      data: {
+        answer: {
+          model: 'grok-4.7',
+          text: '正文引用了两个来源。',
+          sources: [{ url: 'https://example.org/bare' }, { url: 'https://example.org/wiki/X_(y)' }],
+        },
+      },
+    },
+    markdown: `模型：grok-4.7
+
+正文引用了两个来源。
+
+### 模型提供的来源
+
+- <https://example.org/bare>
+- <https://example.org/wiki/X_%28y%29>`,
+  },
+  {
     name: 'model success with Exa timeout',
     renderer: 'search',
     result: {

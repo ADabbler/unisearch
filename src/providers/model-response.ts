@@ -5,7 +5,13 @@ import type { JsonObject } from '../result.js';
 export type ModelAnswer = JsonObject & {
   model: string;
   text: string;
+  /** Sources the answer cites. */
   sources?: AnswerSource[];
+  /**
+   * URLs the provider returned that the answer does not cite. Empty when the
+   * answer cites nothing, because the whole provider list becomes `sources`.
+   */
+  searchedSources?: string[];
 };
 type AnswerSource = JsonObject & { url: string; title?: string };
 export function invalidResponse(): never {
@@ -89,9 +95,6 @@ const urlChar = String.raw`[^\s()<>"'\`，。、；：！？》）】]`;
 /** A URL body with balanced parentheses, as used by paths such as `X_(company)`. */
 const urlBody = String.raw`${urlChar}*(?:\(${urlChar}*\)${urlChar}*)*`;
 
-/** xAI inline citations, for example `[[1]](https://example.org/page)`. */
-const inlineCitation = new RegExp(String.raw`\[\[(\d+)\]\]\((https?:\/\/${urlBody})\)`, 'g');
-
 /** Markdown links and bare URLs matched in text order. */
 const linkOrUrl = new RegExp(
   String.raw`\[([^\]]*)\]\((https?:\/\/${urlBody})\)|https?:\/\/${urlBody}`,
@@ -122,11 +125,10 @@ function stripThinking(text: string): string {
 /**
  * Separate sources the model wrote into the answer text from the answer itself.
  * Sources in a heading block or a trailing block of link-only lines leave the
- * text; inline `[[n]](url)` citations are collected but stay.
+ * text.
  */
 function extractAnswerSources(text: string): { text: string; sources: AnswerSource[] } {
   const sources: AnswerSource[] = [];
-  for (const match of text.matchAll(inlineCitation)) addSource(sources, match[2]);
   const block = headingBlock(text) ?? linkBlock(text);
   if (!block) return { text, sources };
   for (const source of block.sources) addSource(sources, source.url, source.title);
@@ -194,18 +196,37 @@ function citations(value: unknown, sources: AnswerSource[]): void {
   }
 }
 
+interface FinalAnswer {
+  text: string;
+  sources: AnswerSource[];
+  searchedSources: string[];
+}
+
+function answerFields(model: string, answer: FinalAnswer): ModelAnswer {
+  return {
+    model,
+    text: answer.text,
+    ...(answer.sources.length ? { sources: answer.sources } : {}),
+    ...(answer.searchedSources.length ? { searchedSources: answer.searchedSources } : {}),
+  };
+}
+
 /**
  * Replace model-written sources and inline reasoning with structured output.
- * Protocol sources keep priority over sources recovered from prose.
+ * Cited sources keep priority over sources recovered from prose. When the model
+ * cites nothing, the provider list is the only evidence and becomes the sources.
  */
-function finalize(
-  text: string,
-  sources: AnswerSource[],
-): { text: string; sources: AnswerSource[] } {
+function finalize(text: string, cited: AnswerSource[], searched: AnswerSource[]): FinalAnswer {
   const answer = extractAnswerSources(stripThinking(text));
+  const explicit = [...cited, ...answer.sources];
   const merged: AnswerSource[] = [];
-  for (const source of [...sources, ...answer.sources]) addSource(merged, source.url, source.title);
-  return { text: answer.text, sources: merged };
+  for (const source of explicit.length ? explicit : searched)
+    addSource(merged, source.url, source.title);
+  const citedUrls = new Set(merged.map((source) => source.url));
+  const searchedSources = [...new Set(searched.map((source) => source.url))].filter(
+    (url) => !citedUrls.has(url),
+  );
+  return { text: answer.text, sources: merged, searchedSources };
 }
 
 const clientTools = new Set([
@@ -228,8 +249,8 @@ export function responseAnswer(body: unknown): ModelAnswer {
   }
   if (!nonempty(body.model) || !Array.isArray(body.output)) invalidResponse();
   const parts: string[] = [];
-  const sources: AnswerSource[] = [];
-  citations(body.citations, sources);
+  const cited: AnswerSource[] = [];
+  const searched: AnswerSource[] = [];
   let refusal = false;
   for (const item of body.output) {
     if (!isObject(item) || typeof item.type !== 'string') invalidResponse();
@@ -259,19 +280,16 @@ export function responseAnswer(body: unknown): ModelAnswer {
       if (part.type !== 'output_text') continue;
       if (typeof part.text !== 'string') invalidResponse();
       parts.push(part.text);
-      annotations(part.annotations, 'responses', sources);
+      annotations(part.annotations, 'responses', cited);
     }
   }
-  const answer = finalize(parts.join('\n\n'), sources);
+  citations(body.citations, searched);
+  const answer = finalize(parts.join('\n\n'), cited, searched);
   if (!answer.text.trim()) {
     if (refusal) incomplete('refusal');
     invalidResponse();
   }
-  return {
-    model: body.model,
-    text: answer.text,
-    ...(answer.sources.length ? { sources: answer.sources } : {}),
-  };
+  return answerFields(body.model, answer);
 }
 
 function chatFinish(reason: unknown): void {
@@ -309,19 +327,16 @@ export function chatAnswer(body: unknown): ModelAnswer {
     if (nonempty(choice.message.refusal)) incomplete('refusal');
     invalidResponse();
   }
-  const sources: AnswerSource[] = [];
-  citations(body.citations, sources);
-  annotations(choice.message.annotations, 'chat-completions', sources);
-  const answer = finalize(content, sources);
+  const cited: AnswerSource[] = [];
+  const searched: AnswerSource[] = [];
+  citations(body.citations, searched);
+  annotations(choice.message.annotations, 'chat-completions', cited);
+  const answer = finalize(content, cited, searched);
   if (!answer.text.trim()) {
     if (nonempty(choice.message.refusal)) incomplete('refusal');
     invalidResponse();
   }
-  return {
-    model: body.model,
-    text: answer.text,
-    ...(answer.sources.length ? { sources: answer.sources } : {}),
-  };
+  return answerFields(body.model, answer);
 }
 
 async function* events(
@@ -382,20 +397,17 @@ export async function streamAnswer(
   let content = '';
   let stopped = false;
   let refused = false;
-  const sources: AnswerSource[] = [];
+  const cited: AnswerSource[] = [];
+  const searched: AnswerSource[] = [];
   for await (const event of events(body)) {
     if (event.data === '[DONE]') {
       if (protocol !== 'chat-completions' || !stopped || !model) invalidResponse();
-      const answer = finalize(content, sources);
+      const answer = finalize(content, cited, searched);
       if (!answer.text.trim()) {
         if (refused) incomplete('refusal');
         invalidResponse();
       }
-      return {
-        model,
-        text: answer.text,
-        ...(answer.sources.length ? { sources: answer.sources } : {}),
-      };
+      return answerFields(model, answer);
     }
     let value: unknown;
     try {
@@ -429,7 +441,7 @@ export async function streamAnswer(
       continue;
     }
     if (value.citations !== undefined && value.citations !== null)
-      citations(value.citations, sources);
+      citations(value.citations, searched);
     if (value.model !== undefined) {
       if (!nonempty(value.model) || (model !== undefined && value.model !== model))
         invalidResponse();
@@ -454,7 +466,7 @@ export async function streamAnswer(
       if (typeof choice.delta.refusal !== 'string') invalidResponse();
       refused ||= Boolean(choice.delta.refusal);
     }
-    annotations(choice.delta.annotations, 'chat-completions', sources);
+    annotations(choice.delta.annotations, 'chat-completions', cited);
     if (choice.finish_reason !== undefined && choice.finish_reason !== null) {
       chatFinish(choice.finish_reason);
       stopped = true;

@@ -361,7 +361,11 @@ export async function combinedSearch(
       Promise.all(plan.extraSources.map((source) => guarded(() => extraTask(source)))),
     ]);
     const data: CombinedData = {};
-    if (model.result.data !== undefined) data.answer = model.result.data;
+    if (model.result.data !== undefined) {
+      const { searchedSources, ...answer } = model.result.data;
+      data.answer = answer;
+      if (searchedSources?.length) record.searched_sources = redact(searchedSources, plan.secrets);
+    }
     for (const extra of extras) {
       const content = extra.result.data;
       if (content === undefined) continue;

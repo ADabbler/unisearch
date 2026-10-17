@@ -916,6 +916,7 @@ const messages = {
   modelLabel: ['模型', 'Model'],
   modelAnswerLabel: ['模型回答', 'Model answer'],
   modelSourcesLabel: ['模型提供的来源', 'Model-provided sources'],
+  searchedSourcesLabel: ['检索过的来源', 'Searched sources'],
   extraSourcesLabel: ['补充检索', 'Additional search'],
   modelFallbackLabel: ['模型回退', 'Model fallback'],
   upstreamTypeLabel: ['上游错误类型', 'Upstream error type'],

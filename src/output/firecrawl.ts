@@ -1,4 +1,4 @@
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type {
   ContentTruncation,
@@ -9,7 +9,7 @@ import type {
 import { inline, linkTarget, resultTitle } from './exa.js';
 
 function separator(language: Language): string {
-  return language === 'zh' ? '：' : ': ';
+  return colon(language);
 }
 export function link(url: string, title = url): string {
   return `[${inline(title)}](${linkTarget(url)})`;

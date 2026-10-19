@@ -52,9 +52,9 @@ test('Status checks four local states, collapses identical operations, and never
   );
   const md = renderStatus(result, 'zh');
   assert.doesNotMatch(md, /仅检查本地配置|\|/);
-  assert.match(md, /^exa: 就绪/m);
-  assert.match(md, /^tavily: 缺少配置/m);
-  assert.match(md, /^firecrawl: 已禁用/m);
+  assert.match(md, /^exa：就绪/m);
+  assert.match(md, /^tavily：缺少配置/m);
+  assert.match(md, /^firecrawl：已禁用/m);
 });
 
 test('Different operation states expand the complete list and shared issues are not duplicated', () => {
@@ -211,7 +211,7 @@ test('Configuration issues remain at top level when no operation definitions are
   assert.doesNotMatch(JSON.stringify(result), /secret|valid-fixture/);
   const md = renderStatus(result, 'zh');
   assert.match(md, /^没有可展示的服务操作\n/);
-  assert.match(md, /配置问题:/);
+  assert.match(md, /配置问题：/);
   assert.doesNotMatch(md, /\| 服务|setup|候选|path/);
   assert.deepEqual(
     localStatus({ fetch: { providers: ['exa', 'anysearch'] }, map: { providers: [] } }, {}, 'en'),

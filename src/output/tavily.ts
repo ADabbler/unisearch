@@ -1,4 +1,4 @@
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { ExtractData, MapData, TavilySearchData } from '../providers/tavily.js';
 import { inline, resultTitle } from './exa.js';
@@ -10,7 +10,7 @@ export function renderTavilySearch(
   level = 2,
   showProvider = true,
 ): string {
-  const separator = language === 'zh' ? '：' : ': ';
+  const separator = colon(language);
   const entries = data.results.map((item, index) => {
     const sections = [
       resultTitle(

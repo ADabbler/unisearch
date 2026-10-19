@@ -1,4 +1,4 @@
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { FetchData, SearchData } from '../providers/tinyfish-response.js';
 import { inline, resultTitle } from './exa.js';
@@ -11,7 +11,7 @@ export function renderSearch(
   level = 2,
   showProvider = true,
 ): string {
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   const parts = showProvider ? [text(language, 'tinyfishSource')] : [];
   if (data.page !== undefined) {
     const page = `${text(language, 'tinyfishPageLabel')}${sep}${data.page}`;
@@ -50,7 +50,7 @@ export function renderSearch(
 }
 
 export function renderFetch(data: FetchData, language: Language): string {
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   const parts = [text(language, 'tinyfishSource')];
   for (const page of data.results) {
     if (data.results.length === 1) parts[0] += ` · ${link(page.url, page.title)}`;

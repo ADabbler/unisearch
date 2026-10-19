@@ -76,8 +76,8 @@ test('Failure composition keeps the incoming error causes and previous failure',
 test('Markdown preserves original content and necessary failure summaries', async () => {
   const channels = capture();
   assert.equal(await display(partial, options, channels), 6);
-  assert.match(channels.out, /^> 部分完成:/);
-  assert.match(channels.out, /sample: \[TIMEOUT\] Upstream timeout/);
+  assert.match(channels.out, /^> 部分完成：/);
+  assert.match(channels.out, /sample：\[TIMEOUT\] Upstream timeout/);
   assert.ok(channels.out.endsWith(body));
   const plain = capture();
   await display(success(body), options, plain);

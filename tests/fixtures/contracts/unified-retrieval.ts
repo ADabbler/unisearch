@@ -140,8 +140,8 @@ Available document content.`,
         },
       },
     },
-    markdown: `> 错误: [INVALID_RESPONSE] 提取响应条目数与输入 URL 数不符
-> 原因: result_count_mismatch
+    markdown: `> 错误：[INVALID_RESPONSE] 提取响应条目数与输入 URL 数不符
+> 原因：result_count_mismatch
 
 来源：Tavily
 
@@ -202,9 +202,9 @@ Page B.`,
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
-> - tavily: [AUTHENTICATION_ERROR] Tavily 认证失败
-> - HTTP 状态: 401
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+> - tavily：[AUTHENTICATION_ERROR] Tavily 认证失败
+>   - HTTP 状态：401
 
 ## 模型回答
 
@@ -289,10 +289,12 @@ Command reference.`,
         },
       },
     },
-    stderr: `错误: 网页读取失败
-  tavily: Tavily 认证失败
-  HTTP 状态: 401
-  firecrawl: Firecrawl 额度已用尽
-  HTTP 状态: 402`,
+    markdown: ``,
+    stderr: `错误：网页读取失败
+
+tavily：Tavily 认证失败
+  HTTP 状态：401
+firecrawl：Firecrawl 额度已用尽
+  HTTP 状态：402`,
   },
 ];

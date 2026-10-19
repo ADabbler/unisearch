@@ -226,10 +226,11 @@ Run the command.`,
         },
       },
     },
-    stderr: `错误: AnySearch 额度已用尽；响应可能包含敏感凭证，详情未保留
-服务: anysearch
-HTTP 状态: 402
-请求 ID: 5a3f8c27-1e64-4b90-a752-6d9e2f41c083`,
+    markdown: ``,
+    stderr: `错误：AnySearch 额度已用尽；响应可能包含敏感凭证，详情未保留
+服务：anysearch
+HTTP 状态：402
+请求 ID：5a3f8c27-1e64-4b90-a752-6d9e2f41c083`,
   },
   {
     name: 'partial model and supplemental search',
@@ -273,9 +274,9 @@ HTTP 状态: 402
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
-> - exa: [AUTHENTICATION_ERROR] Exa 拒绝了本次凭证
-> - HTTP 状态: 401
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+> - exa：[AUTHENTICATION_ERROR] Exa 拒绝了本次凭证
+>   - HTTP 状态：401
 
 ## 模型回答
 

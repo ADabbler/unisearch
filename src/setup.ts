@@ -8,6 +8,7 @@ import type { ConfigContext } from './config/path.js';
 import { resolveField } from './config/resolve.js';
 import { saveConfig } from './config/write.js';
 import { AppError, failure } from './errors.js';
+import { colon } from './i18n/messages.js';
 import type { Language } from './i18n/messages.js';
 import { providerName, operationName } from './i18n/providers.js';
 import type { Choice, Prompts } from './cli/prompts.js';
@@ -181,7 +182,7 @@ export class SetupDraft {
     if (item.source === 'config' && this.edits.has(key)) origin = zh ? '待保存' : 'pending';
     else if (item.source === 'config') origin = zh ? '已配置' : 'configured';
     else if (item.source === 'default') origin = zh ? '默认' : 'default';
-    return `${origin}${zh ? '：' : ': '}${value}`;
+    return `${origin}${colon(this.language)}${value}`;
   }
 }
 

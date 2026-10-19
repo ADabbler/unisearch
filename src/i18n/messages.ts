@@ -494,7 +494,6 @@ const messages = {
   linkLabel: ['链接', 'Link'],
   resultIndexLabel: ['结果索引', 'Result index'],
   upstreamIndexLabel: ['上游条目索引', 'Upstream entry index'],
-  upstreamReadableLabel: ['上游可读说明', 'Upstream readable message'],
   billedTokensLabel: ['计费用量（tokens）', 'Billed usage (tokens)'],
   anysearchCommand: [
     'AnySearch 搜索、领域发现与网页读取',
@@ -1203,7 +1202,7 @@ const messages = {
   partial: ['部分完成', 'Partial completion'],
   saved: ['结果已保存至', 'Result saved to'],
   retainedData: ['已取得的数据', 'Retained data'],
-  seeHelp: ['查看帮助：', 'See help:'],
+  seeHelp: ['查看帮助', 'See help'],
   configCommand: ['查看和修改本地配置', 'View and edit local configuration'],
   configPathCommand: [
     '显示配置路径，不读取文件',
@@ -1324,6 +1323,11 @@ export type MessageKey = keyof typeof messages;
 
 export function text(language: Language, key: MessageKey): string {
   return messages[key][language === 'zh' ? 0 : 1];
+}
+
+/** Separator between a label and its value: Chinese omits the space after a full-width colon. */
+export function colon(language: Language): string {
+  return language === 'zh' ? '：' : ': ';
 }
 
 const helpTitles: Record<string, string> = {

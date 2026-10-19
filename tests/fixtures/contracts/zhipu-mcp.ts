@@ -197,9 +197,9 @@ Setup steps and prerequisites.
         },
       },
     },
-    markdown: `> 错误: [CONTENT_UNAVAILABLE] 智谱 MCP 未返回网页正文
-> 服务: zhipu-mcp
-> 原因: empty_content
+    markdown: `> 错误：[CONTENT_UNAVAILABLE] 智谱 MCP 未返回网页正文
+> 服务：zhipu-mcp
+> 原因：empty_content
 
 来源：智谱 MCP · [https://example.org/guide](https://example.org/guide)
 
@@ -231,10 +231,11 @@ Setup steps and prerequisites.
         },
       },
     },
-    stderr: `错误: 智谱 MCP 工具调用失败
-操作: tools/call
-服务: zhipu-mcp
-上游消息: The repository is not indexed.
+    markdown: ``,
+    stderr: `错误：智谱 MCP 工具调用失败
+操作：tools/call
+服务：zhipu-mcp
+上游消息：The repository is not indexed.
 
 上游详情：
 
@@ -275,10 +276,10 @@ Setup steps and prerequisites.
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
-> - zhipu-mcp: [AUTHENTICATION_ERROR] 智谱 MCP 拒绝了当前凭证。
-> - 操作: initialize
-> - HTTP 状态: 401
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+> - zhipu-mcp：[AUTHENTICATION_ERROR] 智谱 MCP 拒绝了当前凭证。
+>   - 操作：initialize
+>   - HTTP 状态：401
 
 模型：example-model
 

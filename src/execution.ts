@@ -220,7 +220,7 @@ export async function executeRequest<T extends JsonValue>(
       if (overBudget || options.declineRetryWait?.(wait, budget)) {
         if (final.result.error) {
           const key = overBudget ? 'retryBudget' : 'retryWaitShare';
-          final.result.error.message += `${options.language === 'zh' ? '' : ' '}${text(options.language, key)}`;
+          final.result.error.message += `${options.language === 'zh' ? '；' : '; '}${text(options.language, key)}`;
           final.result.error.details = {
             ...final.result.error.details,
             reason: overBudget ? 'retry_wait_exceeds_budget' : 'retry_wait_exceeds_share',

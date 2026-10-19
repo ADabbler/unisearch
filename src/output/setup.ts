@@ -1,3 +1,4 @@
+import { colon } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { JsonObject, Result } from '../result.js';
 import type { SetupData, SetupDraft } from '../setup.js';
@@ -15,11 +16,12 @@ function changes(items: JsonObject[]): string {
     )
     .join('\n');
 }
-function overrides(items: JsonObject, zh: boolean): string {
+function overrides(items: JsonObject, language: Language): string {
+  const zh = language === 'zh';
   return Object.entries(items)
     .map(
       ([key, env]) =>
-        `${key}: ${zh ? `被环境变量 ${env} 覆盖` : `overridden by environment variable ${env}`}`,
+        `${key}${colon(language)}${zh ? `被环境变量 ${env} 覆盖` : `overridden by environment variable ${env}`}`,
     )
     .join('\n');
 }
@@ -53,7 +55,8 @@ export function renderSetup(result: Result<SetupData>, language: Language): stri
   const heading = cancelled || !data ? issues.shift()! : configuration;
   const lines = [skills, ...issues];
   if (cancelled) lines.unshift(configuration);
-  else if (data) lines.unshift(`${zh ? '配置文件' : 'Configuration file'}: ${data.config.path}`);
+  else if (data)
+    lines.unshift(`${zh ? '配置文件' : 'Configuration file'}${colon(language)}${data.config.path}`);
   return (
     promptFrame(
       heading,
@@ -68,19 +71,19 @@ export function renderSetupPreview(draft: SetupDraft): string {
   const zh = draft.language === 'zh';
   const targets = draft.targets();
   const fileAndChanges = [
-    `${zh ? '配置文件' : 'Configuration file'}: ${draft.document.path}`,
+    `${zh ? '配置文件' : 'Configuration file'}${colon(draft.language)}${draft.document.path}`,
     changes(draft.changes()),
   ]
     .filter(Boolean)
     .join('\n');
-  const sections = [fileAndChanges, overrides(draft.overrides(), zh)].filter(Boolean);
+  const sections = [fileAndChanges, overrides(draft.overrides(), draft.language)].filter(Boolean);
   if (targets.length)
     sections.push(
       [
         zh ? 'Skills 安装位置' : 'Skills installation locations',
         ...targets.map(
           (target) =>
-            `${skillTargets.find((item) => item[0] === target.target)![1]}: ${target.path}`,
+            `${skillTargets.find((item) => item[0] === target.target)![1]}${colon(draft.language)}${target.path}`,
         ),
       ].join('\n'),
     );

@@ -612,7 +612,7 @@ async function requestJson<T extends JsonObject>(
       if (details.upstream_message === outcome.result.error.message)
         delete details.upstream_message;
       if (invalidBody)
-        outcome.result.error.message += `${language === 'zh' ? '' : ' '}${text(language, 'errorBodyInvalid')}`;
+        outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     }
     return {
       outcome,

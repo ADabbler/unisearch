@@ -1,5 +1,5 @@
 import { isObject } from '../config/fields.js';
-import { AppError, failure } from '../errors.js';
+import { AppError, failure, normalizeDetails } from '../errors.js';
 import type { AttemptContext } from '../execution.js';
 import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
@@ -264,7 +264,9 @@ export function parseResponse(
       exitCode: 6,
     };
   const first = failures[0];
-  const details: JsonObject = { ...common, url: first.url, ...first.details };
+  const details: JsonObject = {
+    ...normalizeDetails({ ...common, url: first.url, ...first.details }),
+  };
   delete details.index;
   return {
     result: { status: 'error', data, error: { code: first.code, message: first.message, details } },

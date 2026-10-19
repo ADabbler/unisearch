@@ -1,7 +1,7 @@
 import type { DoctorData, DoctorService } from '../doctor.js';
 import type { Provider } from '../config/fields.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import { operationName, providerName } from '../i18n/providers.js';
 import type { JsonObject, JsonValue, PublicError } from '../result.js';
 import { renderExecution } from './exa.js';
@@ -34,8 +34,24 @@ function parenthetical(value: string, language: Language): string {
   return language === 'zh' ? `（${value}）` : ` (${value})`;
 }
 
+function anonymousLabel(language: Language): string {
+  return parenthetical(language === 'zh' ? '匿名' : 'anonymous', language);
+}
+
 function serviceTitle(provider: Provider, language: Language): string {
   return `${providerName(provider, language)} (${provider})`;
+}
+
+function doctorServiceTitle(
+  service: DoctorService,
+  anonymous: boolean,
+  language: Language,
+): string {
+  const state = `${stateLabel(service.state, language)}${anonymous ? anonymousLabel(language) : ''}`;
+  const model = service.model
+    ? `${language === 'zh' ? '，' : ', '}${text(language, 'configuredModelLabel')}${colon(language)}${service.model}`
+    : '';
+  return `${serviceTitle(service.provider, language)}${colon(language)}${state}${model}`;
 }
 
 function indented(value: string): string {
@@ -49,20 +65,22 @@ function scalar(value: JsonValue): string {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
-function structuredLines(value: JsonValue, indent: string): string[] {
+function structuredLines(value: JsonValue, indent: string, language: Language): string[] {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     return [`${indent}${scalar(value)}`];
   const lines: string[] = [];
   for (const [key, item] of Object.entries(value)) {
     if (item && typeof item === 'object' && !Array.isArray(item)) {
-      lines.push(`${indent}${key}:`, ...structuredLines(item, `${indent}  `));
-    } else lines.push(`${indent}${key}: ${scalar(item)}`);
+      // The value continues on the next line, so the label ends without a space.
+      lines.push(`${indent}${key}${language === 'zh' ? '：' : ':'}`);
+      lines.push(...structuredLines(item, `${indent}  `, language));
+    } else lines.push(`${indent}${key}${colon(language)}${scalar(item)}`);
   }
   return lines;
 }
 
 function checkLines(check: JsonObject, language: Language): string[] {
-  const separator = language === 'zh' ? '：' : ': ';
+  const separator = colon(language);
   const lines: string[] = [];
   for (const [key, value] of Object.entries(check)) {
     if (key === 'operation') {
@@ -73,7 +91,7 @@ function checkLines(check: JsonObject, language: Language): string[] {
       lines.push(`  ${text(language, 'endpointLabel')}${separator}${String(value)}`);
     } else if (key === 'quota') {
       lines.push(`  ${text(language, 'quotaLabel')}${language === 'zh' ? '：' : ':'}`);
-      lines.push(...structuredLines(value, '    '));
+      lines.push(...structuredLines(value, '    ', language));
     } else {
       lines.push(`  ${key}${separator}${scalar(value)}`);
     }
@@ -96,19 +114,17 @@ export function renderDoctor(
           options.anonymous.has(service.provider) &&
           (service.state === 'passed' || service.state === 'failed');
         if (service.provider === 'jina' && anonymous) {
-          const lines = [`${serviceTitle(service.provider, language)}:`];
-          const fetchState = `${stateLabel(service.state, language)}${parenthetical(language === 'zh' ? '匿名' : 'anonymous', language)}`;
-          lines.push(`  fetch: ${fetchState}`);
+          const lines = [`${serviceTitle(service.provider, language)}${colon(language)}`];
+          const fetchState = `${stateLabel(service.state, language)}${anonymousLabel(language)}`;
+          lines.push(`  ${operationName('fetch', language)}${colon(language)}${fetchState}`);
           if (service.error) lines.push(...errorLines(service.error, language, '    '));
           lines.push(
-            `  search: ${text(language, 'doctorMissing')}`,
-            `    ${text(language, 'fieldLabel')}: providers.jina.api_key`,
+            `  ${operationName('search', language)}${colon(language)}${text(language, 'doctorMissing')}`,
+            `    ${text(language, 'fieldLabel')}${colon(language)}providers.jina.api_key`,
           );
           return lines.join('\n');
         }
-        const lines = [
-          `${serviceTitle(service.provider, language)}: ${stateLabel(service.state, language)}${anonymous ? parenthetical(language === 'zh' ? '匿名' : 'anonymous', language) : ''}${service.model ? `${language === 'zh' ? '，' : ', '}${text(language, 'configuredModelLabel')}${language === 'zh' ? '：' : ': '}${service.model}` : ''}`,
-        ];
+        const lines = [doctorServiceTitle(service, anonymous, language)];
         if (service.error) lines.push(...errorLines(service.error, language, '  '));
         return lines.join('\n');
       })

@@ -293,18 +293,12 @@ export async function request(
     const tag = validEnvelope && isObject(body) ? (body.status as number) : undefined;
     if (tag !== undefined) details.upstream_code = tag;
     if (isObject(body)) {
-      for (const [source, target] of [
-        ['message', 'upstream_message'],
-        ['readableMessage', 'upstream_readable_message'],
-      ] as const) {
-        const value = body[source];
-        if (value === undefined || value === null) continue;
+      const value = body.message;
+      if (value !== undefined && value !== null) {
         if (typeof value !== 'string') invalidBody = true;
-        else if (value.trim()) details[target] = safe(value);
+        else if (value.trim()) details.upstream_message = safe(value);
       }
     }
-    if (details.upstream_readable_message === details.upstream_message)
-      delete details.upstream_readable_message;
     const mapped = httpError(response.status, input.operation, invalidBody ? undefined : tag);
     context.retryAllowed = mapped.retry;
     if (mapped.code === 'TIMEOUT') details.timeout_scope = 'request';
@@ -315,7 +309,7 @@ export async function request(
       if (details.upstream_message === outcome.result.error.message)
         delete details.upstream_message;
       if (invalidBody)
-        outcome.result.error.message += `${language === 'zh' ? '' : ' '}${text(language, 'errorBodyInvalid')}`;
+        outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     }
     return {
       outcome,

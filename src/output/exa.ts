@@ -1,4 +1,4 @@
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { SearchData, FetchData, ContentSource } from '../providers/exa.js';
 import type { JsonObject } from '../result.js';
@@ -32,7 +32,7 @@ export function renderSearch(
   level = 2,
   showProvider = true,
 ): string {
-  const separator = language === 'zh' ? '：' : ': ';
+  const separator = colon(language);
   const entries = data.results.map((item, index) => {
     const sections = [
       resultTitle(
@@ -75,7 +75,7 @@ export function renderSearch(
 export function contentSources(sources: ContentSource[] | undefined, language: Language): string[] {
   return (sources ?? []).map(
     (item) =>
-      `${text(language, 'contentSourceLabel')}${language === 'zh' ? '：' : ': '}${link(item.url)} · ${item.source}`,
+      `${text(language, 'contentSourceLabel')}${colon(language)}${link(item.url)} · ${item.source}`,
   );
 }
 
@@ -91,13 +91,13 @@ export function renderPageLatencies(entry: JsonObject, language: Language): stri
   if (!Array.isArray(entry.page_latencies)) return [];
   return entry.page_latencies.map((value) => {
     const page = value as JsonObject;
-    return `  ${text(language, 'pageLatencyLabel')}${language === 'zh' ? '：' : ': '}${page.url} · ${page.latency_ms} ms`;
+    return `  ${text(language, 'pageLatencyLabel')}${colon(language)}${page.url} · ${page.latency_ms} ms`;
   });
 }
 
 export function renderExecution(data: JsonObject, language: Language): string {
   if (!Array.isArray(data.attempts)) return '';
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   const lines = [`${text(language, 'elapsedLabel')}${sep}${data.elapsed_ms} ms`];
   for (const [index, value] of data.attempts.entries()) {
     const entry = value as JsonObject;
@@ -105,8 +105,8 @@ export function renderExecution(data: JsonObject, language: Language): string {
       entry.http_status === undefined ? '' : `HTTP ${entry.http_status}`,
       `${entry.duration_ms} ms`,
       entry.code ? `[${entry.code}]` : text(language, 'successLabel'),
-      entry.request_id ? `${text(language, 'requestIdLabel')} ${entry.request_id}` : '',
-      entry.response_id ? `${text(language, 'responseIdLabel')} ${entry.response_id}` : '',
+      entry.request_id ? `${text(language, 'requestIdLabel')}${sep}${entry.request_id}` : '',
+      entry.response_id ? `${text(language, 'responseIdLabel')}${sep}${entry.response_id}` : '',
       entry.model ? `${text(language, 'modelLabel')}${sep}${entry.model}` : '',
       entry.billed_tokens === undefined
         ? ''

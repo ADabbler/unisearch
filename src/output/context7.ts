@@ -1,4 +1,4 @@
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { Data } from '../providers/context7.js';
 import { inline } from './exa.js';
@@ -16,7 +16,7 @@ export function inlineCode(value: string): string {
   return `${fence}${padding}${content}${padding}${fence}`;
 }
 export function renderContext7(data: Data, language: Language): string {
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   const sections = [text(language, 'ctx7Source')];
   if ('results' in data) {
     if (data.search_filter_applied) sections.push(text(language, 'ctx7Filtered'));

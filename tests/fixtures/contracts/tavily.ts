@@ -142,11 +142,11 @@ Supported releases receive updates. [...] See the release schedule.`,
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] 部分网页提取失败
-> 请求 ID: extract-example-1
-> - https://example.com/b: [UPSTREAM_ERROR] 网页提取失败
-> - 上游消息: Failed to retrieve content
-> - 原因: extraction_failed
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分网页提取失败
+> 请求 ID：extract-example-1
+> - https://example.com/b：[UPSTREAM_ERROR] 网页提取失败
+>   - 上游消息：Failed to retrieve content
+>   - 原因：extraction_failed
 
 来源：Tavily
 
@@ -171,10 +171,11 @@ Article A.`,
         },
       },
     },
-    stderr: `错误: 未取得网页正文
-服务: tavily
-URL: https://example.com/empty
-原因: empty_content`,
+    markdown: ``,
+    stderr: `错误：未取得网页正文
+服务：tavily
+URL：https://example.com/empty
+原因：empty_content`,
   },
   {
     name: 'all batch entries fail',
@@ -208,13 +209,15 @@ URL: https://example.com/empty
         },
       },
     },
-    stderr: `错误: 网页提取失败
-服务: tavily
-  https://example.com/a: 未取得网页正文
-  原因: empty_content
-  https://example.com/b: 网页提取失败
-  上游消息: Failed to retrieve content
-  原因: extraction_failed`,
+    markdown: ``,
+    stderr: `错误：网页提取失败
+服务：tavily
+
+https://example.com/a：未取得网页正文
+  原因：empty_content
+https://example.com/b：网页提取失败
+  上游消息：Failed to retrieve content
+  原因：extraction_failed`,
   },
   {
     name: 'successful site mapping',
@@ -315,9 +318,10 @@ The policy lists supported releases.
         },
       },
     },
-    stderr: `错误: Tavily 额度已用尽或达到使用上限
-服务: tavily
-HTTP 状态: 433
-上游消息: This request exceeds the pay-as-you-go limit.`,
+    markdown: ``,
+    stderr: `错误：Tavily 额度已用尽或达到使用上限
+服务：tavily
+HTTP 状态：433
+上游消息：This request exceeds the pay-as-you-go limit.`,
   },
 ];

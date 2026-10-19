@@ -1,6 +1,6 @@
 import type { Writable } from 'node:stream';
 import { AppError, failure, fileError } from '../errors.js';
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { ExitCode, JsonValue, Outcome } from '../result.js';
 import { prepareOutput } from './file.js';
@@ -54,7 +54,9 @@ export async function reportOutputError<T extends JsonValue>(
       await channels.stderr(rendered.details + rendered.content);
     } else {
       await channels.stderr(
-        line(`${text(language, 'error')}: ${errorText(problem.public(language), language)}`),
+        line(
+          `${text(language, 'error')}${colon(language)}${errorText(problem.public(language), language)}`,
+        ),
       );
     }
   } catch {
@@ -158,10 +160,16 @@ export async function execute<T extends JsonValue>(
   try {
     if (savedPath !== undefined && rendered.outcome.exitCode !== 130) {
       if (rendered.outcome.result.status !== 'success') {
+        const language = options.language;
         const error = rendered.outcome.result.error;
+        const label = text(
+          language,
+          rendered.outcome.result.status === 'partial' ? 'partial' : 'error',
+        );
+        const saved = text(language, 'saved');
         await channels.stderr(
           line(
-            `${text(options.language, rendered.outcome.result.status === 'partial' ? 'partial' : 'error')}: ${errorText(error, options.language)}\n${text(options.language, 'saved')}: ${savedPath}`,
+            `${label}${colon(language)}${errorText(error, language)}\n${saved}${colon(language)}${savedPath}`,
           ),
         );
         rendered.details = rendered.execution;

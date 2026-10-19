@@ -34,6 +34,10 @@ export function operationName(operation: string, language: Language): string {
     domains: '领域目录',
     tree: '目录结构',
     'read-file': '文件读取',
+    usage: '额度查询',
+    credit_usage: '额度查询',
+    models: '模型列表',
+    'tools/list': '工具列表',
   };
   return names[operation] ?? operation;
 }

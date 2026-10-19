@@ -174,7 +174,7 @@ export async function requestModel(
     if (invalidBody) details.reason = 'error_body_invalid';
     const outcome = failure<ModelAnswer>(new AppError(mapped.code, mapped.key, details), language);
     if (invalidBody && outcome.result.error)
-      outcome.result.error.message += `${language === 'zh' ? '' : ' '}${text(language, 'errorBodyInvalid')}`;
+      outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     return {
       outcome,
       retry: mapped.retry,

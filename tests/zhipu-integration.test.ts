@@ -415,7 +415,7 @@ test('Zhipu JSON, Markdown, verbose and file output preserve content and save re
         );
         assert.match(result.channels.err, /Request ID/);
         if (op === 'fetch') {
-          assert.match(result.channels.err, /Response ID fixture-reader-task/);
+          assert.match(result.channels.err, /Response ID: fixture-reader-task/);
           assert.match(result.channels.err, /Model: fixture-reader-model/);
         }
       }

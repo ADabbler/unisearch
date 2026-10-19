@@ -1,5 +1,5 @@
 import { isObject } from '../config/fields.js';
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { JsonObject, JsonValue } from '../result.js';
 import type { Data, Operation, ToolContent } from '../providers/zhipu-mcp.js';
@@ -22,7 +22,7 @@ export function renderBlocks(
   operation?: Operation,
 ): string {
   const sections: string[] = [];
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   for (const block of blocks) {
     const rest = { ...block };
     if (block.type === 'text' && typeof block.text === 'string') {
@@ -69,7 +69,7 @@ export function renderBlocks(
 
 function renderToolContent(data: ToolContent, language: Language, operation?: Operation): string[] {
   const sections: string[] = [];
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   if (data.text !== undefined) {
     if (data.text === '')
       sections.push(text(language, operation === 'read-file' ? 'mcpEmptyFile' : 'mcpEmpty'));
@@ -94,7 +94,7 @@ export function renderMcp(
   showProvider = true,
 ): string {
   const sections: string[] = showProvider ? [text(language, 'mcpSource')] : [];
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   if ('results' in data) {
     for (const page of data.results) {
       if (showProvider && data.results.length === 1)

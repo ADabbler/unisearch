@@ -400,6 +400,8 @@ test('Jina validates HTTP envelopes, encodings and compatible business codes wit
     assert.equal(result.exit, exit, `${status}/${tag}`);
     assert.equal(result.json().error.code, code);
     assert.equal(result.json().error.details.upstream_code, tag);
+    // readableMessage restates message with an error-class prefix; only message is kept.
+    assert.equal(result.json().error.details.upstream_message, 'Diagnostic');
     assert.equal(f.calls.length, before + 1);
     assert.equal(f.calls.at(-1)?.headers.authorization, `Bearer ${key.UNISEARCH_JINA_API_KEY}`);
   }

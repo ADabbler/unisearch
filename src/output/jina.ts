@@ -1,4 +1,4 @@
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { Data, Page } from '../providers/jina-response.js';
 import type { JsonValue } from '../result.js';
@@ -14,7 +14,7 @@ function table(headers: string[], rows: string[][]): string {
     .join('\n');
 }
 export function pageContent(page: Page, language: Language): string[] {
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   const sections: string[] = [];
   const metadata = [
     [page.published_date, 'publishedLabel'],

@@ -189,11 +189,12 @@ Use a visible label.`,
         },
       },
     },
-    stderr: `错误: Context7 无法提供所请求的库文档
-服务: ctx7
-HTTP 状态: 404
-上游代码: tag_not_found
-上游消息: Tag v0.1.0 not found for library /example/ui.`,
+    markdown: ``,
+    stderr: `错误：Context7 无法提供所请求的库文档
+服务：ctx7
+HTTP 状态：404
+上游代码：tag_not_found
+上游消息：Tag v0.1.0 not found for library /example/ui.`,
   },
   {
     name: 'library migration',
@@ -211,11 +212,12 @@ HTTP 状态: 404
         },
       },
     },
-    stderr: `错误: Context7 库已迁移，请使用返回的新库标识
-服务: ctx7
-HTTP 状态: 301
-上游代码: library_redirected
-新库 ID: /example/ui-next`,
+    markdown: ``,
+    stderr: `错误：Context7 库已迁移，请使用返回的新库标识
+服务：ctx7
+HTTP 状态：301
+上游代码：library_redirected
+新库 ID：/example/ui-next`,
   },
   {
     name: 'upstream diagnostics for authentication failure',
@@ -244,11 +246,12 @@ HTTP 状态: 301
         ],
       },
     },
-    stderr: `错误: Context7 认证失败
-服务: ctx7
-HTTP 状态: 401
-上游代码: invalid_api_key
-上游消息: Invalid API key
-请求 ID: ctx7-fixture-auth`,
+    markdown: ``,
+    stderr: `错误：Context7 认证失败
+服务：ctx7
+HTTP 状态：401
+上游代码：invalid_api_key
+上游消息：Invalid API key
+请求 ID：ctx7-fixture-auth`,
   },
 ];

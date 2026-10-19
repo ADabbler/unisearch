@@ -1,4 +1,4 @@
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { RetrievalData } from '../retrieval.js';
 import { contentInfo, link, warnings } from './firecrawl.js';
@@ -48,7 +48,7 @@ export function renderRetrieval(data: RetrievalData, language: Language): string
     for (const page of data.results) {
       if (data.results.length === 1) sections[0] += ` · ${link(page.url, page.title)}`;
       else sections.push(`## ${link(page.url, page.title)}`);
-      const sep = language === 'zh' ? '：' : ': ';
+      const sep = colon(language);
       const metadata = [
         page.published_date
           ? `${text(language, 'publishedLabel')}${sep}${inline(page.published_date)}`

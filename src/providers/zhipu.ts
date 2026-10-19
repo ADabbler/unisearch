@@ -335,7 +335,7 @@ export async function request<O extends Operation>(
     if (outcome.result.error?.code === 'UPSTREAM_ERROR')
       upstreamSwitchPolicy.set(outcome.result.error, mapped.retry);
     if (!valid && response.status !== 200 && outcome.result.error)
-      outcome.result.error.message += `${language === 'zh' ? '' : ' '}${text(language, 'errorBodyInvalid')}`;
+      outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     return {
       outcome,
       retry: mapped.retry,

@@ -1,4 +1,4 @@
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { CatalogData, DomainsData, ExtractData, SearchData } from '../providers/anysearch.js';
 import { inline, resultTitle } from './exa.js';
@@ -38,7 +38,7 @@ export function renderSearch(
 }
 
 export function renderDomains(data: DomainsData | CatalogData, language: Language): string {
-  const separator = language === 'zh' ? '：' : ': ';
+  const separator = colon(language);
   const sections = [text(language, 'anysearchSource')];
   if ('catalog_source' in data) {
     sections[0] += ` · ${text(language, 'anysearchCatalog')}`;

@@ -1,4 +1,4 @@
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { FetchData, SearchData } from '../providers/zhipu-response.js';
 import { inline, resultTitle } from './exa.js';
@@ -12,7 +12,7 @@ export function renderZhipu(
   level = 2,
   showProvider = true,
 ): string {
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   const source = text(language, 'zhipuSource');
   const sections: string[] = [];
   if ('search_engine' in data) {

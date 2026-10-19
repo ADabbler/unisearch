@@ -1,3 +1,4 @@
+import { colon } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { JsonObject, PublicError } from '../result.js';
 import type { SkillsData } from '../skills/manage.js';
@@ -41,13 +42,13 @@ export function renderSkills(data: SkillsData, language: Language, showPaths = t
         else if (item.changed !== undefined)
           changed = zh ? '，可能已部分改动' : ', target may be partially changed';
         const lines = [
-          `${name}: ${labels[item.state]}${changed}`,
+          `${name}${colon(language)}${labels[item.state]}${changed}`,
           ...(showPaths ? [`  ${item.path}`] : []),
         ];
         if (item.differences)
           for (const [kind, paths] of Object.entries(item.differences as JsonObject))
             lines.push(
-              `  ${zh ? ({ missing: '缺失', modified: '变更', extra: '额外文件' } as Record<string, string>)[kind] : kind}: ${(paths as string[]).join(', ')}`,
+              `  ${zh ? ({ missing: '缺失', modified: '变更', extra: '额外文件' } as Record<string, string>)[kind] : kind}${colon(language)}${(paths as string[]).join(', ')}`,
             );
         if (item.error) {
           lines.push(

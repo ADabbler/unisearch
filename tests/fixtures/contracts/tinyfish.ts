@@ -176,11 +176,11 @@ Complete body.`,
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] 部分网页读取失败
-> - https://example.org/b: [CONTENT_UNAVAILABLE] 页面未匹配任何目标选择器
-> - 上游代码: selector_not_matched
-> - 未匹配的选择器: \`article\`
-> - 候选选择器: \`main\`、\`#content\`
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分网页读取失败
+> - https://example.org/b：[CONTENT_UNAVAILABLE] 页面未匹配任何目标选择器
+>   - 上游代码：selector_not_matched
+>   - 未匹配的选择器：\`article\`
+>   - 候选选择器：\`main\`、\`#content\`
 
 来源：TinyFish · [https://example.org/a](https://example.org/a)
 
@@ -202,11 +202,12 @@ Page A article.`,
         },
       },
     },
-    stderr: `错误: 目标页面触发了反机器人验证
-服务: tinyfish
-URL: https://example.org/blocked
-上游代码: bot_blocked
-请求 ID: tf-blocked-fixture`,
+    markdown: ``,
+    stderr: `错误：目标页面触发了反机器人验证
+服务：tinyfish
+URL：https://example.org/blocked
+上游代码：bot_blocked
+请求 ID：tf-blocked-fixture`,
   },
   {
     name: 'all batch entries succeed',
@@ -281,13 +282,14 @@ Complete page B.`,
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] 部分网页读取失败
-> 请求 ID: tf-batch-fixture
-> - https://example.org/missing: [CONTENT_UNAVAILABLE] 目标页面不存在
-> - 页面状态: 404
-> - 上游代码: page_not_found
-> - https://example.org/slow: [CONTENT_UNAVAILABLE] 页面读取超时
-> - 上游代码: timeout
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分网页读取失败
+> 请求 ID：tf-batch-fixture
+> 
+> - https://example.org/missing：[CONTENT_UNAVAILABLE] 目标页面不存在
+>   - 页面状态：404
+>   - 上游代码：page_not_found
+> - https://example.org/slow：[CONTENT_UNAVAILABLE] 页面读取超时
+>   - 上游代码：timeout
 
 来源：TinyFish · [Guide A](https://example.org/a)
 
@@ -325,13 +327,15 @@ Complete page A.`,
         },
       },
     },
-    stderr: `错误: 所有网页读取均失败
-服务: tinyfish
-  https://example.org/missing: 目标页面不存在
-  页面状态: 404
-  上游代码: page_not_found
-  https://example.org/slow: 页面读取超时
-  上游代码: timeout`,
+    markdown: ``,
+    stderr: `错误：所有网页读取均失败
+服务：tinyfish
+
+https://example.org/missing：目标页面不存在
+  页面状态：404
+  上游代码：page_not_found
+https://example.org/slow：页面读取超时
+  上游代码：timeout`,
   },
   {
     name: 'invalid metadata retains content',
@@ -355,8 +359,8 @@ Complete page A.`,
         },
       },
     },
-    markdown: `> 错误: [INVALID_RESPONSE] 服务响应格式无效
-> 响应字段: results[0].title
+    markdown: `> 错误：[INVALID_RESPONSE] 服务响应格式无效
+> 响应字段：results[0].title
 
 来源：TinyFish · [https://example.org/guide](https://example.org/guide)
 
@@ -451,7 +455,7 @@ Complete body.`,
 ## 执行详情
 
 执行耗时：25 ms
-尝试 1：HTTP 200，25 ms，成功，请求 ID tf-success-fixture
+尝试 1：HTTP 200，25 ms，成功，请求 ID：tf-success-fixture
   页面读取耗时：https://example.org/guide · 18 ms`,
   },
 ];

@@ -82,10 +82,10 @@ export const cases: ContractCase[] = [
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
-> - zhipu: [INVALID_RESPONSE] 智谱响应包含无效字段，已保留可用数据
-> - 响应字段: search_result[1].link
-> - HTTP 状态: 200
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+> - zhipu：[INVALID_RESPONSE] 智谱响应包含无效字段，已保留可用数据
+>   - 响应字段：search_result[1].link
+>   - HTTP 状态：200
 
 ## 模型回答
 
@@ -180,10 +180,10 @@ unisearch --help
         },
       },
     },
-    markdown: `> 错误: [CONTENT_UNAVAILABLE] 智谱未返回网页正文
-> 服务: zhipu
-> HTTP 状态: 200
-> 原因: empty_content
+    markdown: `> 错误：[CONTENT_UNAVAILABLE] 智谱未返回网页正文
+> 服务：zhipu
+> HTTP 状态：200
+> 原因：empty_content
 
 来源：智谱 · [示例指南](https://example.org/guide)`,
   },

@@ -400,7 +400,7 @@ export async function request<O extends Operation>(
       if (details.upstream_message === outcome.result.error.message)
         delete details.upstream_message;
       if (!validBody)
-        outcome.result.error.message += `${language === 'zh' ? '' : ' '}${text(language, 'errorBodyInvalid')}`;
+        outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     }
     return {
       outcome,

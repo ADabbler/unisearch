@@ -2,7 +2,7 @@ import { assertValid, fieldAt, parseInput } from './config/fields.js';
 import { inspectConfig, resolveField } from './config/resolve.js';
 import type { ResolvedField } from './config/resolve.js';
 import { operationConfig } from './config/status.js';
-import { AppError, failure } from './errors.js';
+import { AppError, failure, normalizeDetails } from './errors.js';
 import { clock, executeRequest } from './execution.js';
 import type { AttemptContext, AttemptResult, ExecutionClock } from './execution.js';
 import { text } from './i18n/messages.js';
@@ -81,6 +81,7 @@ interface Candidate {
 }
 export interface RetrievalPlan {
   operation: RetrievalOperation;
+  url: string;
   candidates: Candidate[];
   timeout: number;
   retries: number;
@@ -279,7 +280,14 @@ export function prepareRetrieval(
       providers.length ? 'noRetrievalProvider' : 'emptyRetrievalProviders',
       { field: `${operation}.providers` },
     );
-  return { operation, candidates, timeout, retries, secrets: configuredSecrets(values, env) };
+  return {
+    operation,
+    url,
+    candidates,
+    timeout,
+    retries,
+    secrets: configuredSecrets(values, env),
+  };
 }
 
 function canSwitch(
@@ -395,7 +403,7 @@ export async function retrieve(
       const error = final.result.error;
       if (!error) break;
       if (attempted) {
-        const details = { ...error.details };
+        const details = { ...normalizeDetails(error.details) };
         delete details.provider;
         failures.push({
           provider: candidate.provider,
@@ -426,6 +434,9 @@ export async function retrieve(
       final.exitCode === 130 ||
       result.error.details?.timeout_scope === 'total';
     if (failures.length > 1 || (terminal && failures.length && result.error !== recordedError)) {
+      // One request targets one page, so repeating that URL inside every failure adds
+      // nothing. Providers that report it only still identify their own page.
+      for (const failure of failures) delete failure.details?.url;
       if (!terminal) {
         final = {
           result: {
@@ -434,14 +445,17 @@ export async function retrieve(
             error: {
               code: 'ALL_PROVIDERS_FAILED',
               message: text(language, plan.operation === 'fetch' ? 'fetchFailed' : 'mapFailed'),
-              details: { failures },
+              details: { url: plan.url, failures },
             },
           },
           exitCode: exits.every((exit) => exit === exits[0]) ? exits[0] : 4,
         };
       } else {
         const details = result.error === recordedError ? {} : result.error.details;
-        result.error = { ...result.error, details: { ...details, failures } };
+        result.error = {
+          ...result.error,
+          details: { ...details, url: plan.url, failures },
+        };
       }
     }
     // Request IDs are retained internally until the final public error is known.

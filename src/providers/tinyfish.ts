@@ -436,7 +436,7 @@ export async function request(
       language,
     );
     if (invalidBody && outcome.result.error)
-      outcome.result.error.message += `${language === 'zh' ? '' : ' '}${text(language, 'errorBodyInvalid')}`;
+      outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     context.retryAllowed = mapped.retry;
     return {
       outcome,

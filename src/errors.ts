@@ -44,12 +44,25 @@ export class AppError extends Error {
   }
 
   public(language: Language): PublicError {
+    const details = normalizeDetails(this.details);
     return {
       code: this.code,
       message: text(language, this.key),
-      ...(this.details && Object.keys(this.details).length ? { details: this.details } : {}),
+      ...(details && Object.keys(details).length ? { details } : {}),
     };
   }
+}
+
+/**
+ * A page-level failure already reports why the target could not be read. Advertise the
+ * API call's own 200 beside it and readers take that as the page status, so the
+ * redundant value is dropped once, before either output format renders details.
+ */
+export function normalizeDetails(details: JsonObject | undefined): JsonObject | undefined {
+  if (!details || typeof details.page_status !== 'number' || details.http_status !== 200)
+    return details;
+  const { http_status: _omitted, ...rest } = details;
+  return rest;
 }
 
 export function systemCode(error: unknown): string | undefined {

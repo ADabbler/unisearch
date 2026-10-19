@@ -2,7 +2,7 @@ import { fieldAt, isObject, parseInput } from '../config/fields.js';
 import type { ResolvedField } from '../config/resolve.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
-import { AppError, failure } from '../errors.js';
+import { AppError, failure, normalizeDetails } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
 import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
@@ -393,7 +393,7 @@ async function request<T extends JsonValue>(
     if (outcome.result.error) {
       if (info.upstream_message === outcome.result.error.message) delete info.upstream_message;
       if (invalidBody)
-        outcome.result.error.message += `${language === 'zh' ? '' : ' '}${text(language, 'errorBodyInvalid')}`;
+        outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     }
     return {
       outcome,
@@ -405,7 +405,10 @@ async function request<T extends JsonValue>(
     context.retryAllowed = false;
     const outcome = failure<T>(error, language);
     if (outcome.result.error)
-      outcome.result.error.details = { ...outcome.result.error.details, ...details() };
+      outcome.result.error.details = normalizeDetails({
+        ...outcome.result.error.details,
+        ...details(),
+      });
     return { outcome, retry: false };
   }
 }

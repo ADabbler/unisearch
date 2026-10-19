@@ -1,5 +1,5 @@
 import type { Language } from '../i18n/messages.js';
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { JsonObject } from '../result.js';
 import type { CombinedData } from '../search.js';
 import { inline, linkTarget, renderPageLatencies, renderSearch } from './exa.js';
@@ -13,7 +13,7 @@ import { renderSearch as renderTinyfish } from './tinyfish.js';
 
 export function renderCombinedSearch(data: CombinedData, language: Language): string {
   const sections: string[] = [];
-  const separator = language === 'zh' ? '：' : ': ';
+  const separator = colon(language);
   if (data.answer) {
     if (data.extra_sources) sections.push(`## ${text(language, 'modelAnswerLabel')}`);
     sections.push(
@@ -79,7 +79,7 @@ export function renderCombinedSearch(data: CombinedData, language: Language): st
 
 export function renderSearchExecution(data: JsonObject, language: Language): string {
   if (!Array.isArray(data.attempts)) return '';
-  const separator = language === 'zh' ? '：' : ': ';
+  const separator = colon(language);
   const searched =
     Array.isArray(data.searched_sources) && data.searched_sources.length
       ? [
@@ -103,8 +103,10 @@ export function renderSearchExecution(data: JsonObject, language: Language): str
         `${item.duration_ms} ms`,
         item.http_status === undefined ? '' : `HTTP ${item.http_status}`,
         item.code ? `[${item.code}]` : '',
-        item.request_id ? `${text(language, 'requestIdLabel')} ${item.request_id}` : '',
-        item.response_id ? `${text(language, 'responseIdLabel')} ${item.response_id}` : '',
+        item.request_id ? `${text(language, 'requestIdLabel')}${separator}${item.request_id}` : '',
+        item.response_id
+          ? `${text(language, 'responseIdLabel')}${separator}${item.response_id}`
+          : '',
         item.billed_tokens === undefined
           ? ''
           : `${text(language, 'billedTokensLabel')}${separator}${item.billed_tokens}`,

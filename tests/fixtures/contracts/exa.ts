@@ -99,9 +99,9 @@ Installation instructions.`,
         },
       },
     },
-    markdown: `> 错误: [CONTENT_UNAVAILABLE] Exa 未取得网页正文
-> URL: https://example.org/guide
-> 原因: empty_content
+    markdown: `> 错误：[CONTENT_UNAVAILABLE] Exa 未取得网页正文
+> URL：https://example.org/guide
+> 原因：empty_content
 
 来源：Exa
 
@@ -151,11 +151,11 @@ Installation requires the example package.`,
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] 部分网页读取失败
-> 请求 ID: exa-fixture-batch
-> - https://example.org/private: [CONTENT_UNAVAILABLE] Exa 无法读取目标网页
-> - 页面状态: 403
-> - 上游代码: CRAWL_HTTP_403
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分网页读取失败
+> 请求 ID：exa-fixture-batch
+> - https://example.org/private：[CONTENT_UNAVAILABLE] Exa 无法读取目标网页
+>   - 页面状态：403
+>   - 上游代码：CRAWL_HTTP_403
 
 来源：Exa
 
@@ -195,11 +195,13 @@ Content A.`,
         },
       },
     },
-    stderr: `错误: 所有网页读取均失败
-服务: exa
-  https://example.org/a: Exa 无法读取目标网页
-  上游代码: CRAWL_TIMEOUT
-  https://example.org/b: Exa 无法读取目标网页`,
+    markdown: ``,
+    stderr: `错误：所有网页读取均失败
+服务：exa
+
+https://example.org/a：Exa 无法读取目标网页
+  上游代码：CRAWL_TIMEOUT
+https://example.org/b：Exa 无法读取目标网页`,
   },
   {
     name: 'batch count mismatch retains data',
@@ -224,8 +226,8 @@ Content A.`,
         },
       },
     },
-    markdown: `> 错误: [INVALID_RESPONSE] Exa 返回的结果数量与请求不符
-> 原因: result_count_mismatch
+    markdown: `> 错误：[INVALID_RESPONSE] Exa 返回的结果数量与请求不符
+> 原因：result_count_mismatch
 
 来源：Exa
 
@@ -277,10 +279,11 @@ Content A.`,
         },
       },
     },
-    markdown: `> 错误: [CANCELLED] 操作已取消
-> - exa: [INVALID_RESPONSE] Exa 返回的结果数量与请求不符
-> - 原因: result_count_mismatch
-> - tavily: [CANCELLED] 操作已取消
+    markdown: `> 错误：[CANCELLED] 操作已取消
+> 
+> - exa：[INVALID_RESPONSE] Exa 返回的结果数量与请求不符
+>   - 原因：result_count_mismatch
+> - tavily：[CANCELLED] 操作已取消
 
 来源：Exa
 

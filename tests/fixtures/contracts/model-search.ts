@@ -73,7 +73,14 @@ export const cases: ContractCase[] = [
         answer: {
           model: 'grok-4.7',
           text: '正文引用了两个来源。',
-          sources: [{ url: 'https://example.org/bare' }, { url: 'https://example.org/wiki/X_(y)' }],
+          sources: [
+            {
+              url: 'https://example.org/bare',
+            },
+            {
+              url: 'https://example.org/wiki/X_(y)',
+            },
+          ],
         },
       },
     },
@@ -114,9 +121,9 @@ export const cases: ContractCase[] = [
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
-> - exa: [TIMEOUT] 本次调用的总执行时间已用尽
-> - 超时范围: total
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+> - exa：[TIMEOUT] 本次调用的总执行时间已用尽
+>   - 超时范围：total
 
 模型：grok-4.7
 
@@ -155,10 +162,10 @@ export const cases: ContractCase[] = [
         },
       },
     },
-    markdown: `> 错误: [AUTHENTICATION_ERROR] 模型搜索失败
-> - model: [AUTHENTICATION_ERROR] 模型服务拒绝了本次凭证
-> - 模型: grok-4.7
-> - HTTP 状态: 401
+    markdown: `> 错误：[AUTHENTICATION_ERROR] 模型搜索失败
+> - model：[AUTHENTICATION_ERROR] 模型服务拒绝了本次凭证
+>   - 模型：grok-4.7
+>   - HTTP 状态：401
 
 ## 补充检索
 
@@ -197,12 +204,14 @@ export const cases: ContractCase[] = [
         },
       },
     },
-    stderr: `错误: 模型搜索失败
-  model: 模型响应没有完整正文
-  模型: grok-4.7
-  HTTP 状态: 200
-  exa: Exa 拒绝了本次凭证
-  HTTP 状态: 401`,
+    markdown: ``,
+    stderr: `错误：模型搜索失败
+
+model：模型响应没有完整正文
+  模型：grok-4.7
+  HTTP 状态：200
+exa：Exa 拒绝了本次凭证
+  HTTP 状态：401`,
   },
   {
     name: 'fallback summary with multiple source results',
@@ -317,7 +326,7 @@ export const cases: ContractCase[] = [
         message: '操作已取消',
       },
     },
-    markdown: `> 错误: [CANCELLED] 操作已取消
+    markdown: `> 错误：[CANCELLED] 操作已取消
 
 ## 补充检索
 

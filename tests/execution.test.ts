@@ -416,7 +416,7 @@ test('Verbose retry success has no duplicate provider, count or final request ID
   });
   assert.match(
     renderExecution(record, 'zh'),
-    /尝试 2：HTTP 200，150 ms，成功，请求 ID req-example-success/,
+    /尝试 2：HTTP 200，150 ms，成功，请求 ID：req-example-success/,
   );
 });
 

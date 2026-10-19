@@ -1,5 +1,5 @@
 import { AppError, failure } from '../errors.js';
-import { text } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
 import type { JsonObject, JsonValue, Outcome, PublicError, Result } from '../result.js';
 import { contentSources } from './exa.js';
@@ -54,7 +54,6 @@ function errorLines(error: PublicError, language: Language, codes = true): strin
     upstream_type: 'upstreamTypeLabel',
     upstream_param: 'upstreamParamLabel',
     upstream_message: 'upstreamMessageLabel',
-    upstream_readable_message: 'upstreamReadableLabel',
     request_id: 'requestIdLabel',
     response_id: 'responseIdLabel',
     timeout_scope: 'timeoutScopeLabel',
@@ -78,17 +77,19 @@ function errorLines(error: PublicError, language: Language, codes = true): strin
   for (const [key, label] of Object.entries(labels)) {
     if (typeof details?.[key] === 'string' || typeof details?.[key] === 'number')
       lines.push(
-        `${text(language, label)}: ${codes ? details[key] : String(details[key]).replace(/\r\n|\r|\n/g, '\n  ')}`,
+        `${text(language, label)}${colon(language)}${codes ? details[key] : String(details[key]).replace(/\r\n|\r|\n/g, '\n  ')}`,
       );
   }
-  if (typeof details?.help === 'string') lines.push(`${text(language, 'seeHelp')} ${details.help}`);
+  if (typeof details?.help === 'string')
+    lines.push(`${text(language, 'seeHelp')}${colon(language)}${details.help}`);
   if (Array.isArray(details?.content_sources)) {
     const sources = details.content_sources as ContentSource[];
     lines.push(
       ...(codes
         ? contentSources(sources, language)
         : sources.map(
-            (item) => `${text(language, 'contentSourceLabel')}: ${item.url} · ${item.source}`,
+            (item) =>
+              `${text(language, 'contentSourceLabel')}${colon(language)}${item.url} · ${item.source}`,
           )),
     );
   }
@@ -99,7 +100,7 @@ function errorLines(error: PublicError, language: Language, codes = true): strin
     const values = details?.[key];
     if (Array.isArray(values) && values.length)
       lines.push(
-        `${text(language, label)}: ${values.map((value) => (codes ? inlineCode(String(value)) : String(value))).join(language === 'zh' ? '、' : ', ')}`,
+        `${text(language, label)}${colon(language)}${values.map((value) => (codes ? inlineCode(String(value)) : String(value))).join(language === 'zh' ? '、' : ', ')}`,
       );
   }
   for (const cause of details?.causes ?? []) {
@@ -107,13 +108,14 @@ function errorLines(error: PublicError, language: Language, codes = true): strin
       ...errorLines(cause, language, codes).map((entry) => `${codes ? '- ' : '  '}${entry}`),
     );
   }
+  // Several services form their own block, separated from the heading and the shared
+  // URL above them. A single failure stays attached to the heading.
+  if ((details?.failures ?? []).length > 1) lines.push('');
   for (const failure of details?.failures ?? []) {
     const target = 'provider' in failure ? failure.provider : failure.url;
-    lines.push(
-      ...errorLines(failure, language, codes).map(
-        (entry, index) => `${codes ? '- ' : '  '}${index === 0 ? `${target}: ` : ''}${entry}`,
-      ),
-    );
+    const [first, ...rest] = errorLines(failure, language, codes);
+    lines.push(`${codes ? '- ' : ''}${target}${colon(language)}${first}`);
+    for (const entry of rest) lines.push(`${codes ? '  - ' : '  '}${entry}`);
   }
   return lines;
 }
@@ -126,7 +128,7 @@ function errorContent(error: PublicError, language: Language, target?: string): 
   const sections: string[] = [];
   const details = error.details;
   const prefix = target ? `${target} · ` : '';
-  const sep = language === 'zh' ? '：' : ': ';
+  const sep = colon(language);
   if (details?.upstream_data !== undefined)
     sections.push(
       `${prefix}${text(language, 'upstreamDataLabel')}${sep}`,
@@ -153,6 +155,7 @@ function errorContent(error: PublicError, language: Language, target?: string): 
 
 function markdown<T extends JsonValue>(outcome: Outcome<T>, options: RenderOptions<T>): string {
   const { result } = outcome;
+  const { language } = options;
   const sections: string[] = [];
   for (const [fallbacks, label] of [
     [result.meta?.service_fallbacks, 'serviceFallbackLabel'],
@@ -162,22 +165,22 @@ function markdown<T extends JsonValue>(outcome: Outcome<T>, options: RenderOptio
     for (const value of fallbacks) {
       const item = value as JsonObject;
       sections.push(
-        `> ${text(options.language, label)}${options.language === 'zh' ? '：' : ': '}${item.from} → ${item.to}${options.language === 'zh' ? '；' : '; '}[${item.code}] ${String(item.message).replace(/[\r\n]+/g, ' ')}`,
+        `> ${text(language, label)}${colon(language)}${item.from} → ${item.to}${language === 'zh' ? '；' : '; '}[${item.code}] ${String(item.message).replace(/[\r\n]+/g, ' ')}`,
       );
     }
   }
   if (result.error) {
-    const label = text(options.language, result.status === 'partial' ? 'partial' : 'error');
+    const label = text(language, result.status === 'partial' ? 'partial' : 'error');
     sections.push(
-      `> ${label}: ${errorLines(result.error, options.language)
+      `> ${label}${colon(language)}${errorLines(result.error, language)
         .flatMap((value) => value.split(/\r\n|\r|\n/))
         .join('\n> ')}`,
     );
-    sections.push(...errorContent(result.error, options.language));
+    sections.push(...errorContent(result.error, language));
   }
   if (result.data !== undefined) {
     if (!options.renderData) throw new Error('A data renderer is required.');
-    sections.push(options.renderData(result.data, options.language, result.meta));
+    sections.push(options.renderData(result.data, language, result.meta));
   }
   return line(sections.join('\n\n'));
 }
@@ -233,7 +236,7 @@ function readable<T extends JsonValue>(
   ) {
     const label = text(options.language, result.status === 'partial' ? 'partial' : 'error');
     const renderedError = wrapText(
-      `${label}: ${errorText(result.error, options.language)}`,
+      `${label}${colon(options.language)}${errorText(result.error, options.language)}`,
       process.stderr.columns ?? 80,
     );
     if (options.format === 'text' && hasData && options.textErrorPlacement === 'before-data')

@@ -243,10 +243,10 @@ The client calls the API.`,
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] Jina 搜索结果已取得，部分内容不可用
-> - https://example.org/reference: [CONTENT_UNAVAILABLE] Jina 未返回网页正文
-> - 原因: empty_content
-> - 结果索引: 1
+    markdown: `> 部分完成：[PARTIAL_FAILURE] Jina 搜索结果已取得，部分内容不可用
+> - https://example.org/reference：[CONTENT_UNAVAILABLE] Jina 未返回网页正文
+>   - 原因：empty_content
+>   - 结果索引：1
 
 来源：Jina · 网页搜索
 
@@ -296,10 +296,10 @@ API reference.`,
         },
       },
     },
-    markdown: `> 部分完成: [PARTIAL_FAILURE] Jina 搜索结果已取得，部分内容不可用
-> - https://example.org/diagram: [CONTENT_UNAVAILABLE] Jina 未返回图片地址
-> - 原因: missing_image
-> - 结果索引: 0
+    markdown: `> 部分完成：[PARTIAL_FAILURE] Jina 搜索结果已取得，部分内容不可用
+> - https://example.org/diagram：[CONTENT_UNAVAILABLE] Jina 未返回图片地址
+>   - 原因：missing_image
+>   - 结果索引：0
 
 来源：Jina · 图片搜索
 
@@ -351,14 +351,14 @@ The client calls the API.`,
         },
       },
     },
-    markdown: `> 错误: [INVALID_RESPONSE] Jina 响应包含无效数据
-> 服务: jina
-> HTTP 状态: 200
+    markdown: `> 错误：[INVALID_RESPONSE] Jina 响应包含无效数据
+> 服务：jina
+> HTTP 状态：200
 > - [INVALID_RESPONSE] Jina 条目缺少有效来源 URL
-> - 上游条目索引: 0
-> - https://example.org/reference: [CONTENT_UNAVAILABLE] Jina 未返回网页正文
-> - 原因: empty_content
-> - 结果索引: 0
+> - 上游条目索引：0
+> - https://example.org/reference：[CONTENT_UNAVAILABLE] Jina 未返回网页正文
+>   - 原因：empty_content
+>   - 结果索引：0
 
 来源：Jina · 网页搜索
 
@@ -392,12 +392,12 @@ The client calls the API.`,
         },
       },
     },
-    markdown: `> 错误: [CONTENT_UNAVAILABLE] Jina 报告目标页面读取失败
-> 服务: jina
-> URL: https://example.org/private
-> HTTP 状态: 200
-> 页面状态: 403
-> 原因: target_http_error
+    markdown: `> 错误：[CONTENT_UNAVAILABLE] Jina 报告目标页面读取失败
+> 服务：jina
+> URL：https://example.org/private
+> HTTP 状态：200
+> 页面状态：403
+> 原因：target_http_error
 
 来源：Jina · [Access denied](https://example.org/private)
 
@@ -445,10 +445,10 @@ Access denied. Please sign in.`,
         },
       },
     },
-    markdown: `> 错误: [TIMEOUT] 模型搜索失败
-> - model: [TIMEOUT] 本次调用的总执行时间已用尽
-> - 模型: example-model
-> - 超时范围: total
+    markdown: `> 错误：[TIMEOUT] 模型搜索失败
+> - model：[TIMEOUT] 本次调用的总执行时间已用尽
+>   - 模型：example-model
+>   - 超时范围：total
 
 ## 补充检索
 

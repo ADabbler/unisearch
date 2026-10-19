@@ -311,12 +311,14 @@ test('Content failures switch; unknown upstream and parameter failures terminate
   assert.equal(f.calls.length, 1);
 });
 
-test('Target page statuses control fetch fallback: 403 switches, 404 and 410 stop', async (t) => {
+test('Target page statuses control fetch fallback: 403 switches, 401/404/410/451 stop', async (t) => {
   const f = await fixture(t);
   f.save({ fetch: { providers: ['firecrawl', 'tavily'] } });
   for (const { statusCode, message } of [
+    { statusCode: 401, message: 'Unauthorized' },
     { statusCode: 404, message: 'Not Found' },
     { statusCode: 410, message: 'Gone' },
+    { statusCode: 451, message: 'Unavailable For Legal Reasons' },
   ]) {
     f.calls.length = 0;
     f.reply({

@@ -313,10 +313,11 @@ function canSwitch(
     case 'TIMEOUT':
       return error.details?.timeout_scope === 'request';
     case 'CONTENT_UNAVAILABLE':
+      // The page itself demands credentials (401), the address is gone (404, 410), or the
+      // content is withheld by law (451). A 403 stays retryable because another service
+      // reaches the page from a different address with a different user agent.
       return (
-        operation === 'fetch' &&
-        error.details?.page_status !== 404 &&
-        error.details?.page_status !== 410
+        operation === 'fetch' && ![401, 404, 410, 451].includes(Number(error.details?.page_status))
       );
     case 'UPSTREAM_ERROR':
       if (provider === 'zhipu') return zhipu.canSwitchUpstream(error);

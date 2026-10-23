@@ -12,7 +12,7 @@
 
 UniSearch is a unified retrieval CLI for AI agents. It combines model search, web search, page reading, site link discovery, and library or repository documentation lookup.
 
-It connects to model APIs, [Exa](https://exa.ai/), [Tavily](https://www.tavily.com/), [Firecrawl](https://www.firecrawl.dev/), [Context7](https://context7.com/), [Jina](https://jina.ai/), [Zhipu API](https://bigmodel.cn/), [Zhipu MCP](https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server), [AnySearch](https://anysearch.com/), and [TinyFish](https://www.tinyfish.ai/).
+It connects to model APIs, [Exa](https://exa.ai/), [Tavily](https://www.tavily.com/), [Firecrawl](https://www.firecrawl.dev/), [Context7](https://context7.com/), [Jina](https://jina.ai/), [Zhipu API](https://docs.z.ai/guides/tools/web-search), [Zhipu MCP](https://docs.z.ai/devpack/mcp/search-mcp-server), [AnySearch](https://anysearch.com/), [TinyFish](https://www.tinyfish.ai/), and [DeepSeek](https://api-docs.deepseek.com/guides/search).
 
 ## Install
 

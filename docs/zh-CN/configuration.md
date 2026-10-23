@@ -19,6 +19,7 @@
   - [智谱 MCP](#智谱-mcp)
   - [AnySearch](#anysearch)
   - [TinyFish](#tinyfish)
+  - [DeepSeek](#deepseek)
 - [配置示例](#配置示例)
 - [检查与排障](#检查与排障)
 
@@ -108,10 +109,10 @@ UniSearch 读取一个用户配置文件：
 
 ### 统一 fetch 与 map
 
-| 字段              | 类型与取值                                   | 默认值                                                                                     | 环境变量 |
-| ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ | -------- |
-| `fetch.providers` | 有序字符串数组，仅支持默认列表中的服务 ID    | `firecrawl` → `exa` → `tavily` → `jina` → `zhipu` → `zhipu-mcp` → `tinyfish` → `anysearch` | —        |
-| `map.providers`   | 有序字符串数组，仅支持 `tavily`、`firecrawl` | `tavily` → `firecrawl`                                                                     | —        |
+| 字段              | 类型与取值                                   | 默认值                                                                                                  | 环境变量 |
+| ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------- |
+| `fetch.providers` | 有序字符串数组，仅支持默认列表中的服务 ID    | `firecrawl` → `exa` → `tavily` → `jina` → `zhipu` → `zhipu-mcp` → `tinyfish` → `anysearch` → `deepseek` | —        |
+| `map.providers`   | 有序字符串数组，仅支持 `tavily`、`firecrawl` | `tavily` → `firecrawl`                                                                                  | —        |
 
 `unisearch fetch` 和 `unisearch map` 按列表顺序选择已启用且配置完整的服务，启用回退时可在失败后尝试下一服务。列表中的服务 ID 不能重复，空列表 `[]` 会导致对应命令报错；服务专用命令不受列表影响。
 
@@ -123,7 +124,7 @@ UniSearch 读取一个用户配置文件：
 | ------------------------ | ------------------------- | ------ | -------- |
 | `providers.<id>.enabled` | `true` 启用，`false` 禁用 | `true` | —        |
 
-`<id>` 为 `model`、`exa`、`tavily`、`firecrawl`、`ctx7`、`jina`、`zhipu`、`zhipu-mcp`、`anysearch` 或 `tinyfish`。
+`<id>` 为 `model`、`exa`、`tavily`、`firecrawl`、`ctx7`、`jina`、`zhipu`、`zhipu-mcp`、`anysearch`、`tinyfish` 或 `deepseek`。
 
 例如，禁用 Exa：
 
@@ -286,6 +287,14 @@ setup 的 xAI 快捷项会自动填写地址、Responses 协议及 `web_search`�
 | `providers.tinyfish.api_key`    | API Key，搜索和 fetch 必需 | 无                               | `UNISEARCH_TINYFISH_API_KEY`    |
 | `providers.tinyfish.search_url` | Search 连接地址            | `https://api.search.tinyfish.ai` | `UNISEARCH_TINYFISH_SEARCH_URL` |
 | `providers.tinyfish.fetch_url`  | Fetch 连接地址             | `https://api.fetch.tinyfish.ai`  | `UNISEARCH_TINYFISH_FETCH_URL`  |
+
+### DeepSeek
+
+| 字段                              | 类型与取值                    | 默认值                     | 环境变量                      |
+| --------------------------------- | ----------------------------- | -------------------------- | ----------------------------- |
+| `providers.deepseek.api_key`      | API Key，搜索和 fetch 必需    | 无                         | `UNISEARCH_DEEPSEEK_API_KEY`  |
+| `providers.deepseek.base_url`     | 连接地址                      | `https://api.deepseek.com` | `UNISEARCH_DEEPSEEK_BASE_URL` |
+| `providers.deepseek.search.limit` | 整数 `1–50`，搜索结果数量上限 | `10`                       | —                             |
 
 ## 配置示例
 

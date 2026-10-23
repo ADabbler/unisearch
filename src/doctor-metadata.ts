@@ -7,9 +7,10 @@ import type { JsonObject } from './result.js';
 import { httpError as modelError } from './providers/model.js';
 import { httpError as tavilyError } from './providers/tavily.js';
 import { classify as firecrawlError } from './providers/firecrawl.js';
+import { httpError as deepseekError } from './providers/deepseek.js';
 import { redactDiagnostics, transportError } from './providers/transport.js';
 
-export type MetadataProvider = 'model' | 'tavily' | 'firecrawl';
+export type MetadataProvider = 'model' | 'tavily' | 'firecrawl' | 'deepseek';
 export interface MetadataRequest {
   provider: MetadataProvider;
   url: string;
@@ -49,6 +50,23 @@ export function parseMetadata(request: MetadataRequest, value: unknown): JsonObj
         model: request.model!,
       });
     return;
+  }
+  if (provider === 'deepseek') {
+    if (typeof body.is_available !== 'boolean') return invalid(provider, 'is_available');
+    if (!Array.isArray(body.balance_infos)) return invalid(provider, 'balance_infos');
+    const balances = body.balance_infos.map((entry) => {
+      const item = object(entry, provider, 'balance_infos');
+      const balance: JsonObject = {};
+      for (const field of ['currency', 'total_balance', 'granted_balance', 'topped_up_balance']) {
+        const value = item[field];
+        if (typeof value !== 'string' || !value.trim())
+          return invalid(provider, `balance_infos.${field}`);
+        balance[field] = value;
+      }
+      return balance;
+    });
+    if (!body.is_available) throw new AppError('QUOTA_EXCEEDED', 'deepseekQuota', { provider });
+    return { is_available: true, balance_infos: balances };
   }
   if (provider === 'tavily') {
     const key = object(body.key, provider, 'key'),
@@ -160,6 +178,9 @@ export async function requestMetadata(
       } else if (provider === 'tavily') {
         error = isObject(body) && isObject(body.detail) ? body.detail : undefined;
         mapped = tavilyError(response.status);
+      } else if (provider === 'deepseek') {
+        error = isObject(body) && isObject(body.error) ? body.error : undefined;
+        mapped = deepseekError(response.status);
       } else {
         error = isObject(body) ? body : undefined;
         mapped = firecrawlError(

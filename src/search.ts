@@ -30,6 +30,8 @@ import {
   tavilyRequestLimits,
 } from './providers/tavily.js';
 import type { TavilySearchRequest, TavilySearchData } from './providers/tavily.js';
+import * as deepseek from './providers/deepseek.js';
+import type { SearchData as DeepseekData } from './providers/deepseek-response.js';
 
 export interface SearchPlan {
   model: ModelRequest;
@@ -44,7 +46,8 @@ type ExtraPlan =
   | { provider: 'exa'; request: SearchRequest }
   | { provider: 'firecrawl'; request: firecrawl.SearchRequest }
   | { provider: 'jina'; request: jina.SearchRequest }
-  | { provider: 'tavily'; request: TavilySearchRequest };
+  | { provider: 'tavily'; request: TavilySearchRequest }
+  | { provider: 'deepseek'; request: deepseek.SearchRequest };
 type ExtraData =
   | SearchData
   | FirecrawlData
@@ -53,6 +56,7 @@ type ExtraData =
   | anysearch.SearchData
   | ZhipuData
   | TinyfishData
+  | DeepseekData
   | zhipuMcp.Data;
 type ExtraSource =
   | { provider: 'zhipu'; data: Omit<ZhipuData, 'provider'> }
@@ -62,7 +66,8 @@ type ExtraSource =
   | { provider: 'anysearch'; data: { results: anysearch.SearchData['results'] } }
   | { provider: 'tavily'; data: { results: TavilySearchData['results'] } }
   | { provider: 'exa'; data: { results: SearchData['results'] } }
-  | { provider: 'firecrawl'; data: { results: FirecrawlData['results']; warnings?: string[] } };
+  | { provider: 'firecrawl'; data: { results: FirecrawlData['results']; warnings?: string[] } }
+  | { provider: 'deepseek'; data: { results: DeepseekData['results'] } };
 export type CombinedData = JsonObject & {
   answer?: ModelAnswer;
   extra_sources?: ExtraSource[];
@@ -91,6 +96,7 @@ export function prepareCombinedSearch(
           'zhipu',
           'zhipu-mcp',
           'tinyfish',
+          'deepseek',
         ].includes(source),
     ) ||
     new Set(sources).size !== sources.length
@@ -153,6 +159,11 @@ export function prepareCombinedSearch(
       return {
         provider,
         request: prepareTavilySearch(query, { timeout: options.timeout }, values, env, language),
+      };
+    if (provider === 'deepseek')
+      return {
+        provider,
+        request: deepseek.prepareSearch(query, { timeout: options.timeout }, values, env, language),
       };
     return {
       provider: 'firecrawl',
@@ -321,6 +332,8 @@ export async function combinedSearch(
               return requestTavilySearch(source.request, context, language, options.transport);
             case 'firecrawl':
               return firecrawl.requestSearch(source.request, context, language, options.transport);
+            case 'deepseek':
+              return deepseek.request(source.request, context, language, options.transport);
           }
         },
         {
@@ -336,6 +349,7 @@ export async function combinedSearch(
             jina: jina.requestLimit,
             tavily: tavilyRequestLimits.search,
             firecrawl: firecrawl.requestLimits.search,
+            deepseek: deepseek.requestLimits.search,
           }[source.provider],
           record: {},
           onAttempt: (entry) => {
@@ -388,6 +402,8 @@ export async function combinedSearch(
         source = { provider, data };
       } else if (content.provider === 'tavily') {
         source = { provider: 'tavily', data: { results: content.results } };
+      } else if (content.provider === 'deepseek') {
+        source = { provider: 'deepseek', data: { results: content.results } };
       } else {
         const sanitize = (message: string) => redact(message, plan.secrets) as string;
         const sanitizeWarnings = (warnings: string[]) => [...new Set(warnings.map(sanitize))];

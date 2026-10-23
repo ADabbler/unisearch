@@ -261,7 +261,20 @@ export function prepareDoctor(
     }
     case 'model':
     case 'tavily':
-    case 'firecrawl': {
+    case 'firecrawl':
+    case 'deepseek': {
+      const endpoints = {
+        model: 'models',
+        tavily: 'usage',
+        firecrawl: 'team/credit-usage',
+        // The balance endpoint sits at the API root, outside the /v1 prefix the tools use.
+        deepseek: 'user/balance',
+      } as const;
+      // Operation names the user recognises; endpoint paths are an implementation detail.
+      const checkNames: Partial<Record<Provider, string>> = {
+        firecrawl: 'credit_usage',
+        deepseek: 'usage',
+      };
       const settings = operationConfig(
         values,
         environment,
@@ -288,7 +301,7 @@ export function prepareDoctor(
             },
       );
       const base = settings[`providers.${provider}.base_url`].value as string;
-      const suffix = { model: 'models', tavily: 'usage', firecrawl: 'team/credit-usage' }[provider];
+      const suffix = endpoints[provider];
       const request = {
         provider,
         url: `${base.replace(/\/+$/, '')}/${suffix}`,
@@ -299,7 +312,7 @@ export function prepareDoctor(
         secrets: configuredSecrets(values, environment),
       };
       const check: JsonObject = {
-        operation: provider === 'firecrawl' ? 'credit_usage' : suffix,
+        operation: checkNames[provider] ?? suffix,
         endpoint: redactDiagnostics(request.url, request.secrets),
       };
       return {

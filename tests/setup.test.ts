@@ -113,6 +113,7 @@ test('Setup saved configuration and Codex Skill are usable by new CLI processes'
     'zhipu-mcp',
     'anysearch',
     'tinyfish',
+    'deepseek',
   ]);
   assert.doesNotMatch(JSON.stringify(saved), /fixture-setup-key/);
   const output = capture();
@@ -433,6 +434,7 @@ test('Setup preselects effective choices and preserves existing sources when con
               'zhipu-mcp',
               'anysearch',
               'tinyfish',
+              'deepseek',
             ],
           );
           assert.equal(choices[0].label, language === 'zh' ? '模型搜索' : 'Model search');

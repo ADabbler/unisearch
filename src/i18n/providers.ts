@@ -12,6 +12,7 @@ const names: Record<Provider, string> = {
   zhipu: 'Zhipu',
   'zhipu-mcp': 'Zhipu Coding Plan MCP',
   tinyfish: 'TinyFish',
+  deepseek: 'DeepSeek',
 };
 export function providerName(provider: Provider, language: Language): string {
   if (language === 'zh') {

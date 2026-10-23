@@ -16,6 +16,8 @@ export type ContractCase = {
     | 'jina'
     | 'tinyfish-search'
     | 'tinyfish-fetch'
+    | 'deepseek-search'
+    | 'deepseek-fetch'
     | 'mcp-search'
     | 'mcp-fetch'
     | 'mcp-docs'

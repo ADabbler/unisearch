@@ -10,6 +10,7 @@ import { renderTavilySearch, renderExtract, renderMap } from '../src/output/tavi
 import * as anysearch from '../src/output/anysearch.js';
 import { renderJina } from '../src/output/jina.js';
 import * as tinyfish from '../src/output/tinyfish.js';
+import * as deepseek from '../src/output/deepseek.js';
 import { renderMcp } from '../src/output/zhipu-mcp.js';
 import { renderZhipu } from '../src/output/zhipu.js';
 import type { Data as McpData } from '../src/providers/zhipu-mcp.js';
@@ -22,6 +23,7 @@ import { cases as tavily } from './fixtures/contracts/tavily.js';
 import { cases as anysearchCases } from './fixtures/contracts/anysearch.js';
 import { cases as jina } from './fixtures/contracts/jina.js';
 import { cases as tinyfishCases } from './fixtures/contracts/tinyfish.js';
+import { cases as deepseekCases } from './fixtures/contracts/deepseek.js';
 import { cases as mcp } from './fixtures/contracts/zhipu-mcp.js';
 import { cases as zhipu } from './fixtures/contracts/zhipu.js';
 
@@ -39,6 +41,8 @@ const renderers = {
   jina: renderJina,
   'tinyfish-search': tinyfish.renderSearch,
   'tinyfish-fetch': tinyfish.renderFetch,
+  'deepseek-search': deepseek.renderSearch,
+  'deepseek-fetch': deepseek.renderFetch,
   'mcp-search': (data: McpData) => renderMcp(data, 'zh', 'search'),
   'mcp-fetch': (data: McpData) => renderMcp(data, 'zh', 'fetch'),
   'mcp-docs': (data: McpData) => renderMcp(data, 'zh', 'docs'),
@@ -56,6 +60,7 @@ for (const [group, cases] of Object.entries({
   anysearch: anysearchCases,
   jina,
   tinyfish: tinyfishCases,
+  deepseek: deepseekCases,
   'zhipu-mcp': mcp,
   zhipu,
 })) {

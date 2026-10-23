@@ -19,6 +19,7 @@
   - [Zhipu MCP](#zhipu-mcp)
   - [AnySearch](#anysearch)
   - [TinyFish](#tinyfish)
+  - [DeepSeek](#deepseek)
 - [Examples](#examples)
 - [Check and troubleshoot](#check-and-troubleshoot)
 
@@ -108,10 +109,10 @@ Use `--timeout SECONDS` to override the time limit for one call. The limit inclu
 
 ### Unified fetch and map
 
-| Field             | Type and values                                                         | Default                                                                                    | Environment variable |
-| ----------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------- |
-| `fetch.providers` | Ordered string array; supports only the service IDs in the default list | `firecrawl` → `exa` → `tavily` → `jina` → `zhipu` → `zhipu-mcp` → `tinyfish` → `anysearch` | —                    |
-| `map.providers`   | Ordered string array; supports only `tavily` and `firecrawl`            | `tavily` → `firecrawl`                                                                     | —                    |
+| Field             | Type and values                                                         | Default                                                                                                 | Environment variable |
+| ----------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------- |
+| `fetch.providers` | Ordered string array; supports only the service IDs in the default list | `firecrawl` → `exa` → `tavily` → `jina` → `zhipu` → `zhipu-mcp` → `tinyfish` → `anysearch` → `deepseek` | —                    |
+| `map.providers`   | Ordered string array; supports only `tavily` and `firecrawl`            | `tavily` → `firecrawl`                                                                                  | —                    |
 
 `unisearch fetch` and `unisearch map` select enabled, configured services in list order and can try the next service after a failure when fallback is enabled. Service IDs must be unique; an empty list `[]` makes the command fail. Provider-specific commands are unaffected by these lists.
 
@@ -123,7 +124,7 @@ Unified commands reuse each service's settings. `map --limit` overrides the limi
 | ------------------------ | ----------------------------------------------- | ------- | -------------------- |
 | `providers.<id>.enabled` | `true` enables the service; `false` disables it | `true`  | —                    |
 
-`<id>` is `model`, `exa`, `tavily`, `firecrawl`, `ctx7`, `jina`, `zhipu`, `zhipu-mcp`, `anysearch`, or `tinyfish`.
+`<id>` is `model`, `exa`, `tavily`, `firecrawl`, `ctx7`, `jina`, `zhipu`, `zhipu-mcp`, `anysearch`, `tinyfish`, or `deepseek`.
 
 For example, disable Exa:
 
@@ -286,6 +287,14 @@ Default connection URLs: `https://open.bigmodel.cn/api/mcp` for BigModel and `ht
 | `providers.tinyfish.api_key`    | API key, required for search and fetch | None                             | `UNISEARCH_TINYFISH_API_KEY`    |
 | `providers.tinyfish.search_url` | Search connection URL                  | `https://api.search.tinyfish.ai` | `UNISEARCH_TINYFISH_SEARCH_URL` |
 | `providers.tinyfish.fetch_url`  | Fetch connection URL                   | `https://api.fetch.tinyfish.ai`  | `UNISEARCH_TINYFISH_FETCH_URL`  |
+
+### DeepSeek
+
+| Field                             | Type and values                        | Default                    | Environment variable          |
+| --------------------------------- | -------------------------------------- | -------------------------- | ----------------------------- |
+| `providers.deepseek.api_key`      | API key, required for search and fetch | None                       | `UNISEARCH_DEEPSEEK_API_KEY`  |
+| `providers.deepseek.base_url`     | Connection URL                         | `https://api.deepseek.com` | `UNISEARCH_DEEPSEEK_BASE_URL` |
+| `providers.deepseek.search.limit` | Integer `1–50`; search result limit    | `10`                       | —                             |
 
 ## Examples
 

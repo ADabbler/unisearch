@@ -39,6 +39,8 @@ import { renderJina } from '../output/jina.js';
 import * as anysearch from '../providers/anysearch.js';
 import * as anysearchOutput from '../output/anysearch.js';
 import * as tinyfish from '../providers/tinyfish.js';
+import * as deepseek from '../providers/deepseek.js';
+import * as deepseekOutput from '../output/deepseek.js';
 import * as tinyfishOutput from '../output/tinyfish.js';
 import { renderContext7 } from '../output/context7.js';
 import * as firecrawlOutput from '../output/firecrawl.js';
@@ -757,6 +759,63 @@ export function createCli(version: string, options: CliOptions = {}) {
       tinyfish.requestLimits.fetch,
       (context) => tinyfish.request(request, context, ui),
       tinyfishOutput.renderFetch,
+    );
+  });
+
+  const deepseekGroup = program.command('deepseek').description(text('en', 'deepseekCommand'));
+  const deepseekSearch = deepseekGroup
+    .command('search')
+    .summary(text('en', 'deepseekSearch'))
+    .description(text('en', 'deepseekSearch'))
+    .argument('<QUERY>', text('en', 'queryArgument'));
+  for (const [flags, key] of [
+    ['--limit <N>', 'deepseekLimitOption'],
+    ['--include-text', 'textOption'],
+    ['--question <TEXT>', 'deepseekQuestion'],
+    ['--include-domains <DOMAINS>', 'deepseekIncludeDomains'],
+    ['--exclude-domains <DOMAINS>', 'deepseekExcludeDomains'],
+    ['--language <CODE>', 'deepseekLanguage'],
+    ['--after-date <DATE>', 'deepseekAfter'],
+    ['--before-date <DATE>', 'deepseekBefore'],
+  ] as const)
+    addScalarOption(deepseekSearch, new Option(flags, text('en', key)));
+  deepseekSearch.action(async (query: string, options: deepseek.SearchOptions) => {
+    const ui = language();
+    const request = deepseek.prepareSearch(
+      query,
+      { ...options, timeout: active.opts().timeout },
+      getDocument().values,
+      config.env,
+      ui,
+    );
+    await runProviderRequest(
+      'deepseek',
+      request,
+      deepseek.requestLimits.search,
+      (context) => deepseek.request(request, context, ui),
+      (data, ui) => deepseekOutput.renderSearch(data, ui),
+    );
+  });
+  const deepseekFetch = deepseekGroup
+    .command('fetch')
+    .summary(text('en', 'pageFetchSummary'))
+    .description(text('en', 'pageFetchSummary'))
+    .argument('<URL>', text('en', 'pageUrlArgument'));
+  deepseekFetch.action(async (url: string, options: deepseek.FetchOptions) => {
+    const ui = language();
+    const request = deepseek.prepareFetch(
+      url,
+      { ...options, timeout: active.opts().timeout },
+      getDocument().values,
+      config.env,
+      ui,
+    );
+    await runProviderRequest(
+      'deepseek',
+      request,
+      deepseek.requestLimits.fetch,
+      (context) => deepseek.request(request, context, ui),
+      deepseekOutput.renderFetch,
     );
   });
 

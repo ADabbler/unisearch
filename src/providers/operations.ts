@@ -8,6 +8,7 @@ import { operations as zhipu } from './zhipu.js';
 import { operations as mcp } from './zhipu-mcp.js';
 import { operations as anysearch } from './anysearch.js';
 import { operations as tinyfish } from './tinyfish.js';
+import { operations as deepseek } from './deepseek.js';
 
 export const operations = [
   modelSearch,
@@ -20,4 +21,5 @@ export const operations = [
   ...zhipu,
   ...mcp,
   ...tinyfish,
+  ...deepseek,
 ];

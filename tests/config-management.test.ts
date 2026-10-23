@@ -133,6 +133,7 @@ test('Service lists and saved providers share display order without reordering s
     'zhipu-mcp',
     'anysearch',
     'tinyfish',
+    'deepseek',
   ];
   const model = {
     fallback_models: [{ id: 'backup-b' }, { id: 'backup-a' }],

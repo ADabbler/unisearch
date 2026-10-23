@@ -48,6 +48,7 @@ Choose by task, configured availability, and user preference.
 - **Zhipu MCP (`zhipu-mcp`)**: Coding Plan web search, page reading, and documentation, directories, or files from supported public GitHub repositories.
 - **AnySearch (`anysearch`)**: General search and vertical search with domain-specific tags and parameters.
 - **TinyFish (`tinyfish`)**: Web, news, or paper search with location, language, and paper-year conditions; batch URL reading.
+- **DeepSeek (`deepseek`)**: Chinese and multilingual web search with authority and rerank scores plus a long summary; single-page reading.
 
 For AnySearch vertical search, use `unisearch anysearch domains` to find an unknown domain and `unisearch anysearch domains DOMAIN` to discover its tags and parameters. Reuse known definitions; general search needs no domain discovery.
 

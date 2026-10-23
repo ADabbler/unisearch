@@ -26,6 +26,7 @@ export function renderRetrieval(data: RetrievalData, language: Language): string
     anysearch: 'anysearchSource',
     tinyfish: 'tinyfishSource',
     'zhipu-mcp': 'mcpSource',
+    deepseek: 'deepseekSource',
   } as const;
   const source = text(language, sourceLabels[data.provider]);
   const sections = [source, ...warnings(data.warnings, language)];

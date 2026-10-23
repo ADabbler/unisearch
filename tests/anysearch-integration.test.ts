@@ -11,7 +11,8 @@ test('AnySearch is an anonymous default fetch candidate and explicit lists repla
   const f = await fixture(t);
   const defaults = (await f.run(['config', 'get', 'fetch.providers'])).json().data
     .value as string[];
-  assert.equal(defaults.at(-1), 'anysearch');
+  // DeepSeek was appended after AnySearch, so AnySearch is no longer the last candidate.
+  assert.deepEqual(defaults.slice(-2), ['anysearch', 'deepseek']);
   const fetched = await f.run(['fetch', pageUrl, '--format=json']);
   assert.equal(fetched.exit, 0, fetched.channels.out);
   assert.equal(fetched.json().data.provider, 'anysearch');

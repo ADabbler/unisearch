@@ -32,6 +32,7 @@ export const setupFields: Record<Provider, string[]> = {
   zhipu: ['platform', 'base_url', 'api_key'],
   'zhipu-mcp': ['platform', 'base_url', 'api_key'],
   tinyfish: ['search_url', 'fetch_url', 'api_key'],
+  deepseek: ['base_url', 'api_key'],
 };
 export type SetupData = JsonObject & { config: JsonObject };
 

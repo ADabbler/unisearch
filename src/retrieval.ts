@@ -16,6 +16,7 @@ import * as zhipuMcp from './providers/zhipu-mcp.js';
 import type { Page as JinaPage } from './providers/jina-response.js';
 import * as anysearch from './providers/anysearch.js';
 import * as tinyfish from './providers/tinyfish.js';
+import * as deepseek from './providers/deepseek.js';
 import type { Page as TinyfishPage } from './providers/tinyfish-response.js';
 import type { MapLink, ScrapeData } from './providers/firecrawl-response.js';
 import { validPageUrl } from './providers/firecrawl-response.js';
@@ -32,6 +33,7 @@ const operations = {
   'zhipu-mcp': { definitions: zhipuMcp.operations, fetch: 'fetch' },
   anysearch: { definitions: anysearch.operations, fetch: 'extract' },
   tinyfish: { definitions: tinyfish.operations, fetch: 'fetch' },
+  deepseek: { definitions: deepseek.operations, fetch: 'fetch' },
 };
 type Provider = keyof typeof operations;
 type Page = Pick<
@@ -200,6 +202,17 @@ export function prepareRetrieval(
           provider,
           requestLimit: tinyfish.requestLimits.fetch,
           run: (context, ui, transport) => tinyfish.request(request, context, ui, transport),
+        });
+      } else if (provider === 'deepseek') {
+        const request = deepseek.prepareFetch(url, { timeout }, values, env, language);
+        candidates.push({
+          provider,
+          requestLimit: deepseek.requestLimits.fetch,
+          run: async (context, ui, transport) =>
+            mapAttempt(await deepseek.request(request, context, ui, transport), (data) => ({
+              provider: 'deepseek',
+              results: data.results,
+            })),
         });
       } else if (provider === 'jina') {
         const request = jina.prepareFetch(url, { timeout }, values, env, language);

@@ -565,6 +565,70 @@ const messages = {
   anysearchRate: ['AnySearch 请求受到限流', 'AnySearch request was rate limited'],
   anysearchUpstream: ['AnySearch 请求失败', 'AnySearch request failed'],
   anysearchNetwork: ['无法连接 AnySearch', 'Could not connect to AnySearch'],
+  deepseekCommand: ['DeepSeek 搜索与网页读取', 'DeepSeek search and page reading'],
+  deepseekSearch: ['搜索网页', 'Search the web'],
+  deepseekLimitOption: [
+    '结果数量 1–50；未指定时使用配置值，默认值为 10',
+    'Result limit 1–50; uses the configured value if omitted, default 10',
+  ],
+  deepseekQuestion: [
+    '自然语言问题，用于说明搜索意图（1–128 字符）',
+    'Natural-language question that clarifies search intent (1–128 characters)',
+  ],
+  deepseekQuestionInvalid: [
+    '问题须非空且不超过 128 个字符',
+    'The question must be nonempty and at most 128 characters',
+  ],
+  deepseekIncludeDomains: [
+    '仅搜索逗号分隔的域名；不支持 *. 子域名与路径',
+    'Search only comma-separated domains; *. subdomains and paths are not supported',
+  ],
+  deepseekExcludeDomains: [
+    '排除逗号分隔的域名；不支持 *. 子域名与路径',
+    'Exclude comma-separated domains; *. subdomains and paths are not supported',
+  ],
+  deepseekLanguage: [
+    '结果语言代码，逗号分隔，如 zh,en',
+    'Result language codes, comma-separated, e.g. zh,en',
+  ],
+  deepseekAfter: [
+    '仅返回发布日期晚于指定日期的结果，格式 YYYY-MM-DD',
+    'Return results published after the given date; use YYYY-MM-DD',
+  ],
+  deepseekBefore: [
+    '仅返回发布日期早于指定日期的结果，格式 YYYY-MM-DD',
+    'Return results published before the given date; use YYYY-MM-DD',
+  ],
+  deepseekLimit: ['数量必须为 1–50 的整数', 'Limit must be an integer from 1 to 50'],
+  deepseekDomains: [
+    '域名须为有效主机名，且不得包含 *.、路径、端口或操作符字符',
+    'Domains must be valid hostnames and must not contain *., paths, ports, or operator characters',
+  ],
+  deepseekLanguageCode: [
+    '语言代码须非空且不含空白或控制字符',
+    'Language codes must be nonempty and free of whitespace and control characters',
+  ],
+  deepseekDate: ['日期必须为 YYYY-MM-DD', 'Date must be YYYY-MM-DD'],
+  deepseekDatesOrder: [
+    '--after-date 不能晚于 --before-date',
+    '--after-date must not be later than --before-date',
+  ],
+  deepseekQueryLimit: [
+    '拼接过滤条件后的查询超过 API 的 128 字符上限；请缩短查询或移除上述选项',
+    'The query exceeds the 128-character API limit once filters are appended; shorten the query or drop the listed options',
+  ],
+  deepseekSource: ['来源：DeepSeek', 'Source: DeepSeek'],
+  deepseekSiteLabel: ['站点', 'Site'],
+  deepseekAuthorityLabel: ['权威度', 'Authority'],
+  deepseekResponse: ['DeepSeek 返回了无效响应', 'DeepSeek returned an invalid response'],
+  deepseekArgument: ['DeepSeek 拒绝了请求参数', 'DeepSeek rejected the request arguments'],
+  deepseekAuth: ['DeepSeek 认证失败', 'DeepSeek authentication failed'],
+  deepseekAccess: ['DeepSeek 拒绝访问', 'DeepSeek denied access'],
+  deepseekQuota: ['DeepSeek 额度已用尽', 'DeepSeek quota is exhausted'],
+  deepseekUnavailable: ['DeepSeek 未取得网页正文', 'DeepSeek returned no page content'],
+  deepseekRate: ['DeepSeek 请求受到限流', 'DeepSeek request was rate limited'],
+  deepseekUpstream: ['DeepSeek 请求失败', 'DeepSeek request failed'],
+  deepseekNetwork: ['无法连接 DeepSeek', 'Could not connect to DeepSeek'],
   tavilyInvalidResponse: ['Tavily 响应包含无效数据', 'The Tavily response contains invalid data'],
   tavilyInvalidResults: [
     'Tavily 响应缺少有效的 results 数组',

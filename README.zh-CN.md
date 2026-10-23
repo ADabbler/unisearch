@@ -12,7 +12,7 @@
 
 UniSearch 是面向 AI Agent 的统一检索 CLI，整合模型搜索、网页搜索、正文读取、站点链接发现，以及库文档和仓库文档查询。
 
-支持模型 API、[Exa](https://exa.ai/)、[Tavily](https://www.tavily.com/)、[Firecrawl](https://www.firecrawl.dev/)、[Context7](https://context7.com/)、[Jina](https://jina.ai/)、[智谱 API](https://bigmodel.cn/)、[智谱 MCP](https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server)、[AnySearch](https://anysearch.com/) 和 [TinyFish](https://www.tinyfish.ai/)。
+支持模型 API、[Exa](https://exa.ai/)、[Tavily](https://www.tavily.com/)、[Firecrawl](https://www.firecrawl.dev/)、[Context7](https://context7.com/)、[Jina](https://jina.ai/)、[智谱 API](https://docs.bigmodel.cn/cn/guide/tools/web-search)、[智谱 MCP](https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server)、[AnySearch](https://anysearch.com/)、[TinyFish](https://www.tinyfish.ai/) 和 [DeepSeek](https://api-docs.deepseek.com/zh-cn/guides/search)。
 
 ## 安装
 

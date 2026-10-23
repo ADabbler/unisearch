@@ -71,6 +71,7 @@ test('Bare doctor reports every service and diagnoses ready anonymous and authen
       'zhipu-mcp': 'disabled',
       anysearch: 'passed',
       tinyfish: 'disabled',
+      deepseek: 'disabled',
     },
   );
   assert.equal(data.data.services[0].model, 'fixture-model');
@@ -333,6 +334,17 @@ test('Each doctor check uses its fixed endpoint, method, auth and minimum input 
     jina: jinaEnvelope(jinaPage),
     zhipu: zhipuSearch,
     tinyfish: tinyfishSearch,
+    deepseek: {
+      is_available: true,
+      balance_infos: [
+        {
+          currency: 'CNY',
+          total_balance: '1',
+          granted_balance: '0',
+          topped_up_balance: '1',
+        },
+      ],
+    },
   };
   const paths: Record<string, string> = {
     model: '/model/models',
@@ -344,6 +356,7 @@ test('Each doctor check uses its fixed endpoint, method, auth and minimum input 
     jina: '/jina/',
     zhipu: '/zhipu/web_search',
     tinyfish: '/tinyfish/',
+    deepseek: '/deepseek/user/balance',
   };
   for (const provider of providers.filter((p) => p !== 'zhipu-mcp')) {
     const key = fieldAt(`providers.${provider}.api_key`).environment!;

@@ -313,7 +313,7 @@ test('Compiled entry works outside the source directory with UTF-8 paths', (t) =
   assert.equal(version.stdout, `unisearch ${manifest.version}\n`);
 });
 
-test('All 39 operations expose and enforce the confirmed option matrix', async (t) => {
+test('All 41 operations expose and enforce the confirmed option matrix', async (t) => {
   const root = temporary(t);
   const content = new Set([
     'search',
@@ -343,6 +343,8 @@ test('All 39 operations expose and enforce the confirmed option matrix', async (
     'zhipu-mcp read-file',
     'tinyfish search',
     'tinyfish fetch',
+    'deepseek search',
+    'deepseek fetch',
   ]);
   const local = new Set([
     'status',
@@ -375,7 +377,7 @@ test('All 39 operations expose and enforce the confirmed option matrix', async (
     for (const child of command.commands) visit(child, [...path, child.name()]);
   };
   visit(createCli('test').program, []);
-  assert.equal(paths.length, 39);
+  assert.equal(paths.length, 41);
   for (const path of paths) {
     const name = path.join(' ');
     let unsupported: string[];

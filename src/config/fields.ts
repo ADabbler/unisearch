@@ -16,6 +16,7 @@ const providerEnvironments = {
   'zhipu-mcp': 'UNISEARCH_ZHIPU_MCP',
   anysearch: 'UNISEARCH_ANYSEARCH',
   tinyfish: 'UNISEARCH_TINYFISH',
+  deepseek: 'UNISEARCH_DEEPSEEK',
 };
 export type Provider = keyof typeof providerEnvironments;
 export const providers = Object.keys(providerEnvironments) as Provider[];
@@ -205,6 +206,20 @@ export const fields: readonly Field[] = [
     environment: 'UNISEARCH_TINYFISH_FETCH_URL',
   },
   {
+    path: 'providers.deepseek.base_url',
+    kind: 'url',
+    default: 'https://api.deepseek.com',
+    environment: 'UNISEARCH_DEEPSEEK_BASE_URL',
+  },
+  {
+    path: 'providers.deepseek.search.limit',
+    kind: 'integer',
+    minimum: 1,
+    maximum: 50,
+    default: 10,
+    invalidMessage: 'deepseekLimit',
+  },
+  {
     path: 'providers.tavily.base_url',
     kind: 'url',
     default: 'https://api.tavily.com',
@@ -276,7 +291,17 @@ export const fields: readonly Field[] = [
   {
     path: 'fetch.providers',
     kind: 'providers',
-    default: ['firecrawl', 'exa', 'tavily', 'jina', 'zhipu', 'zhipu-mcp', 'tinyfish', 'anysearch'],
+    default: [
+      'firecrawl',
+      'exa',
+      'tavily',
+      'jina',
+      'zhipu',
+      'zhipu-mcp',
+      'tinyfish',
+      'anysearch',
+      'deepseek',
+    ],
     supported: [
       'exa',
       'anysearch',
@@ -286,6 +311,7 @@ export const fields: readonly Field[] = [
       'zhipu-mcp',
       'firecrawl',
       'tinyfish',
+      'deepseek',
     ],
   },
   {

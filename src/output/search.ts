@@ -10,6 +10,7 @@ import { renderZhipu } from './zhipu.js';
 import { renderMcp } from './zhipu-mcp.js';
 import { renderSearch as renderAnySearch } from './anysearch.js';
 import { renderSearch as renderTinyfish } from './tinyfish.js';
+import { renderSearch as renderDeepseek } from './deepseek.js';
 
 export function renderCombinedSearch(data: CombinedData, language: Language): string {
   const sections: string[] = [];
@@ -66,6 +67,11 @@ export function renderCombinedSearch(data: CombinedData, language: Language): st
         sections.push(
           '### Jina',
           renderJina({ provider: 'jina', ...source.data }, language, 4, false),
+        );
+      else if (source.provider === 'deepseek')
+        sections.push(
+          '### DeepSeek',
+          renderDeepseek({ provider: 'deepseek', ...source.data }, language, 4, false),
         );
       else
         sections.push(

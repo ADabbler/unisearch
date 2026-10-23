@@ -23,6 +23,15 @@ export class TerminalHelp extends Help {
   }
 
   override formatHelp(command: Command, helper: Help): string {
-    return this.boxWrap(super.formatHelp(command, helper), this.helpWidth ?? 80);
+    // Commander joins the localized title and its subject with a literal space, which reads as a
+    // stray gap after the full-width colon Chinese uses as a label separator.
+    const heading = helper.styleTitle('Usage:');
+    const text = super.formatHelp(command, helper);
+    const joined = `${heading} `;
+    const trimmed =
+      heading.endsWith('：') && text.startsWith(joined)
+        ? heading + text.slice(joined.length)
+        : text;
+    return this.boxWrap(trimmed, this.helpWidth ?? 80);
   }
 }

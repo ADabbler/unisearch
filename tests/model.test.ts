@@ -35,8 +35,12 @@ const chat = (content = 'Complete answer.'): JsonObject => ({
 });
 const prepare = (values = {}, options = {}, env = modelEnv) =>
   prepareModel(' q ', options, values, env, 'en');
-const rejects = (fn: () => unknown, code = 'INVALID_CONFIG') =>
-  assert.throws(fn, (error) => error instanceof AppError && error.code === code);
+const rejects = (fn: () => unknown, code = 'INVALID_CONFIG', key?: AppError['key']) =>
+  assert.throws(
+    fn,
+    (error) =>
+      error instanceof AppError && error.code === code && (key === undefined || error.key === key),
+  );
 
 test('Model connection requires explicit ID, address and key, supports independent environment fields and both protocols', () => {
   for (const field of [
@@ -49,7 +53,7 @@ test('Model connection requires explicit ID, address and key, supports independe
     rejects(() => prepare({}, {}, env), 'MISSING_CONFIG');
   }
   const initial = prepare();
-  assert.equal(initial.url, 'https://fixture.example/prefix/responses');
+  assert.equal(initial.baseUrl, 'https://fixture.example/prefix');
   assert.deepEqual(initial.tools, []);
   assert.equal(modelBody(initial, initial.candidates[0], searchInstructions).tools, undefined);
   assert.equal(initial.stream, false);
@@ -63,7 +67,7 @@ test('Model connection requires explicit ID, address and key, supports independe
     { ...modelEnv, UNISEARCH_MODEL_PROTOCOL: 'chat-completions', UNISEARCH_MODEL_STREAM: 'true' },
     'en',
   );
-  assert.equal(request.url, 'https://fixture.example/prefix/chat/completions');
+  assert.equal(request.baseUrl, 'https://fixture.example/prefix');
   assert.deepEqual(request.candidates, [{ id: 'primary', effort: 'high' }]);
   assert.equal(request.stream, true);
   rejects(() => prepare({ providers: { model: { protocol: 'guess' } } }));
@@ -135,6 +139,11 @@ test('Candidate identity includes each effort and forbids saved duplicates inclu
     ['x'],
     [{ id: '' }],
     [{ id: 'x', effort: ' ' }],
+    [{ id: 'x', protocol: 'bad' }],
+    [{ id: 'x', tools: 'web_search' }],
+    [{ id: 'x', tools: [''] }],
+    [{ id: 'x' }, { id: 'x', protocol: 'chat-completions' }],
+    [{ id: 'x', tools: [] }, { id: 'x' }],
   ])
     rejects(() => prepare({ providers: { model: { fallback_models } } }));
   assert.deepEqual(
@@ -175,7 +184,134 @@ test('CLI selection uses first matching saved effort, independent backups and ex
   rejects(() => prepare(values, { model: '' }), 'INVALID_ARGUMENT');
 });
 
-test('Selection validates only visited IDs and selected effort, but never skips malformed visited structures', () => {
+test('Fallback entries inherit or override protocol and tools independently', () => {
+  const request = prepare({
+    providers: {
+      model: {
+        protocol: 'responses',
+        tools: ['web_search'],
+        model: { id: 'primary' },
+        fallback_models: [
+          { id: 'chat', protocol: 'chat-completions' },
+          { id: 'no-tools', tools: [] },
+          {
+            id: 'custom',
+            protocol: 'chat-completions',
+            tools: [{ type: 'custom_tool', option: true }],
+          },
+          { id: 'chat-empty', protocol: 'chat-completions', tools: [] },
+        ],
+      },
+    },
+  });
+  assert.deepEqual(request.candidates, [
+    { id: 'primary' },
+    { id: 'chat', protocol: 'chat-completions' },
+    { id: 'no-tools', tools: [] },
+    {
+      id: 'custom',
+      protocol: 'chat-completions',
+      tools: [{ type: 'custom_tool', option: true }],
+    },
+    { id: 'chat-empty', protocol: 'chat-completions', tools: [] },
+  ]);
+  assert.deepEqual(request.tools, [{ type: 'web_search' }]);
+  const primary = modelBody(request, request.candidates[0], 'instructions');
+  const chat = modelBody(request, request.candidates[1], 'instructions');
+  assert.equal(primary.store, false);
+  assert.deepEqual(primary.tools, [{ type: 'web_search' }]);
+  assert.equal(chat.store, undefined);
+  assert.deepEqual(chat.messages, [
+    { role: 'system', content: 'instructions' },
+    { role: 'user', content: ' q ' },
+  ]);
+  assert.deepEqual(chat.tools, [{ type: 'web_search' }]);
+  assert.equal(modelBody(request, request.candidates[2], 'instructions').tools, undefined);
+  assert.deepEqual(modelBody(request, request.candidates[3], 'instructions').tools, [
+    { type: 'custom_tool', option: true },
+  ]);
+  assert.equal(modelBody(request, request.candidates[4], 'instructions').tools, undefined);
+  assert.deepEqual(
+    parseInput(
+      fieldAt('providers.model.fallback_models'),
+      '[{"id":"chat","protocol":"chat-completions","tools":[]}]',
+    ),
+    [{ id: 'chat', protocol: 'chat-completions', tools: [] }],
+  );
+  rejects(
+    () =>
+      parseInput(fieldAt('providers.model.fallback_models'), '[{"id":"chat","protocol":"bad"}]'),
+    'INVALID_ARGUMENT',
+  );
+});
+
+test('CLI selection applies the saved protocol and tools with or without explicit effort', () => {
+  const values = {
+    providers: {
+      model: {
+        model: { id: 'primary' },
+        fallback_models: [{ id: 'backup', effort: 'low', protocol: 'chat-completions', tools: [] }],
+      },
+    },
+  };
+  assert.deepEqual(prepare(values, { model: 'backup' }).candidates, [
+    { id: 'backup', effort: 'low', protocol: 'chat-completions', tools: [] },
+  ]);
+  assert.deepEqual(prepare(values, { model: 'backup', effort: 'high' }).candidates, [
+    { id: 'backup', effort: 'high', protocol: 'chat-completions', tools: [] },
+  ]);
+  assert.deepEqual(prepare(values, { model: 'primary', effort: 'high' }).candidates, [
+    { id: 'primary', effort: 'high' },
+  ]);
+  assert.deepEqual(prepare(values, { model: 'new', effort: 'high' }).candidates, [
+    { id: 'new', effort: 'high' },
+  ]);
+  assert.deepEqual(
+    prepare(
+      values,
+      { model: 'backup', effort: 'high' },
+      { ...modelEnv, UNISEARCH_MODEL_ID: 'backup' },
+    ).candidates,
+    [{ id: 'backup', effort: 'high' }],
+  );
+});
+
+test('Fallback protocol selects its endpoint and response parser', async () => {
+  const plan = prepareCombinedSearch(
+    'q',
+    {},
+    { providers: { model: { fallback_models: [{ id: 'backup', protocol: 'chat-completions' }] } } },
+    modelEnv,
+    'en',
+  );
+  const urls: string[] = [];
+  const outcome = await combinedSearch(
+    plan,
+    new AbortController().signal,
+    'en',
+    {},
+    {
+      transport: async (url) => {
+        urls.push(String(url));
+        return urls.length === 1
+          ? Response.json({ error: { code: 'model_not_found' } }, { status: 404 })
+          : Response.json(chat('Fallback answer.'));
+      },
+    },
+  );
+  assert.equal(outcome.exitCode, 0);
+  assert.deepEqual(urls, [
+    'https://fixture.example/prefix/responses',
+    'https://fixture.example/prefix/chat/completions',
+  ]);
+  assert.equal(outcome.result.data?.answer?.text, 'Fallback answer.');
+  assert.deepEqual(
+    (outcome.result.meta?.model_fallbacks as JsonObject[]).map(({ from, to }) => [from, to]),
+    [['primary', 'backup']],
+  );
+});
+
+test('Selection validates only visited entries, but never skips malformed visited structures', () => {
   const make = (fallback_models: unknown) => ({
     providers: { model: { model: { id: 'primary', effort: 42 }, fallback_models } },
   });
@@ -184,15 +320,42 @@ test('Selection validates only visited IDs and selected effort, but never skips 
     { id: 'chosen', effort: 'high' },
   ]);
   rejects(() => prepare(make([null, { id: 'chosen' }]), { model: 'chosen' }));
-  rejects(() => prepare(make(null), { model: 'chosen' }));
+  rejects(() => prepare(make(null), { model: 'chosen' }), 'INVALID_CONFIG', 'invalidModels');
   rejects(() => prepare(make([{ id: 42 }, { id: 'chosen' }]), { model: 'chosen' }));
   rejects(() => prepare(make([{ id: 'chosen', effort: false }]), { model: 'chosen' }));
   assert.deepEqual(
+    prepare(make([{ id: 'chosen', effort: false, protocol: 'chat-completions' }]), {
+      model: 'chosen',
+      effort: 'low',
+    }).candidates,
+    [{ id: 'chosen', effort: 'low', protocol: 'chat-completions' }],
+  );
+  rejects(
+    () =>
+      prepare(make([{ id: 'chosen', effort: false, protocol: 'bad' }]), {
+        model: 'chosen',
+        effort: 'low',
+      }),
+    'INVALID_CONFIG',
+    'invalidProtocol',
+  );
+  rejects(
+    () => prepare(make([{ id: 'chosen', tools: [''] }]), { model: 'chosen' }),
+    'INVALID_CONFIG',
+    'invalidTools',
+  );
+  assert.deepEqual(
     prepare(
-      { providers: { model: { model: 42, fallback_models: false } } },
+      { providers: { model: { model: 42, fallback_models: [] } } },
       { model: 'chosen', effort: 'low' },
     ).candidates,
     [{ id: 'chosen', effort: 'low' }],
+  );
+  rejects(() =>
+    prepare(
+      { providers: { model: { model: 42, fallback_models: false } } },
+      { model: 'chosen', effort: 'low' },
+    ),
   );
   assert.deepEqual(prepare(make(false), { effort: 'none', fallback: false }).candidates, [
     { id: 'primary', effort: 'none' },
@@ -207,6 +370,16 @@ test('Model status validates all candidates and optional effort, exposing four l
     [{ providers: { model: { enabled: false } } }, {}, 'disabled'],
     [{ providers: { model: { model: { effort: 42 } } } }, modelEnv, 'invalid'],
     [{ providers: { model: { fallback_models: [{ id: '' }] } } }, modelEnv, 'invalid'],
+    [
+      { providers: { model: { fallback_models: [{ id: 'x', protocol: 'bad' }] } } },
+      modelEnv,
+      'invalid',
+    ],
+    [
+      { providers: { model: { fallback_models: [{ id: 'x', tools: 'web_search' }] } } },
+      modelEnv,
+      'invalid',
+    ],
   ] as const) {
     const result = localStatus(values, env, 'en', [modelSearch]);
     assert.equal(result.services[0].state, state);

@@ -141,7 +141,7 @@ These settings apply to `unisearch search`.
 | `providers.model.api_key`         | API key, required                                                 | None        | `UNISEARCH_MODEL_API_KEY`  |
 | `providers.model.base_url`        | API root URL, required                                            | None        | `UNISEARCH_MODEL_BASE_URL` |
 | `providers.model.protocol`        | `responses`, `chat-completions`                                   | `responses` | `UNISEARCH_MODEL_PROTOCOL` |
-| `providers.model.model.id`        | Model ID string, required                                         | None        | `UNISEARCH_MODEL_ID`       |
+| `providers.model.model.id`        | Model ID string; required unless `--model` is given               | None        | `UNISEARCH_MODEL_ID`       |
 | `providers.model.model.effort`    | Effort string, optional                                           | None        | `UNISEARCH_MODEL_EFFORT`   |
 | `providers.model.fallback_models` | Ordered array of model objects; format below                      | `[]`        | —                          |
 | `providers.model.tools`           | Array of tool-type strings or objects; format below               | `[]`        | —                          |
@@ -153,15 +153,17 @@ Accepted `model.effort` values depend on the model API. Omit it or use `default`
 
 ### Model selection
 
-Each `fallback_models` entry has the form `{ "id": "...", "effort": "..." }`, with `effort` optional.
+Each `fallback_models` entry has the form `{ "id": "...", "effort": "...", "protocol": "...", "tools": [...] }`. All fields except `id` are optional. Entries share the primary `base_url` and `api_key`. Omitted `protocol` and `tools` use the primary model's values; omitted `effort` sends no effort and lets the model use its own default.
 
-Backup models share the primary model's connection and tools but can each have their own effort. ID/effort pairs must be unique across primary and backup models; an omitted effort and `default` count as the same value.
+The same ID and effort pair may appear only once across the primary model and `fallback_models`. An omitted effort and `default` count as the same value.
 
 ```sh
-unisearch config set providers.model.fallback_models '[{"id":"backup-model","effort":"low"}]'
+unisearch config set providers.model.fallback_models '[{"id":"backup-model","effort":"low"},{"id":"chat-model","protocol":"chat-completions","tools":[]}]'
 ```
 
-`--model ID` selects one model and disables model fallback. Without `--effort`, it inherits the effort of the first saved entry with that ID, or the model service's default if none matches. `--effort` alone overrides only the first model attempted.
+`--model ID` tries only that model and disables model fallback. If the ID matches the primary model, the primary model's settings are used. Otherwise, the first `fallback_models` entry with that ID supplies its `protocol` and `tools`; its `effort` applies unless `--effort` is given. If the ID appears in neither the primary model nor `fallback_models`, only the primary model's `protocol` and `tools` are used.
+
+`--effort LEVEL` replaces the chosen model's effort when `--model` is given. Without `--model`, it replaces only the primary model's effort; later fallback models keep their own efforts.
 
 ### Tool configuration
 
@@ -258,7 +260,7 @@ Default connection URLs: `https://open.bigmodel.cn/api/paas/v4` for BigModel and
 
 The search engine parameter, `search.engine`, accepts `search_std`, `search_pro`, `search_pro_sogou`, or `search_pro_quark` on BigModel, and `search-prime` on Z.AI. Sogou accepts `search.limit` values of `10`, `20`, `30`, `40`, or `50`.
 
-Quark, and Sogou with both domain and time filters, reject `search.limit` and `--limit`. If `search.limit` is saved, remove it with `unisearch config unset providers.zhipu.search.limit`.
+Do not set `search.limit` or `--limit` with Quark, or with Sogou when both domain and time filters are used. If `search.limit` is saved, remove it with `unisearch config unset providers.zhipu.search.limit`.
 
 After switching platforms, check any manually set `base_url` and `search.engine` values; they do not change automatically.
 

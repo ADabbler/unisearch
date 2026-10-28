@@ -426,7 +426,17 @@ export interface Problem {
 
 type Invalid = Pick<Problem, 'code' | 'message'>;
 
-export type ModelCandidate = JsonObject & { id: string; effort?: string };
+export type ModelProtocol = 'responses' | 'chat-completions';
+export type ModelCandidate = JsonObject & {
+  id: string;
+  effort?: string;
+  protocol?: ModelProtocol;
+  tools?: JsonObject[];
+};
+const modelKeys = new Set(['id', 'effort', 'protocol', 'tools']);
+export function isModelKey(key: string): boolean {
+  return modelKeys.has(key);
+}
 export function token(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && !/\s/u.test(value);
 }
@@ -455,17 +465,24 @@ export function validate(field: Field, value: unknown): Invalid | undefined {
         return { code: 'INVALID_VALUE', message: 'invalidProtocol' };
       break;
     case 'models': {
-      if (
-        !Array.isArray(value) ||
-        value.some(
-          (item) =>
-            !isObject(item) ||
-            !token(item.id) ||
-            (item.effort !== undefined && !token(item.effort)) ||
-            Object.keys(item).some((key) => key !== 'id' && key !== 'effort'),
+      if (!Array.isArray(value)) return { code: 'INVALID_VALUE', message: 'invalidModels' };
+      for (const item of value) {
+        if (
+          !isObject(item) ||
+          !token(item.id) ||
+          (item.effort !== undefined && !token(item.effort)) ||
+          Object.keys(item).some((key) => !isModelKey(key))
         )
-      )
-        return { code: 'INVALID_VALUE', message: 'invalidModels' };
+          return { code: 'INVALID_VALUE', message: 'invalidModels' };
+        if (item.protocol !== undefined) {
+          const invalid = validate(fieldAt('providers.model.protocol'), item.protocol);
+          if (invalid) return invalid;
+        }
+        if (item.tools !== undefined) {
+          const invalid = validate(fieldAt('providers.model.tools'), item.tools);
+          if (invalid) return invalid;
+        }
+      }
       const identities = value.map((item) => modelIdentity(item as ModelCandidate));
       if (new Set(identities).size !== identities.length)
         return { code: 'INVALID_VALUE', message: 'duplicateModel' };

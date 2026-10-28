@@ -911,8 +911,8 @@ const messages = {
     'Protocol must be responses or chat-completions',
   ],
   invalidModels: [
-    '模型列表必须包含 {id, effort?} 对象，值为非空、无空白字符串',
-    'Models must be {id, effort?} objects with nonempty strings without whitespace',
+    '备用模型必须为对象数组；每项只能设置 id、effort、protocol、tools，其中 id 必填，id 和 effort 必须为非空且无空白的字符串',
+    'Fallback models must be an array of objects with only the fields id, effort, protocol, and tools; id is required, and id and effort must be nonempty strings without whitespace',
   ],
   duplicateModel: [
     '模型及思考等级不能完全重复',

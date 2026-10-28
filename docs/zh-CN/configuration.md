@@ -141,7 +141,7 @@ unisearch config set providers.exa.enabled false
 | `providers.model.api_key`         | API Key，必需                               | 无          | `UNISEARCH_MODEL_API_KEY`  |
 | `providers.model.base_url`        | API 根地址，必需                            | 无          | `UNISEARCH_MODEL_BASE_URL` |
 | `providers.model.protocol`        | `responses`、`chat-completions`             | `responses` | `UNISEARCH_MODEL_PROTOCOL` |
-| `providers.model.model.id`        | 模型 ID 字符串，必需                        | 无          | `UNISEARCH_MODEL_ID`       |
+| `providers.model.model.id`        | 模型 ID 字符串；未使用 `--model` 时必需     | 无          | `UNISEARCH_MODEL_ID`       |
 | `providers.model.model.effort`    | 思考等级字符串，可选                        | 无          | `UNISEARCH_MODEL_EFFORT`   |
 | `providers.model.fallback_models` | 有序模型对象数组，格式见下文                | `[]`        | —                          |
 | `providers.model.tools`           | 工具类型字符串或对象的数组，格式见下文      | `[]`        | —                          |
@@ -153,15 +153,17 @@ unisearch config set providers.exa.enabled false
 
 ### 模型选择
 
-`fallback_models` 的每项格式为 `{ "id": "...", "effort": "..." }`，`effort` 可省略。
+`fallback_models` 的每项格式为 `{ "id": "...", "effort": "...", "protocol": "...", "tools": [...] }`，除 `id` 外均可省略。备用条目共用主模型的 `base_url` 和 `api_key`。未设置 `protocol` 和 `tools` 时沿用主模型的值；未设置 `effort` 时不发送思考等级，由模型使用自身默认值。
 
-备用模型共用主模型的连接和工具配置，可分别指定思考等级。主模型与备用模型的 ID、思考等级组合不能重复；省略思考等级与 `default` 视为相同值。
+主模型与备用模型之间，同一 ID、思考等级组合只能出现一次。省略思考等级与 `default` 视为相同值。
 
 ```sh
-unisearch config set providers.model.fallback_models '[{"id":"backup-model","effort":"low"}]'
+unisearch config set providers.model.fallback_models '[{"id":"backup-model","effort":"low"},{"id":"chat-model","protocol":"chat-completions","tools":[]}]'
 ```
 
-`--model ID` 指定单个模型并关闭模型回退。未提供 `--effort` 时，沿用第一个同名配置的思考等级，找不到时使用模型服务的默认值。单独使用 `--effort` 只覆盖首先尝试的模型。
+`--model ID` 只尝试该模型并关闭回退。ID 与主模型相同时使用主模型的设置；否则使用 `fallback_models` 中第一个同 ID 条目的 `protocol` 和 `tools`，其 `effort` 在没有 `--effort` 时生效。ID 在主模型和 `fallback_models` 中都不存在时，只使用主模型的 `protocol` 和 `tools`。
+
+`--effort LEVEL` 与 `--model` 一起使用时替换所选模型的思考等级；未使用 `--model` 时只替换主模型的思考等级，后续备用模型仍使用各自的思考等级。
 
 ### 工具配置
 

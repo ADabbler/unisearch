@@ -3,18 +3,20 @@ import {
   assertValid,
   expandTools,
   fieldAt,
+  isModelKey,
   isObject,
   modelIdentity,
   parseInput,
   token,
+  validate,
   valueAt,
 } from '../config/fields.js';
-import type { ModelCandidate } from '../config/fields.js';
+import type { ModelCandidate, ModelProtocol } from '../config/fields.js';
 import { inspectConfig, parentProblems, resolveField } from '../config/resolve.js';
 import type { ResolvedField } from '../config/resolve.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
-import type { Language } from '../i18n/messages.js';
+import type { Language, MessageKey } from '../i18n/messages.js';
 import type { JsonObject, JsonValue } from '../result.js';
 
 const connectionFields = [
@@ -42,15 +44,25 @@ export interface ModelOptions {
   extraSources?: string;
 }
 export interface ModelRequest {
-  url: string;
+  baseUrl: string;
   apiKey: string;
-  protocol: 'responses' | 'chat-completions';
+  protocol: ModelProtocol;
   stream: boolean;
   tools: JsonObject[];
   candidates: ModelCandidate[];
   query: string;
   timeout: number;
   retries: number;
+}
+
+function normalizeCandidate(candidate: ModelCandidate): ModelCandidate {
+  const { id, effort, protocol, tools } = candidate;
+  return {
+    id,
+    ...(effort === undefined || effort === 'default' ? {} : { effort }),
+    ...(protocol === undefined ? {} : { protocol }),
+    ...(tools === undefined ? {} : { tools: expandTools(tools) }),
+  };
 }
 
 function cliToken(value: string, option: string): string {
@@ -102,40 +114,61 @@ export function prepareModel(
       throw new AppError('MISSING_CONFIG', 'missingRequired', { provider: 'model', field: path });
     return setting.value;
   }
+  function fallbackEntry(
+    id: string,
+    options: { ignoreEffort?: boolean } = {},
+  ): ModelCandidate | undefined {
+    assertValid(parentProblems(values, 'providers.model.fallback_models'), language);
+    const configured = valueAt(values, 'providers.model.fallback_models');
+    const saved = configured === undefined ? [] : configured;
+    const invalid = (message: MessageKey = 'invalidModels') => {
+      throw new AppError('INVALID_CONFIG', message, {
+        field: 'providers.model.fallback_models',
+      });
+    };
+    if (!Array.isArray(saved)) invalid();
+    for (const item of saved as unknown[]) {
+      if (!isObject(item) || !token(item.id) || Object.keys(item).some((key) => !isModelKey(key)))
+        invalid();
+      const model = item as ModelCandidate;
+      if (model.id !== id) continue;
+      if (!options.ignoreEffort && model.effort !== undefined && !token(model.effort)) invalid();
+      if (model.protocol !== undefined) {
+        const problem = validate(fieldAt('providers.model.protocol'), model.protocol);
+        if (problem) invalid(problem.message);
+      }
+      if (model.tools !== undefined) {
+        const problem = validate(fieldAt('providers.model.tools'), model.tools);
+        if (problem) invalid(problem.message);
+      }
+      return model;
+    }
+    return undefined;
+  }
   let candidates: ModelCandidate[];
   if (selectedId !== undefined) {
     const id = selectedId;
-    let selected = effort;
+    let selected: ModelCandidate = { id, ...(effort === undefined ? {} : { effort }) };
     if (effort === undefined) {
       const mainId = read('providers.model.model.id');
-      if (mainId === id) selected = read('providers.model.model.effort') as string | undefined;
-      else {
-        assertValid(parentProblems(values, 'providers.model.fallback_models'), language);
-        const configured = valueAt(values, 'providers.model.fallback_models');
-        const saved = configured === undefined ? [] : configured;
-        const invalid = () => {
-          throw new AppError('INVALID_CONFIG', 'invalidModels', {
-            field: 'providers.model.fallback_models',
-          });
-        };
-        if (!Array.isArray(saved)) invalid();
-        for (const item of saved as unknown[]) {
-          if (
-            !isObject(item) ||
-            !token(item.id) ||
-            Object.keys(item).some((key) => key !== 'id' && key !== 'effort')
-          )
-            invalid();
-          const model = item as ModelCandidate;
-          if (model.id === id) {
-            if (model.effort !== undefined && !token(model.effort)) invalid();
-            selected = model.effort;
-            break;
-          }
-        }
+      if (mainId === id) {
+        const mainEffort = read('providers.model.model.effort') as string | undefined;
+        selected = { id, ...(mainEffort === undefined ? {} : { effort: mainEffort }) };
+      } else {
+        const found = fallbackEntry(id);
+        if (found) selected = found;
+      }
+    } else {
+      const main = valueAt(values, 'providers.model.model');
+      const primaryId =
+        env.UNISEARCH_MODEL_ID ??
+        (isObject(main) && typeof main.id === 'string' ? main.id : undefined);
+      if (primaryId !== id) {
+        const found = fallbackEntry(id, { ignoreEffort: true });
+        if (found) selected = { ...found, effort };
       }
     }
-    candidates = [{ id, ...(selected === undefined ? {} : { effort: selected }) }];
+    candidates = [selected];
   } else {
     const id = read('providers.model.model.id', true) as string;
     const selected = effort ?? (read('providers.model.model.effort') as string | undefined);
@@ -153,13 +186,10 @@ export function prepareModel(
       seen.add(key);
       return true;
     })
-    .map(({ id, effort }) => ({
-      id,
-      ...(effort === undefined || effort === 'default' ? {} : { effort }),
-    }));
-  const protocol = get('providers.model.protocol') as ModelRequest['protocol'];
+    .map(normalizeCandidate);
+  const protocol = get('providers.model.protocol') as ModelProtocol;
   return {
-    url: `${(get('providers.model.base_url') as string).replace(/\/+$/, '')}/${protocol === 'responses' ? 'responses' : 'chat/completions'}`,
+    baseUrl: (get('providers.model.base_url') as string).replace(/\/+$/, ''),
     apiKey: get('providers.model.api_key') as string,
     protocol,
     stream: get('providers.model.stream') as boolean,

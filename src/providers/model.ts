@@ -1,5 +1,5 @@
 import { isObject } from '../config/fields.js';
-import type { ModelCandidate } from '../config/fields.js';
+import type { ModelCandidate, ModelProtocol } from '../config/fields.js';
 import { AppError, failure } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
@@ -21,17 +21,33 @@ export const searchInstructions = `You are a search assistant. Return relevant, 
 - Present the most relevant findings first, with the details needed to use them correctly.
 - Use concise Markdown, LaTeX for formulas, and fenced code blocks for code. Return findings directly without narrating the search process.`;
 
+function effectiveProtocol(request: ModelRequest, candidate: ModelCandidate): ModelProtocol {
+  return candidate.protocol ?? request.protocol;
+}
+
+function effectiveTools(request: ModelRequest, candidate: ModelCandidate): JsonObject[] {
+  return candidate.tools ?? request.tools;
+}
+
+function requestUrl(request: ModelRequest, candidate: ModelCandidate): string {
+  const endpoint =
+    effectiveProtocol(request, candidate) === 'responses' ? 'responses' : 'chat/completions';
+  return `${request.baseUrl}/${endpoint}`;
+}
+
 export function modelBody(
   request: ModelRequest,
   candidate: ModelCandidate,
   instructions: string,
 ): JsonObject {
+  const protocol = effectiveProtocol(request, candidate);
+  const tools = effectiveTools(request, candidate);
   const common = {
     model: candidate.id,
     stream: request.stream,
-    ...(request.tools.length ? { tools: request.tools } : {}),
+    ...(tools.length ? { tools } : {}),
   };
-  if (request.protocol === 'responses')
+  if (protocol === 'responses')
     return {
       ...common,
       store: false,
@@ -101,7 +117,8 @@ export async function requestModel(
   const safe = (value: string) => redactError(value, request.apiKey);
   let streamStarted = false;
   try {
-    const response = await transport(request.url, {
+    const protocol = effectiveProtocol(request, candidate);
+    const response = await transport(requestUrl(request, candidate), {
       method: 'POST',
       redirect: 'manual',
       signal: context.signal,
@@ -127,7 +144,7 @@ export async function requestModel(
       let answer: ModelAnswer;
       if (request.stream) {
         if (!response.body) invalidResponse();
-        answer = await streamAnswer(response.body, request.protocol, () => {
+        answer = await streamAnswer(response.body, protocol, () => {
           context.markStreamProgress?.();
           streamStarted = true;
         });
@@ -139,7 +156,7 @@ export async function requestModel(
         } catch {
           invalidResponse();
         }
-        answer = request.protocol === 'responses' ? responseAnswer(body) : chatAnswer(body);
+        answer = protocol === 'responses' ? responseAnswer(body) : chatAnswer(body);
       }
       return { outcome: success(answer), retry: false };
     }

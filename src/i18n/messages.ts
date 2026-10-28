@@ -613,6 +613,10 @@ const messages = {
     '--after-date 不能晚于 --before-date',
     '--after-date must not be later than --before-date',
   ],
+  deepseekQueryTooLong: [
+    '查询超过 API 的 128 字符上限；请缩短查询',
+    'The query exceeds the 128-character API limit; shorten the query',
+  ],
   deepseekQueryLimit: [
     '拼接过滤条件后的查询超过 API 的 128 字符上限；请缩短查询或移除上述选项',
     'The query exceeds the 128-character API limit once filters are appended; shorten the query or drop the listed options',
@@ -936,8 +940,8 @@ const messages = {
     'Set the effort for the model used in this search',
   ],
   extraSourcesOption: [
-    '补充来源，逗号分隔；支持已启用的 exa、tavily、firecrawl、jina、zhipu、zhipu-mcp、anysearch、tinyfish',
-    'Comma-separated additional sources from enabled services: exa, tavily, firecrawl, jina, zhipu, zhipu-mcp, anysearch, tinyfish',
+    '补充来源，逗号分隔；支持已启用的 exa、tavily、firecrawl、jina、zhipu、zhipu-mcp、anysearch、tinyfish、deepseek',
+    'Comma-separated additional sources from enabled services: exa, tavily, firecrawl, jina, zhipu, zhipu-mcp, anysearch, tinyfish, deepseek',
   ],
   streamOption: ['使用流式请求，收齐后输出', 'Use a streaming request, output after completion'],
   noStreamOption: ['使用非流式请求', 'Use a non-streaming request'],
@@ -946,8 +950,8 @@ const messages = {
     'Disable model fallback, retaining same-model retries',
   ],
   invalidExtraSources: [
-    '补充来源支持 exa、tavily、firecrawl、jina、zhipu、zhipu-mcp、anysearch、tinyfish，不能包含空项、空白或重复项',
-    'Additional sources support exa, tavily, firecrawl, jina, zhipu, zhipu-mcp, anysearch and tinyfish, without empty, whitespace, or duplicate entries',
+    '补充来源支持 exa、tavily、firecrawl、jina、zhipu、zhipu-mcp、anysearch、tinyfish、deepseek，不能包含空项、空白或重复项',
+    'Additional sources support exa, tavily, firecrawl, jina, zhipu, zhipu-mcp, anysearch, tinyfish and deepseek, without empty, whitespace, or duplicate entries',
   ],
   streamConflict: [
     '--stream 与 --no-stream 不能并用',

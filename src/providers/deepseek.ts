@@ -1,3 +1,4 @@
+import { domainToASCII } from 'node:url';
 import { fieldAt, isObject, parseInput } from '../config/fields.js';
 import type { ResolvedField } from '../config/resolve.js';
 import { operationConfig } from '../config/status.js';
@@ -70,15 +71,18 @@ function cliOverride(path: string, value: number): ResolvedField {
 // Values reach the query verbatim, so anything the API's site: operator cannot express would
 // silently change what the search matches.
 function sites(value: string, option: string, maximum: number): string[] {
-  const domains = domainList(value, option, maximum);
-  for (const domain of domains)
-    if (/[/:"\\]/u.test(domain) || !validDomain(domain)) invalid('deepseekDomains', option);
-  return domains;
+  return domainList(value, option, maximum, 'deepseekDomains').map((domain) => {
+    if (/[/:"\\]/u.test(domain)) invalid('deepseekDomains', option);
+    // site: matches ASCII hostnames; a Unicode domain would be read as search terms.
+    const hostname = domainToASCII(domain);
+    if (!hostname || !validDomain(hostname)) invalid('deepseekDomains', option);
+    return hostname;
+  });
 }
 function validDomain(value: string): boolean {
   return value
     .split('.')
-    .every((label) => /^[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?$/u.test(label));
+    .every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/u.test(label));
 }
 
 function languages(value: string, option: string): string[] {
@@ -147,9 +151,10 @@ export function prepareSearch(
     ? `${query} ${filters.map((item) => item.text).join(' ')}`
     : query;
   if ([...composed].length > queryLimit) {
+    if ([...query].length > queryLimit) invalid('deepseekQueryTooLong', 'QUERY');
     // Naming one filter would be arbitrary when several together pushed the query over.
     const flags = [...new Set(filters.map((item) => item.flag))].join('/');
-    invalid('deepseekQueryLimit', [...query].length > queryLimit ? 'QUERY' : flags);
+    invalid('deepseekQueryLimit', flags);
   }
   if (
     options.question !== undefined &&

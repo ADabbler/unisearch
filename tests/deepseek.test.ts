@@ -78,6 +78,25 @@ test('DeepSeek filter flags reach the query only when given', async (t) => {
   assert.equal(f.calls.at(-1)!.body!.need_content, true);
 });
 
+test('DeepSeek sends internationalized domains as ASCII hostnames', async (t) => {
+  const f = await fixture(t);
+  await f.run([
+    'deepseek',
+    'search',
+    'plain',
+    '--include-domains',
+    '例子.中国,Example.COM',
+    '--exclude-domains',
+    '百度.中国',
+    '--format',
+    'json',
+  ]);
+  assert.equal(
+    f.calls.at(-1)!.body!.query,
+    'plain site:xn--fsqu00a.xn--fiqs8s OR site:example.com -site:xn--wxtr44c.xn--fiqs8s',
+  );
+});
+
 test('DeepSeek rejects input that would change query semantics before sending', async (t) => {
   const f = await fixture(t);
   const cases: [string[], string][] = [
@@ -121,6 +140,7 @@ test('DeepSeek reports which options pushed the query past 128 characters', asyn
   const overQuery = await f.run(['deepseek', 'search', 'a'.repeat(129), '--format', 'json']);
   assert.equal(overQuery.exit, 2);
   assert.equal(overQuery.json().error.details.option, 'QUERY');
+  assert.doesNotMatch(overQuery.json().error.message, /option/i);
   // A query that already overflows is blamed even when a filter is also present.
   const both = await f.run([
     'deepseek',
@@ -132,6 +152,7 @@ test('DeepSeek reports which options pushed the query past 128 characters', asyn
     'json',
   ]);
   assert.equal(both.json().error.details.option, 'QUERY');
+  assert.doesNotMatch(both.json().error.message, /option/i);
   // Every given filter is listed, since any of them may be the one to drop.
   const many = await f.run([
     'deepseek',
@@ -197,6 +218,18 @@ test('DeepSeek maps documented HTTP failures to the shared error codes', async (
   assert.equal(search.json().error.code, 'UPSTREAM_ERROR');
   const fetch = await f.run(['deepseek', 'fetch', url, '--format', 'json']);
   assert.equal(fetch.json().error.code, 'CONTENT_UNAVAILABLE');
+});
+
+test('DeepSeek appears in the extra-source list and its rejection message', async (t) => {
+  const f = await fixture(t);
+  for (const language of ['zh', 'en']) {
+    const help = await f.run(['search', '--help'], { UNISEARCH_LANG: language });
+    assert.equal(help.exit, 0);
+    assert.match(help.channels.out, /deepseek/);
+  }
+  const invalid = await f.run(['search', 'q', '--extra-sources', 'unknown', '--format', 'json']);
+  assert.equal(invalid.exit, 2);
+  assert.match(invalid.json().error.message, /deepseek/);
 });
 
 test('DeepSeek 404 stays switchable because it only means no usable content', async (t) => {

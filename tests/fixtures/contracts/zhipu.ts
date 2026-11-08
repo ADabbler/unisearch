@@ -44,11 +44,14 @@ export const cases: ContractCase[] = [
     result: {
       status: 'partial',
       data: {
-        answer: {
-          model: 'fixture-model',
-          text: '请核对政策原文。',
-        },
-        extra_sources: [
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'fixture-model',
+              text: '请核对政策原文。',
+            },
+          },
           {
             provider: 'zhipu',
             data: {
@@ -66,7 +69,7 @@ export const cases: ContractCase[] = [
       },
       error: {
         code: 'PARTIAL_FAILURE',
-        message: '模型搜索已完成，部分补充来源失败',
+        message: '部分搜索来源失败',
         details: {
           failures: [
             {
@@ -82,7 +85,7 @@ export const cases: ContractCase[] = [
         },
       },
     },
-    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分搜索来源失败
 > - zhipu：[INVALID_RESPONSE] 智谱响应包含无效字段，已保留可用数据
 >   - 响应字段：search_result[1].link
 >   - HTTP 状态：200
@@ -93,9 +96,7 @@ export const cases: ContractCase[] = [
 
 请核对政策原文。
 
-## 补充检索
-
-### 智谱
+## 智谱
 
 引擎：\`search_std\`
 

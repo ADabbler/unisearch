@@ -735,15 +735,18 @@ test('All four search tasks start together, preserve order and redact cross-serv
   const result = await f.run([
     'search',
     'q',
-    '--extra-sources',
-    'firecrawl,tavily,exa',
+    '--sources',
+    'model,firecrawl,tavily,exa',
     '--format=json',
     '--timeout',
     '2',
   ]);
   assert.equal(result.exit, 0, result.channels.out);
   assert.deepEqual(
-    result.json().data.extra_sources.map((s: { provider: string }) => s.provider),
+    result
+      .json()
+      .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
+      .map((s: { provider: string }) => s.provider),
     ['firecrawl', 'tavily', 'exa'],
   );
   assert.equal(f.calls.find((c) => c.path === '/firecrawl/search')!.body.limit, 2);
@@ -752,12 +755,12 @@ test('All four search tasks start together, preserve order and redact cross-serv
   assert.doesNotMatch(result.channels.out, /fixture-tavily-secret|fixture-exa-secret/);
   const before = f.calls.length;
   assert.equal(
-    (await f.run(['search', 'x'.repeat(501), '--extra-sources', 'exa,tavily,firecrawl'])).exit,
+    (await f.run(['search', 'x'.repeat(501), '--sources', 'model,exa,tavily,firecrawl'])).exit,
     2,
   );
   assert.equal(
     (
-      await f.run(['search', 'q', '--extra-sources', 'exa,tavily,firecrawl'], {
+      await f.run(['search', 'q', '--sources', 'model,exa,tavily,firecrawl'], {
         UNISEARCH_TAVILY_API_KEY: undefined,
       })
     ).exit,

@@ -120,7 +120,7 @@ test('Configuration confirmations preserve dollar substitution sequences literal
   }
 });
 
-test('Service lists and saved providers share display order without reordering settings', async (t) => {
+test('Configuration sections and providers share display order without reordering settings', async (t) => {
   const f = fixture(t);
   const order = [
     'model',
@@ -151,6 +151,7 @@ test('Service lists and saved providers share display order without reordering s
         .map((provider) => [provider, provider === 'model' ? model : { enabled: false }]),
     ),
     fetch: { providers: ['jina', 'exa'] },
+    search: { providers: ['tavily', 'exa'] },
   };
   f.save(original);
   const before = readFileSync(f.path, 'utf8');
@@ -172,7 +173,14 @@ test('Service lists and saved providers share display order without reordering s
     );
     assert.deepEqual(sourceGroups, order);
     if (!isProviderSection)
-      assert.deepEqual(Object.keys(values), ['providers', 'fetch', 'map', 'execution', 'language']);
+      assert.deepEqual(Object.keys(values), [
+        'providers',
+        'search',
+        'fetch',
+        'map',
+        'execution',
+        'language',
+      ]);
   }
   for (const command of ['status', 'doctor']) {
     const result = await f.json([command, '--json']);
@@ -198,7 +206,7 @@ test('Service lists and saved providers share display order without reordering s
     [...help.out.matchAll(/^ {2}([a-z][a-z0-9-]*)\b/gm)]
       .map((match) => match[1])
       .filter((provider) => order.includes(provider)),
-    order.filter((provider) => provider !== 'model'),
+    order,
   );
   assert.equal(readFileSync(f.path, 'utf8'), before);
   assert.equal((await f.run(['config', 'set', 'execution.retries', '0'])).exit, 0);
@@ -207,7 +215,14 @@ test('Service lists and saved providers share display order without reordering s
   assert.equal((await f.run(['config', 'set', 'execution.retries', '1'])).exit, 0);
   const saved = f.saved();
   assert.deepEqual(Object.keys(saved.providers), order);
-  assert.deepEqual(Object.keys(saved), ['providers', 'language', 'map', 'execution', 'fetch']);
+  assert.deepEqual(Object.keys(saved), [
+    'providers',
+    'search',
+    'fetch',
+    'map',
+    'execution',
+    'language',
+  ]);
   assert.deepEqual(Object.keys(saved.providers.model), Object.keys(model));
   assert.deepEqual(saved, { ...original, execution: { retries: 1, timeout_seconds: 8 } });
 });

@@ -66,7 +66,7 @@ test('Zhipu REST and MCP platform defaults, overrides and credentials remain ind
     { UNISEARCH_ZHIPU_MCP_API_KEY: undefined },
   ]) {
     const result = await f.run(
-      ['search', 'q', '--extra-sources', 'zhipu,zhipu-mcp,tinyfish'],
+      ['search', 'q', '--sources', 'model,zhipu,zhipu-mcp,tinyfish'],
       overrides,
     );
     assert.equal(result.exit, 3, result.channels.out);
@@ -116,8 +116,8 @@ test(
         const result = await f.run([
           'search',
           'q',
-          '--extra-sources',
-          order.join(','),
+          '--sources',
+          ['model', ...order].join(','),
           '--format',
           format,
           '--output',
@@ -131,18 +131,30 @@ test(
         if (format === 'json') {
           const value = JSON.parse(saved);
           assert.deepEqual(
-            value.data.extra_sources.map((s: JsonObject) => s.provider),
+            value.data.sources
+              .filter((source: { provider: string }) => source.provider !== 'model')
+              .map((s: JsonObject) => s.provider),
             order,
           );
-          assert.deepEqual(value.data.extra_sources[1].data.structured_content, {
-            score: 0,
-            truncated: false,
-          });
-          assert.equal(value.data.extra_sources[2].data.results[0].refer, hit.refer);
+          assert.deepEqual(
+            value.data.sources.filter(
+              (source: { provider: string }) => source.provider !== 'model',
+            )[1].data.structured_content,
+            {
+              score: 0,
+              truncated: false,
+            },
+          );
+          assert.equal(
+            value.data.sources.filter(
+              (source: { provider: string }) => source.provider !== 'model',
+            )[2].data.results[0].refer,
+            hit.refer,
+          );
           assert.ok(
-            value.data.extra_sources.every(
-              (s: { data: JsonObject }) => s.data.provider === undefined,
-            ),
+            value.data.sources
+              .filter((source: { provider: string }) => source.provider !== 'model')
+              .every((s: { data: JsonObject }) => s.data.provider === undefined),
           );
           if (failed)
             assert.deepEqual(
@@ -151,7 +163,7 @@ test(
             );
         } else {
           assert.deepEqual(
-            [...saved.matchAll(/^### (TinyFish|Zhipu MCP|Zhipu)$/gm)].map((m) => m[1]),
+            [...saved.matchAll(/^## (TinyFish|Zhipu MCP|Zhipu)$/gm)].map((m) => m[1]),
             ['TinyFish', 'Zhipu MCP', 'Zhipu'],
           );
           assert.ok(saved.includes(pageText));

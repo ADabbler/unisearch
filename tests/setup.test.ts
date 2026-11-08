@@ -15,6 +15,14 @@ import { capture, context, temporary } from './helpers.js';
 import { createCli } from '../src/cli/program.js';
 import type { Prompts } from '../src/cli/prompts.js';
 import { operationName } from '../src/i18n/providers.js';
+import { text } from '../src/i18n/messages.js';
+
+const isSearchSourcesPrompt = (message: string) =>
+  (['en', 'zh'] as const).some(
+    (language) => message === text(language, 'setupSelectSearchSources'),
+  );
+const isSearchSourcesModePrompt = (message: string) =>
+  (['en', 'zh'] as const).some((language) => message === text(language, 'setupSearchSources'));
 
 test('Setup saved configuration and Codex Skill are usable by new CLI processes', async (t) => {
   const root = temporary(t),
@@ -68,11 +76,24 @@ test('Setup saved configuration and Codex Skill are usable by new CLI processes'
   const selections = ['en', 'save'];
   const multiple = [['exa'], ['codex']];
   const prompts: Prompts = {
-    async select(_message, choices) {
+    async select(message, choices, initial) {
+      if (isSearchSourcesModePrompt(message)) {
+        assert.equal(initial, 'keep');
+        assert.deepEqual(choices, [
+          { value: 'keep', label: 'Keep current sources: Model search' },
+          { value: 'custom', label: 'Custom sources' },
+        ]);
+        return 'custom';
+      }
       if (choices.some((choice) => choice.value === 'custom')) return 'custom';
       return selections.shift()!;
     },
-    async multi() {
+    async multi(message, _choices, initial, _language, validate) {
+      if (isSearchSourcesPrompt(message)) {
+        assert.deepEqual(initial, []);
+        assert.equal(validate!([]), text('en', 'setupSearchSourcesRequired'));
+        return ['exa'];
+      }
       return multiple.shift()!;
     },
     async input(_message, secret, validate) {
@@ -160,9 +181,8 @@ test('Setup saved configuration and Codex Skill are usable by new CLI processes'
     skills.stdout.replace(/\r?\n\s*/g, '').includes(join(root, '.codex', 'skills', 'unisearch')),
   );
   assert.deepEqual(calls, []);
-  assert.deepEqual(await runCli(['exa', 'search', 'setup integration', '--limit', '1']), {
-    provider: 'exa',
-    results,
+  assert.deepEqual(await runCli(['search', 'setup integration']), {
+    sources: [{ provider: 'exa', data: { results } }],
   });
   assert.deepEqual(calls, [
     {
@@ -170,7 +190,7 @@ test('Setup saved configuration and Codex Skill are usable by new CLI processes'
       key: 'fixture-setup-key',
       body: {
         query: 'setup integration',
-        numResults: 1,
+        numResults: 5,
         type: 'auto',
         contents: { text: false, highlights: false },
       },
@@ -231,10 +251,16 @@ test('Prompt edit restarts at language, retains pending values, discards deselec
   const prompts: Prompts = {
     async select(message, options) {
       messages.push(message);
+      if (isSearchSourcesModePrompt(message)) return previews === 0 ? 'custom' : 'keep';
       if (options.some((option) => option.value === 'custom')) return 'custom';
       return choices.shift()!;
     },
-    async multi() {
+    async multi(message, _choices, initial) {
+      if (isSearchSourcesPrompt(message)) {
+        assert.equal(previews, 0);
+        assert.deepEqual(initial, []);
+        return ['model'];
+      }
       return multiple.shift()!;
     },
     async input(message, secret, validate) {
@@ -259,7 +285,7 @@ test('Prompt edit restarts at language, retains pending values, discards deselec
   assert.equal(inputs, 2);
   assert.ok(messages.includes('Interface language'));
   assert.ok(messages.includes('界面语言'));
-  assert.deepEqual(draft.values, { language: 'en' });
+  assert.deepEqual(draft.values, { language: 'en', search: { providers: ['model'] } });
   assert.deepEqual(draft.skills, []);
 });
 
@@ -320,6 +346,7 @@ test('Model setup defaults new tools to xAI and preserves existing and edited ch
     let toolsPrompts = 0;
     const prompts: Prompts = {
       async select(message, options, initial) {
+        if (isSearchSourcesModePrompt(message)) return initial;
         if (message === 'Model search tools') {
           const hasCurrentTools = 'tools' in original || toolsPrompts > 0;
           assert.deepEqual(
@@ -366,6 +393,7 @@ test('Setup preselects effective choices and preserves existing sources when con
   for (const language of ['zh', 'en'] as const) {
     for (const source of ['default', 'config', 'environment'] as const) {
       const original = {
+        search: { providers: ['tavily', 'model'] },
         providers: {
           model: {
             api_key: 'fixture-existing-model-key',
@@ -395,6 +423,16 @@ test('Setup preselects effective choices and preserves existing sources when con
       const inputs: string[] = [];
       const prompts: Prompts = {
         async select(message, choices, initial) {
+          if (isSearchSourcesModePrompt(message)) {
+            assert.equal(initial, 'keep');
+            assert.equal(
+              choices[0].label,
+              language === 'zh'
+                ? '保持当前来源：Tavily, 模型搜索'
+                : 'Keep current sources: Tavily, Model search',
+            );
+            return initial;
+          }
           if (choices.some((choice) => choice.value === 'zh')) return language;
           if (choices.some((choice) => choice.value === 'save')) return 'save';
           if (choices.some((choice) => choice.value === 'keep')) return 'keep';
@@ -508,6 +546,7 @@ test('XAI setup saves the official URL and tools and retains model, effort and c
   let services = false;
   const prompts: Prompts = {
     async select(message, choices, initial) {
+      if (isSearchSourcesModePrompt(message)) return initial;
       if (choices.some((choice) => choice.value === 'zh')) return 'en';
       if (choices.some((choice) => choice.value === 'save'))
         return previews === 1 ? 'edit' : 'save';
@@ -614,6 +653,7 @@ test('Custom URL inputs preserve defaults on Enter and save only the edited Jina
   let selected = false;
   const prompts: Prompts = {
     async select(message, choices, initial) {
+      if (isSearchSourcesModePrompt(message)) return initial;
       if (choices.some((choice) => choice.value === 'custom')) {
         assert.equal(initial, 'current');
         if (message.includes('Firecrawl')) {
@@ -660,6 +700,8 @@ test('Custom URL inputs preserve defaults on Enter and save only the edited Jina
     language: 'zh',
     providers: { jina: { reader_url: customUrl } },
   });
+  assert.equal(draft.current('search.providers').source, 'default');
+  assert.deepEqual(draft.current('search.providers').value, ['model']);
   assert.deepEqual(
     draft.changes().map((change) => change.key),
     ['language', 'providers.jina.reader_url'],

@@ -179,18 +179,26 @@ test(
     const result = await f.run([
       'search',
       'q',
-      '--extra-sources',
-      'zhipu-mcp,exa',
+      '--sources',
+      'model,zhipu-mcp,exa',
       '--format=json',
       '--timeout',
       '2',
     ]);
     assert.equal(result.exit, 0, result.channels.out);
     assert.deepEqual(
-      result.json().data.extra_sources.map((source: JsonObject) => source.provider),
+      result
+        .json()
+        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
+        .map((source: JsonObject) => source.provider),
       ['zhipu-mcp', 'exa'],
     );
-    assert.deepEqual(result.json().data.extra_sources[0].data, { text: 'MCP evidence' });
+    assert.deepEqual(
+      result
+        .json()
+        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0].data,
+      { text: 'MCP evidence' },
+    );
   },
 );
 
@@ -219,9 +227,15 @@ test('Zhipu MCP failed supplements retain evidence even when every task fails, a
           ],
         });
     });
-    const result = await f.run(['search', 'q', '--extra-sources', 'zhipu-mcp', '--format=json']);
-    assert.equal(result.exit, mode === 'all-fail' ? 3 : 6, result.channels.out);
-    assert.equal(result.json().data.extra_sources[0].data.text, 'reliable evidence');
+    const result = await f.run(['search', 'q', '--sources', 'model,zhipu-mcp', '--format=json']);
+    assert.equal(result.exit, mode === 'all-fail' ? 4 : 6, result.channels.out);
+    assert.equal(
+      result
+        .json()
+        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0].data
+        .text,
+      'reliable evidence',
+    );
     assert.equal(result.json().error.details.failures.at(-1).provider, 'zhipu-mcp');
     assert.equal(f.calls.filter((call) => call.body.method === 'tools/call').length, 1);
     assert.equal(
@@ -245,7 +259,7 @@ test('Zhipu MCP supplement cancellation and internal transport errors preserve c
       completed = done;
     });
     f.result({ content: [{ type: 'text', text: 'preserved evidence' }] });
-    const plan = prepareCombinedSearch('q', { extraSources: 'zhipu-mcp' }, {}, f.env, 'en');
+    const plan = prepareCombinedSearch('q', { sources: 'model,zhipu-mcp' }, {}, f.env, 'en');
     const transport: typeof fetch = async (url, options) => {
       if (String(url).endsWith('/model/responses')) {
         await ready;
@@ -261,7 +275,9 @@ test('Zhipu MCP supplement cancellation and internal transport errors preserve c
     };
     const result = await combinedSearch(plan, controller.signal, 'en', {}, { transport });
     assert.equal(result.exitCode, mode === 'cancel' ? 130 : 5);
-    const source = result.result.data?.extra_sources?.[0];
+    const source = result.result.data?.sources.filter(
+      (source: { provider: string }) => source.provider !== 'model',
+    )?.[0];
     assert.ok(source?.provider === 'zhipu-mcp');
     assert.equal(source.data.text, 'preserved evidence');
   }

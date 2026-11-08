@@ -44,7 +44,7 @@ import * as deepseekOutput from '../output/deepseek.js';
 import * as tinyfishOutput from '../output/tinyfish.js';
 import { renderContext7 } from '../output/context7.js';
 import * as firecrawlOutput from '../output/firecrawl.js';
-import type { ModelOptions } from '../providers/model-config.js';
+import type { SearchOptions as UnifiedSearchOptions } from '../search.js';
 import { combinedSearch, prepareCombinedSearch } from '../search.js';
 import { renderCombinedSearch, renderSearchExecution } from '../output/search.js';
 import { prepareRetrieval, retrieve } from '../retrieval.js';
@@ -577,61 +577,69 @@ export function createCli(version: string, options: CliOptions = {}) {
     });
   }
 
-  const model = program
+  const unified = program
     .command('search')
     .summary(text('en', 'searchSummary'))
-    .description(text('en', 'modelSearch'))
-    .argument('<QUERY>', text('en', 'queryArgument'));
-  for (const [flags, key] of [
-    ['--model <ID>', 'modelOption'],
-    ['--effort <LEVEL>', 'effortOption'],
-    ['--extra-sources <IDS>', 'extraSourcesOption'],
-    ['--stream', 'streamOption'],
-    ['--no-stream', 'noStreamOption'],
-    ['--no-fallback', 'noFallbackOption'],
-  ] as const)
-    addScalarOption(model, new Option(flags, text('en', key)));
-  let streamSeen = false;
-  for (const name of ['stream', 'no-stream'])
-    model.on(`option:${name}`, () => {
-      if (streamSeen)
-        throw new AppError('INVALID_ARGUMENT', 'streamConflict', {
-          option: '--stream/--no-stream',
-        });
-      streamSeen = true;
-    });
-  model.action(async (query: string, options: ModelOptions) => {
-    const loaded = getDocument();
-    const ui = language();
-    const plan = prepareCombinedSearch(
-      query,
-      {
-        ...options,
-        stream: explicitBoolean(model, 'stream'),
-        fallback: explicitBoolean(model, 'fallback'),
-        timeout: active.opts().timeout,
-      },
-      loaded.values,
-      config.env,
-      ui,
-    );
-    const abort = new AbortController();
-    const cancel = () => abort.abort();
-    const record: JsonObject = {};
-    process.on('SIGINT', cancel);
-    try {
-      await runOperation(
-        () => combinedSearch(plan, abort.signal, ui, record),
+    .description(text('en', 'searchCommand'));
+  addScalarOption(unified, new Option('--sources <IDS>', text('en', 'sourcesOption')));
+  const dedicated = program
+    .command('model')
+    .description(text('en', 'modelCommand'))
+    .command('search')
+    .description(text('en', 'modelSearch'));
+  for (const command of [unified, dedicated]) {
+    command.argument('<QUERY>', text('en', 'queryArgument'));
+    for (const [flags, key] of [
+      ['--model <ID>', 'modelOption'],
+      ['--effort <LEVEL>', 'effortOption'],
+      ['--stream', 'streamOption'],
+      ['--no-stream', 'noStreamOption'],
+      ['--no-fallback', 'noFallbackOption'],
+    ] as const)
+      addScalarOption(command, new Option(flags, text('en', key)));
+    let streamSeen = false;
+    for (const name of ['stream', 'no-stream'])
+      command.on(`option:${name}`, () => {
+        if (streamSeen)
+          throw new AppError('INVALID_ARGUMENT', 'streamConflict', {
+            option: '--stream/--no-stream',
+          });
+        streamSeen = true;
+      });
+    command.action(async (query: string, options: UnifiedSearchOptions) => {
+      const loaded = getDocument();
+      const ui = language();
+      const plan = prepareCombinedSearch(
+        query,
         {
-          renderData: renderCombinedSearch,
-          execution: { data: record, markdown: renderSearchExecution },
+          ...options,
+          sources: command === dedicated ? 'model' : options.sources,
+          stream: explicitBoolean(command, 'stream'),
+          fallback: explicitBoolean(command, 'fallback'),
+          timeout: active.opts().timeout,
         },
-        abort.signal,
+        loaded.values,
+        config.env,
+        ui,
       );
-    } finally {
-      process.off('SIGINT', cancel);
-    }
-  });
+      const abort = new AbortController();
+      const cancel = () => abort.abort();
+      const record: JsonObject = {};
+      process.on('SIGINT', cancel);
+      try {
+        await runOperation(
+          () => combinedSearch(plan, abort.signal, ui, record),
+          {
+            renderData: renderCombinedSearch,
+            execution: { data: record, markdown: renderSearchExecution },
+          },
+          abort.signal,
+        );
+      } finally {
+        process.off('SIGINT', cancel);
+      }
+    });
+  }
 
   const zhipuGroup = program.command('zhipu').description(text('en', 'zhipuCommand'));
   const zhipuSearch = zhipuGroup
@@ -1382,7 +1390,7 @@ export function createCli(version: string, options: CliOptions = {}) {
     'search',
     'fetch',
     'map',
-    ...providers.filter((provider) => provider !== 'model'),
+    ...providers,
   ];
   (program.commands as Command[]).sort(
     (a, b) => commandOrder.indexOf(a.name()) - commandOrder.indexOf(b.name()),

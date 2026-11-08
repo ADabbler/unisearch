@@ -107,6 +107,24 @@ UniSearch 读取一个用户配置文件：
 
 `--no-fallback` 关闭模型或服务切换，不影响重试。服务专用命令不会跨服务切换。
 
+### 统一 search
+
+| 字段               | 类型与取值                                                                                                                      | 默认值      | 环境变量 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- |
+| `search.providers` | 非空来源 ID 数组；支持 `model`、`exa`、`tavily`、`firecrawl`、`jina`、`zhipu`、`zhipu-mcp`、`anysearch`、`tinyfish`、`deepseek` | `["model"]` | —        |
+
+`unisearch search` 并行执行列表中的全部来源，按列表顺序输出。使用 `--sources IDS` 可覆盖本次调用的 `search.providers`，多个 ID 用逗号分隔。
+
+若列表包含重复或不支持的 ID，或所选服务已禁用、缺少必要配置，命令会在发送任何请求前报错。
+
+```sh
+unisearch config set search.providers '["exa","tavily"]'
+unisearch search "搜索问题"
+unisearch search "搜索问题" --sources model,exa --effort low
+```
+
+只选其他来源时无需模型配置。选中 `model` 时可使用模型搜索专属参数，例如 `--model` 和 `--effort`，仅影响模型任务；未选中 `model` 时使用这些参数会报错。完整参数见 `unisearch model search --help`。
+
 ### 统一 fetch 与 map
 
 | 字段              | 类型与取值                                   | 默认值                                                                                                  | 环境变量 |
@@ -134,7 +152,7 @@ unisearch config set providers.exa.enabled false
 
 ## 模型配置
 
-这些配置用于 `unisearch search`。
+这些配置用于 `unisearch model search`，以及选中 `model` 的统一 `unisearch search`。
 
 | 字段                              | 类型与取值                                  | 默认值      | 环境变量                   |
 | --------------------------------- | ------------------------------------------- | ----------- | -------------------------- |
@@ -194,7 +212,7 @@ setup 的 xAI 快捷项会自动填写地址、Responses 协议及 `web_search`�
 - 模型服务须在本次调用的总时限内返回首段文本。
 - UniSearch 收到首段文本后，每次收到新的模型文本都会重置计时；超过设定时长未收到新文本，该请求即超时。心跳和工具进度不会重置计时。
 
-持续返回文本的请求可超过最初的总时限；`--extra-sources` 指定的补充检索仍受该时限约束。开始返回文本后若回答中断，会报错且不再重试或切换模型。
+持续返回文本的模型请求可超过最初的总时限；统一搜索中的其他来源仍受该时限约束。开始返回文本后若回答中断，模型任务会报错且不再重试或切换模型。
 
 ## 服务配置
 
@@ -300,13 +318,14 @@ setup 的 xAI 快捷项会自动填写地址、Responses 协议及 `web_search`�
 
 ## 配置示例
 
-配置 Exa 搜索，并让统一 fetch 依次尝试 Exa 和 Jina：
+让统一 search 使用 Exa，统一 fetch 依次尝试 Exa 和 Jina：
 
 ```json
 {
   "providers": {
     "exa": { "api_key": "example-exa-key", "search": { "limit": 10 } }
   },
+  "search": { "providers": ["exa"] },
   "fetch": { "providers": ["exa", "jina"] }
 }
 ```
@@ -340,7 +359,7 @@ unisearch config get providers.model
 unisearch status
 ```
 
-`status` 检查本地配置：
+`status` 显示当前生效的统一搜索来源，并检查各服务的本地配置：
 
 | 状态       | 含义                     |
 | ---------- | ------------------------ |

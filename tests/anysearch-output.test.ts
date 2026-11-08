@@ -112,15 +112,15 @@ test('AnySearch combined partial and model-error output retains successful evide
       const result = await f.run([
         'search',
         'q',
-        '--extra-sources',
-        'anysearch,exa',
+        '--sources',
+        'model,anysearch,exa',
         '--verbose',
         '--format',
         format,
         '--output',
         path,
       ]);
-      assert.equal(result.exit, mode === 'model-failure' ? 3 : 6);
+      assert.equal(result.exit, 6);
       assert.equal(result.channels.out, '');
       assert.match(result.channels.err, /Result saved to:/);
       const saved = readFileSync(path, 'utf8');
@@ -130,7 +130,9 @@ test('AnySearch combined partial and model-error output retains successful evide
       );
       if (format === 'json')
         assert.equal(
-          JSON.parse(saved).data.extra_sources[0].provider,
+          JSON.parse(saved).data.sources.filter(
+            (source: { provider: string }) => source.provider !== 'model',
+          )[0].provider,
           mode === 'model-failure' ? 'anysearch' : 'exa',
         );
       else assert.match(saved, /Supplemental|Additional|Exa|AnySearch/);

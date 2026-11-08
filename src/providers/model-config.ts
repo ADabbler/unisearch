@@ -41,7 +41,6 @@ export interface ModelOptions {
   stream?: boolean;
   fallback?: boolean;
   timeout?: number;
-  extraSources?: string;
 }
 export interface ModelRequest {
   baseUrl: string;

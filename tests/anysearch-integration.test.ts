@@ -206,15 +206,18 @@ test(
     const result = await f.run([
       'search',
       'q',
-      '--extra-sources',
-      'anysearch,exa',
+      '--sources',
+      'model,anysearch,exa',
       '--format=json',
       '--timeout',
       '2',
     ]);
     assert.equal(result.exit, 0, result.channels.out);
     assert.deepEqual(
-      result.json().data.extra_sources.map((s: JsonObject) => s.provider),
+      result
+        .json()
+        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
+        .map((s: JsonObject) => s.provider),
       ['anysearch', 'exa'],
     );
     assert.deepEqual(f.calls.find((c) => c.path === '/gateway/v1/search')?.body, {
@@ -225,7 +228,8 @@ test(
     assert.ok(
       result
         .json()
-        .data.extra_sources.every((s: { data: JsonObject }) => s.data.provider === undefined),
+        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
+        .every((s: { data: JsonObject }) => s.data.provider === undefined),
     );
     f.handle((call, res) => res.end(JSON.stringify(payloads[call.path])));
     f.calls.length = 0;
@@ -261,25 +265,32 @@ test('AnySearch search failures, valid empty supplements and model fallback reta
     const result = await f.run([
       'search',
       'q',
-      '--extra-sources',
-      'anysearch,exa',
+      '--sources',
+      'model,anysearch,exa',
       '--format=json',
     ]);
     assert.equal(
       result.exit,
-      { empty: 0, 'any-failure': 6, 'all-extras': 6, 'model-failure': 3, fallback: 0 }[mode],
+      { empty: 0, 'any-failure': 6, 'all-extras': 6, 'model-failure': 6, fallback: 0 }[mode],
       result.channels.out,
     );
-    const sources = result.json().data.extra_sources;
+    const sources = result
+      .json()
+      .data.sources.filter((source: { provider: string }) => source.provider !== 'model');
     if (mode === 'empty') assert.deepEqual(sources[0].data.results, []);
-    if (mode === 'all-extras') assert.equal(sources, undefined);
+    if (mode === 'all-extras') assert.deepEqual(sources, []);
     if (mode === 'any-failure')
       assert.deepEqual(
         sources.map((s: JsonObject) => s.provider),
         ['exa'],
       );
     if (mode === 'model-failure') {
-      assert.equal(result.json().data.answer, undefined);
+      assert.equal(
+        result
+          .json()
+          .data.sources.find((source: { provider: string }) => source.provider === 'model')?.data,
+        undefined,
+      );
       assert.equal(sources[0].provider, 'anysearch');
     }
     if (mode === 'fallback') {
@@ -292,7 +303,7 @@ test('AnySearch search failures, valid empty supplements and model fallback reta
     { UNISEARCH_ANYSEARCH_API_KEY: '' },
     { UNISEARCH_ANYSEARCH_BASE_URL: 'bad' },
   ]) {
-    const result = await f.run(['search', 'q', '--extra-sources', 'anysearch,exa'], override);
+    const result = await f.run(['search', 'q', '--sources', 'model,anysearch,exa'], override);
     assert.equal(result.exit, 3);
   }
   assert.equal(f.calls.length, before);
@@ -344,15 +355,25 @@ test(
         return response;
       };
       const result = await combinedSearch(
-        prepareCombinedSearch('q', { extraSources: 'anysearch,exa' }, {}, f.env, 'en'),
+        prepareCombinedSearch('q', { sources: 'model,anysearch,exa' }, {}, f.env, 'en'),
         controller.signal,
         'en',
         {},
         { transport },
       );
       assert.equal(result.exitCode, mode === 'cancel' ? 130 : 5);
-      assert.equal(result.result.data?.extra_sources?.[0].provider, 'anysearch');
-      assert.equal(result.result.data?.answer, undefined);
+      assert.equal(
+        result.result.data?.sources.filter(
+          (source: { provider: string }) => source.provider !== 'model',
+        )?.[0].provider,
+        'anysearch',
+      );
+      assert.equal(
+        result.result.data?.sources.find(
+          (source: { provider: string }) => source.provider === 'model',
+        )?.data,
+        undefined,
+      );
     }
   },
 );

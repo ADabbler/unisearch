@@ -202,7 +202,7 @@ Page A article.`,
         },
       },
     },
-    markdown: ``,
+    markdown: '',
     stderr: `错误：目标页面触发了反机器人验证
 服务：tinyfish
 URL：https://example.org/blocked
@@ -327,7 +327,7 @@ Complete page A.`,
         },
       },
     },
-    markdown: ``,
+    markdown: '',
     stderr: `错误：所有网页读取均失败
 服务：tinyfish
 
@@ -374,11 +374,14 @@ Complete body.`,
     result: {
       status: 'success',
       data: {
-        answer: {
-          model: 'example-model',
-          text: 'Use the command reference.',
-        },
-        extra_sources: [
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'example-model',
+              text: 'Use the command reference.',
+            },
+          },
           {
             provider: 'tinyfish',
             data: {
@@ -403,13 +406,11 @@ Complete body.`,
 
 Use the command reference.
 
-## 补充检索
-
-### TinyFish
+## TinyFish
 
 页码：0
 
-#### 1. [Command Reference](https://example.org/reference)
+### 1. [Command Reference](https://example.org/reference)
 
 站点：example.org
 

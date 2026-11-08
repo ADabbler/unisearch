@@ -1236,8 +1236,8 @@ test('Root search concurrently executes real model, Exa and Firecrawl with saved
       await createCli('test', { config, channels }).run([
         'search',
         ' q ',
-        '--extra-sources',
-        order,
+        '--sources',
+        'model,' + order,
         '--timeout',
         '1',
         '--format=json',
@@ -1248,10 +1248,16 @@ test('Root search concurrently executes real model, Exa and Firecrawl with saved
     );
     const result = JSON.parse(channels.out);
     assert.deepEqual(
-      result.data.extra_sources.map((item: { provider: string }) => item.provider),
+      result.data.sources
+        .filter((source: { provider: string }) => source.provider !== 'model')
+        .map((item: { provider: string }) => item.provider),
       order.split(','),
     );
-    assert.equal(result.data.answer.model, 'actual-model');
+    assert.equal(
+      result.data.sources.find((source: { provider: string }) => source.provider === 'model')?.data
+        .model,
+      'actual-model',
+    );
     assert.deepEqual(
       result.meta.attempts.map((item: { provider: string }) => item.provider),
       ['model', ...order.split(',')],
@@ -1288,7 +1294,7 @@ test('Root Firecrawl supplemental failures preserve other data and validate all 
   for (const [model, extra, expected, status] of [
     [true, true, 0, 'success'],
     [true, false, 6, 'partial'],
-    [false, true, 3, 'error'],
+    [false, true, 6, 'partial'],
     [false, false, 3, 'error'],
   ] as const) {
     modelOk = model;
@@ -1298,16 +1304,24 @@ test('Root Firecrawl supplemental failures preserve other data and validate all 
       await createCli('test', { config: context(root, settings), channels }).run([
         'search',
         'q',
-        '--extra-sources',
-        'firecrawl',
+        '--sources',
+        'model,firecrawl',
         '--format=json',
       ]),
       expected,
     );
     const result = JSON.parse(channels.out);
     assert.equal(result.status, status);
-    assert.equal(!!result.data?.answer, model);
-    assert.equal(!!result.data?.extra_sources, extra);
+    assert.equal(
+      !!result.data?.sources.find((source: { provider: string }) => source.provider === 'model')
+        ?.data,
+      model,
+    );
+    assert.equal(
+      !!result.data?.sources.filter((source: { provider: string }) => source.provider !== 'model')
+        .length,
+      extra,
+    );
   }
   calls = 0;
   for (const sources of ['firecrawl,firecrawl', 'firecrawl,', ' firecrawl'])
@@ -1315,7 +1329,7 @@ test('Root Firecrawl supplemental failures preserve other data and validate all 
       await createCli('test', { config: context(root, settings), channels: capture() }).run([
         'search',
         'q',
-        '--extra-sources',
+        '--sources',
         sources,
       ]),
       2,
@@ -1325,8 +1339,8 @@ test('Root Firecrawl supplemental failures preserve other data and validate all 
     await createCli('test', { config: context(root, noKey), channels: capture() }).run([
       'search',
       'q',
-      '--extra-sources',
-      'firecrawl',
+      '--sources',
+      'model,firecrawl',
     ]),
     3,
   );
@@ -1346,7 +1360,7 @@ test('Root search redacts all known credentials in Firecrawl diagnostics while p
   const values = {
     providers: { firecrawl: { api_key: savedKey } },
   };
-  const plan = prepareCombinedSearch('q', { extraSources: 'firecrawl' }, values, settings, 'en');
+  const plan = prepareCombinedSearch('q', { sources: 'model,firecrawl' }, values, settings, 'en');
   const sourceText = `Source text mentioning ${settings.UNISEARCH_MODEL_API_KEY}`;
   const fetcher: typeof fetch = async (url) => {
     if (String(url).includes('model.test')) return new Response(JSON.stringify(answer));
@@ -1374,7 +1388,9 @@ test('Root search redacts all known credentials in Firecrawl diagnostics while p
   };
   const outcome = await combinedSearch(plan, attempt().signal, 'en', {}, { transport: fetcher });
   assert.equal(outcome.exitCode, 0);
-  const source = outcome.result.data?.extra_sources?.[0];
+  const source = outcome.result.data?.sources.filter(
+    (source: { provider: string }) => source.provider !== 'model',
+  )?.[0];
   assert.ok(source?.provider === 'firecrawl');
   assert.deepEqual(source.data.warnings, ['key=[REDACTED]']);
   assert.equal(source.data.results[0].title, 'Source title');
@@ -1394,7 +1410,7 @@ test('Unexpected Firecrawl programming errors stop the combined invocation and r
   };
   const plan = prepareCombinedSearch(
     'q',
-    { extraSources: 'exa,firecrawl' },
+    { sources: 'model,exa,firecrawl' },
     values,
     settings,
     'en',
@@ -1434,5 +1450,10 @@ test('Unexpected Firecrawl programming errors stop the combined invocation and r
   assert.equal(result.exitCode, 5);
   assert.equal(result.result.error?.code, 'INTERNAL_ERROR');
   assert.equal(aborted, true);
-  assert.deepEqual(result.result.data?.extra_sources, [{ provider: 'exa', data: { results: [] } }]);
+  assert.deepEqual(
+    result.result.data?.sources.filter(
+      (source: { provider: string }) => source.provider !== 'model',
+    ),
+    [{ provider: 'exa', data: { results: [] } }],
+  );
 });

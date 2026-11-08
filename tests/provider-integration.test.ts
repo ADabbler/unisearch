@@ -165,8 +165,8 @@ test(
       const result = await f.run([
         'search',
         'integration query',
-        '--extra-sources',
-        'jina,anysearch',
+        '--sources',
+        'model,jina,anysearch',
         '--format',
         format,
         '--output',
@@ -191,14 +191,17 @@ test(
       const saved = readFileSync(path, 'utf8');
       if (format === 'json') {
         const json = JSON.parse(saved);
+        const sources = json.data.sources.filter(
+          (source: { provider: string }) => source.provider !== 'model',
+        );
         assert.deepEqual(
-          json.data.extra_sources.map((s: JsonObject) => s.provider),
+          sources.map((source: JsonObject) => source.provider),
           ['jina', 'anysearch'],
         );
-        assert.equal(json.data.extra_sources[0].data.results[0].text, page.content);
-        assert.deepEqual(json.data.extra_sources[0].data.results[0].metadata, page.metadata);
+        assert.equal(sources[0].data.results[0].text, page.content);
+        assert.deepEqual(sources[0].data.results[0].metadata, page.metadata);
         assert.ok(
-          json.data.extra_sources.every((s: { data: JsonObject }) => s.data.provider === undefined),
+          sources.every((source: { data: JsonObject }) => source.data.provider === undefined),
         );
         assert.equal(
           json.meta.attempts.find((a: JsonObject) => a.provider === 'jina').billed_tokens,
@@ -206,7 +209,7 @@ test(
         );
       } else {
         assert.deepEqual(
-          [...saved.matchAll(/^### (Jina|AnySearch)$/gm)].map((match) => match[1]),
+          [...saved.matchAll(/^## (Jina|AnySearch)$/gm)].map((match) => match[1]),
           ['Jina', 'AnySearch'],
         );
         assert.ok(saved.includes(page.content));
@@ -222,7 +225,7 @@ test(
       { UNISEARCH_ANYSEARCH_BASE_URL: 'bad' },
     ]) {
       assert.equal(
-        (await f.run(['search', 'q', '--extra-sources', 'jina,anysearch'], overrides)).exit,
+        (await f.run(['search', 'q', '--sources', 'model,jina,anysearch'], overrides)).exit,
         3,
       );
     }
@@ -265,34 +268,34 @@ test('Combined Jina and AnySearch failures retain independent evidence and redac
       const result = await f.run([
         'search',
         'q',
-        '--extra-sources',
-        'anysearch,jina',
+        '--sources',
+        'model,anysearch,jina',
         '--format',
         format,
         '--output',
         path,
         '--verbose',
       ]);
-      assert.equal(
-        result.exit,
-        mode === 'model-failure' ? 3 : mode === 'jina-partial' ? 0 : 6,
-        result.channels.out,
-      );
+      assert.equal(result.exit, mode === 'jina-partial' ? 0 : 6, result.channels.out);
       const saved = readFileSync(path, 'utf8');
       for (const secret of credentials)
         assert.ok(!`${saved}${result.channels.out}${result.channels.err}`.includes(secret));
       if (format === 'json') {
         const json = JSON.parse(saved);
+        const sources = json.data.sources.filter(
+          (source: { provider: string }) => source.provider !== 'model',
+        );
         assert.deepEqual(
-          json.data.extra_sources.map((s: JsonObject) => s.provider),
+          sources.map((source: JsonObject) => source.provider),
           mode === 'anysearch-failure' ? ['jina'] : ['anysearch', 'jina'],
         );
-        assert.equal(json.data.answer === undefined, mode === 'model-failure');
+        assert.equal(
+          json.data.sources.find((source: { provider: string }) => source.provider === 'model')
+            ?.data === undefined,
+          mode === 'model-failure',
+        );
         if (mode === 'jina-partial')
-          assert.equal(
-            json.data.extra_sources[1].data.results[0].description,
-            'Available evidence',
-          );
+          assert.equal(sources[1].data.results[0].description, 'Available evidence');
       } else assert.match(saved, mode === 'jina-partial' ? /Available evidence/ : /Full guide/);
     }
   }

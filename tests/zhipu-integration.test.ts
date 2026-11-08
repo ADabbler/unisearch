@@ -26,16 +26,31 @@ test(
           task.res.end(JSON.stringify(payloads[task.path]));
     });
     const result = await f.run(
-      ['search', 'q', '--extra-sources', 'zhipu,exa', '--format=json', '--verbose'],
+      ['search', 'q', '--sources', 'model,zhipu,exa', '--format=json', '--verbose'],
       keys,
     );
     assert.equal(result.exit, 0);
     assert.deepEqual(
-      result.json().data.extra_sources.map((s: JsonObject) => s.provider),
+      result
+        .json()
+        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
+        .map((s: JsonObject) => s.provider),
       ['zhipu', 'exa'],
     );
-    assert.equal(result.json().data.extra_sources[0].data.provider, undefined);
-    assert.equal(result.json().data.extra_sources[0].data.search_engine, 'search_std');
+    assert.equal(
+      result
+        .json()
+        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0].data
+        .provider,
+      undefined,
+    );
+    assert.equal(
+      result
+        .json()
+        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0].data
+        .search_engine,
+      'search_std',
+    );
     assert.equal(
       f.calls.find((call) => call.path === '/gateway/web_search')?.headers.authorization,
       'Bearer fixture-zhipu-key',
@@ -63,11 +78,17 @@ test('Root search preserves failed Zhipu evidence, accepts empty results and nev
     });
     const before = f.calls.length;
     const result = await f.run(
-      ['search', 'q', '--extra-sources', 'zhipu', '--format=json', '--verbose'],
+      ['search', 'q', '--sources', 'model,zhipu', '--format=json', '--verbose'],
       keys,
     );
-    assert.equal(result.exit, { empty: 0, partial: 6, 'model-failure': 3, fallback: 6 }[mode]);
-    assert.equal(result.json().data.extra_sources[0].data.results.length, mode === 'empty' ? 0 : 1);
+    assert.equal(result.exit, { empty: 0, partial: 6, 'model-failure': 4, fallback: 6 }[mode]);
+    assert.equal(
+      result
+        .json()
+        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0].data
+        .results.length,
+      mode === 'empty' ? 0 : 1,
+    );
     const calls = f.calls.slice(before);
     assert.equal(calls.filter((call) => call.path === '/gateway/web_search').length, 1);
     if (mode !== 'empty')
@@ -83,8 +104,8 @@ test('Root search preserves failed Zhipu evidence, accepts empty results and nev
   }
   const before = f.calls.length;
   for (const args of [
-    ['search', '😀'.repeat(71), '--extra-sources', 'zhipu'],
-    ['search', 'q', '--extra-sources', 'zhipu,zhipu'],
+    ['search', '😀'.repeat(71), '--sources', 'model,zhipu'],
+    ['search', 'q', '--sources', 'model,zhipu,zhipu'],
   ])
     assert.equal((await f.run(args, keys)).exit, 2);
   assert.equal(f.calls.length, before);
@@ -102,7 +123,7 @@ test('Completed Zhipu search evidence survives sibling cancellation, timeout and
     f.reply(search);
     const plan = prepareCombinedSearch(
       'q',
-      { extraSources: 'zhipu', timeout: 3 },
+      { sources: 'model,zhipu', timeout: 3 },
       {},
       { ...f.env, ...keys },
       'en',
@@ -129,8 +150,10 @@ test('Completed Zhipu search evidence survives sibling cancellation, timeout and
         },
       },
     );
-    assert.equal(result.exitCode, { cancel: 130, timeout: 4, internal: 5 }[mode]);
-    const source = result.result.data?.extra_sources?.[0];
+    assert.equal(result.exitCode, { cancel: 130, timeout: 6, internal: 5 }[mode]);
+    const source = result.result.data?.sources.filter(
+      (source: { provider: string }) => source.provider !== 'model',
+    )?.[0];
     assert.ok(source?.provider === 'zhipu');
     assert.equal(source.data.results[0].description, hit.content);
   }

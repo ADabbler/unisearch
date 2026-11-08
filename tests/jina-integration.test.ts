@@ -523,16 +523,31 @@ test('Root search runs model, Jina and Exa concurrently and retains requested so
   });
   f.save({ providers: { jina: { search: { limit: 2 } } } });
   const result = await f.run(
-    ['search', 'q', '--extra-sources', 'jina,exa', '--timeout', '2', '--format=json', '--verbose'],
+    ['search', 'q', '--sources', 'model,jina,exa', '--timeout', '2', '--format=json', '--verbose'],
     env,
   );
   assert.equal(result.exit, 0);
   assert.deepEqual(
-    result.json().data.extra_sources.map((s: JsonObject) => s.provider),
+    result
+      .json()
+      .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
+      .map((s: JsonObject) => s.provider),
     ['jina', 'exa'],
   );
-  assert.equal(result.json().data.extra_sources[0].data.provider, undefined);
-  assert.equal(result.json().data.extra_sources[0].data.search_type, 'web');
+  assert.equal(
+    result
+      .json()
+      .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0].data
+      .provider,
+    undefined,
+  );
+  assert.equal(
+    result
+      .json()
+      .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0].data
+      .search_type,
+    'web',
+  );
   const body = f.calls.find((call) => call.path === '/searcher/search')!.body;
   assert.equal(body.num, 2);
   assert.equal(body.type, 'web');
@@ -559,17 +574,25 @@ test('Root search keeps Jina metadata and invalid data when model fails, with lo
           res.end(JSON.stringify(modelOk ? answer : { error: { message: 'No access' } }));
         } else res.end(JSON.stringify(envelope(entries)));
       });
-      const result = await f.run(['search', 'q', '--extra-sources', 'jina', '--format=json'], env);
-      let expectedExit = 3;
-      if (modelOk) expectedExit = 'title' in entries[0] && entries[0].title === 0 ? 6 : 0;
+      const result = await f.run(['search', 'q', '--sources', 'model,jina', '--format=json'], env);
+      const invalid = 'title' in entries[0] && entries[0].title === 0;
+      let expectedExit = 6;
+      if (modelOk && !invalid) expectedExit = 0;
+      else if (!modelOk && invalid) expectedExit = 4;
       assert.equal(result.exit, expectedExit);
-      assert.equal(result.json().data.extra_sources[0].data.results.length, 1);
+      assert.equal(
+        result
+          .json()
+          .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0]
+          .data.results.length,
+        1,
+      );
       if (!modelOk) assert.equal(result.json().error.details.failures[0].provider, 'model');
     }
   const calls = f.calls.length;
   assert.equal(
     (
-      await f.run(['search', 'q', '--extra-sources', 'jina'], {
+      await f.run(['search', 'q', '--sources', 'model,jina'], {
         ...env,
         UNISEARCH_JINA_API_KEY: undefined,
       })
@@ -596,7 +619,7 @@ test('Completed Jina data survives root search cancellation, total timeout and i
       completed = resolve;
     });
     f.reply(envelope([page]));
-    const plan = prepareCombinedSearch('q', { extraSources: 'jina', timeout: 3 }, {}, env, 'en');
+    const plan = prepareCombinedSearch('q', { sources: 'model,jina', timeout: 3 }, {}, env, 'en');
     const result = await combinedSearch(
       plan,
       controller.signal,
@@ -619,9 +642,11 @@ test('Completed Jina data survives root search cancellation, total timeout and i
         },
       },
     );
-    const expected = { cancel: 130, timeout: 4, internal: 5 }[mode];
+    const expected = { cancel: 130, timeout: 6, internal: 5 }[mode];
     assert.equal(result.exitCode, expected);
-    const source = result.result.data?.extra_sources?.[0];
+    const source = result.result.data?.sources.filter(
+      (source: { provider: string }) => source.provider !== 'model',
+    )?.[0];
     assert.ok(source?.provider === 'jina');
     assert.equal(source.data.results[0].text, page.content);
   }

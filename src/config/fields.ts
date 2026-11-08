@@ -20,6 +20,7 @@ const providerEnvironments = {
 };
 export type Provider = keyof typeof providerEnvironments;
 export const providers = Object.keys(providerEnvironments) as Provider[];
+export const searchProviders = providers.filter((provider) => provider !== 'ctx7');
 
 export interface Field {
   path: string;
@@ -289,6 +290,13 @@ export const fields: readonly Field[] = [
     },
   ]),
   {
+    path: 'search.providers',
+    kind: 'providers',
+    default: ['model'],
+    supported: searchProviders,
+    minimum: 1,
+  },
+  {
     path: 'fetch.providers',
     kind: 'providers',
     default: [
@@ -557,6 +565,8 @@ export function validate(field: Field, value: unknown): Invalid | undefined {
     case 'providers':
       if (!Array.isArray(value) || value.some((item) => typeof item !== 'string'))
         return { code: 'INVALID_TYPE', message: 'providerArray' };
+      if (field.minimum !== undefined && value.length < field.minimum)
+        return { code: 'INVALID_VALUE', message: 'emptySearchSources' };
       if (value.some((item) => !Object.hasOwn(providerEnvironments, item)))
         return { code: 'UNKNOWN_PROVIDER', message: 'unknownProvider' };
       if (value.some((item) => !field.supported!.includes(item)))

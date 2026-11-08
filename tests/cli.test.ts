@@ -22,6 +22,10 @@ test('Bare root, help aliases, and version follow Commander without configuratio
     assert.match(channels.out, /\bsetup\b/);
     assert.doesNotMatch(channels.out, /--format|--output|--verbose|--timeout/);
     assert.match(channels.out, /\bexa\b/);
+    assert.equal(
+      cli.program.commands.findIndex((command) => command.name() === 'model'),
+      cli.program.commands.findIndex((command) => command.name() === 'map') + 1,
+    );
     outputs.push(channels.out);
   }
   assert.ok(outputs.every((value) => value === outputs[0]));
@@ -313,10 +317,11 @@ test('Compiled entry works outside the source directory with UTF-8 paths', (t) =
   assert.equal(version.stdout, `unisearch ${manifest.version}\n`);
 });
 
-test('All 41 operations expose and enforce the confirmed option matrix', async (t) => {
+test('All 42 operations expose and enforce the confirmed option matrix', async (t) => {
   const root = temporary(t);
   const content = new Set([
     'search',
+    'model search',
     'fetch',
     'map',
     'exa search',
@@ -377,7 +382,7 @@ test('All 41 operations expose and enforce the confirmed option matrix', async (
     for (const child of command.commands) visit(child, [...path, child.name()]);
   };
   visit(createCli('test').program, []);
-  assert.equal(paths.length, 41);
+  assert.equal(paths.length, 42);
   for (const path of paths) {
     const name = path.join(' ');
     let unsupported: string[];

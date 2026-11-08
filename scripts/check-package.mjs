@@ -110,7 +110,7 @@ const env = {
 function installed(args, language, expectedStatus = 0, errorOutput = false) {
   const environment = { ...env };
   if (language !== undefined) environment.UNISEARCH_LANG = language;
-  // Only the fixed smoke-test arguments below are passed to the Windows command shim.
+  // Shim smoke tests use fixed arguments without embedded quotes; structured settings use files.
   const result =
     process.platform === 'win32'
       ? run(
@@ -157,6 +157,29 @@ assert.equal(installedManifest.version, manifest.version);
 assert.equal(installed(['--version']), `unisearch ${manifest.version}\n`);
 assert.match(installed(['--help']), /^用法：/);
 assert.match(installed(['--help'], 'en'), /^Usage:/);
+for (const language of ['en', 'zh']) {
+  assert.match(installed(['search', '--help'], language), /--sources/);
+  assert.match(installed(['model', 'search', '--help'], language), /--effort/);
+}
+assert.deepEqual(JSON.parse(installed(['config', 'get', 'search.providers'])).data.value, [
+  'model',
+]);
+const searchConfig = join(caller, 'search-settings.json');
+writeFileSync(
+  searchConfig,
+  JSON.stringify({ language: 'zh', search: { providers: ['exa', 'tavily'] } }),
+);
+env.UNISEARCH_CONFIG_PATH = searchConfig;
+assert.deepEqual(JSON.parse(installed(['config', 'get', 'search.providers'])).data.value, [
+  'exa',
+  'tavily',
+]);
+assert.equal(
+  JSON.parse(installed(['search', 'fixture', '--model', 'fixture', '--format=json'], 'en', 2)).error
+    .code,
+  'INVALID_ARGUMENT',
+);
+env.UNISEARCH_CONFIG_PATH = config;
 assert.match(installed(['exa', 'search', '--help'], 'en'), /--search-type/);
 assert.match(installed(['exa', 'search', '--help']), /搜索模式/);
 assert.match(installed(['exa', 'fetch', '--help'], 'en'), /--max-length/);

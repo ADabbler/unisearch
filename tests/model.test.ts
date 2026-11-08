@@ -304,7 +304,10 @@ test('Fallback protocol selects its endpoint and response parser', async () => {
     'https://fixture.example/prefix/responses',
     'https://fixture.example/prefix/chat/completions',
   ]);
-  assert.equal(outcome.result.data?.answer?.text, 'Fallback answer.');
+  assert.equal(
+    outcome.result.data?.sources.find((source) => source.provider === 'model')?.data?.text,
+    'Fallback answer.',
+  );
   assert.deepEqual(
     (outcome.result.meta?.model_fallbacks as JsonObject[]).map(({ from, to }) => [from, to]),
     [['primary', 'backup']],
@@ -436,14 +439,17 @@ test('Both response protocols preserve complete text, actual model and structure
   assert.deepEqual(responseAnswer(body), {
     model: 'reported-model',
     text: 'Complete answer.\n\nSecond part',
-    sources: [{ url: 'https://example.org/a', title: 'A' }, { url: 'https://example.org/a#part' }],
+    citations: [
+      { url: 'https://example.org/a', title: 'A' },
+      { url: 'https://example.org/a#part' },
+    ],
   });
   const chatBody = chat() as any;
   chatBody.choices[0].message.annotations = annotations.map((annotation) => ({
     type: annotation.type,
     url_citation: annotation,
   }));
-  assert.deepEqual(chatAnswer(chatBody).sources, responseAnswer(body).sources);
+  assert.deepEqual(chatAnswer(chatBody).citations, responseAnswer(body).citations);
   for (const citation of [
     { url: 'ftp://example.org' },
     { url: 'https://example.org', title: 42 },
@@ -503,7 +509,7 @@ test('Top-level citations are read strictly and keep only uncited URLs as search
     { type: 'url_citation', url: 'https://example.org/c' },
   ];
   const answer = responseAnswer(body);
-  assert.deepEqual(answer.sources, [
+  assert.deepEqual(answer.citations, [
     { url: 'https://example.org/b', title: 'B' },
     { url: 'https://example.org/c' },
   ]);
@@ -514,13 +520,13 @@ test('Top-level citations are read strictly and keep only uncited URLs as search
     { type: 'url_citation', url_citation: { url: 'https://example.org/b', title: 'B' } },
   ];
   const chatResult = chatAnswer(chatBody);
-  assert.deepEqual(chatResult.sources, [{ url: 'https://example.org/b', title: 'B' }]);
+  assert.deepEqual(chatResult.citations, [{ url: 'https://example.org/b', title: 'B' }]);
   assert.deepEqual(chatResult.searchedSources, ['https://example.org/a']);
   const uncited = response() as any;
   uncited.citations = citations;
   uncited.output[0].content[0].annotations = [];
   const fallback = responseAnswer(uncited);
-  assert.deepEqual(fallback.sources, [
+  assert.deepEqual(fallback.citations, [
     { url: 'https://example.org/a' },
     { url: 'https://example.org/b' },
   ]);
@@ -559,7 +565,7 @@ test('Sources headings and trailing link blocks become structured sources', () =
   assert.deepEqual(responseAnswer(response(answer)), {
     model: 'reported-model',
     text: 'Body text.',
-    sources: [
+    citations: [
       { url: 'https://example.org/a', title: 'Example' },
       { url: 'https://example.org/b', title: 'Test' },
     ],
@@ -568,7 +574,7 @@ test('Sources headings and trailing link blocks become structured sources', () =
   assert.deepEqual(chatAnswer(chat(links)), {
     model: 'reported-model',
     text: 'Body text.',
-    sources: [{ url: 'https://example.org/a' }, { url: 'https://example.org/b' }],
+    citations: [{ url: 'https://example.org/a' }, { url: 'https://example.org/b' }],
   });
   // Inline citations carry their URL in the answer text, so they stay there
   // without adding a second copy to the structured sources.
@@ -581,7 +587,7 @@ test('Sources headings and trailing link blocks become structured sources', () =
   assert.deepEqual(chatAnswer(chat(zh)), {
     model: 'reported-model',
     text: '正文。',
-    sources: [{ url: 'https://example.org/a', title: 'A' }, { url: 'https://example.org/b' }],
+    citations: [{ url: 'https://example.org/a', title: 'A' }, { url: 'https://example.org/b' }],
   });
   const trailing = 'Body text.\n\nhttps://example.org/a.';
   assert.deepEqual(chatAnswer(chat(trailing)), { model: 'reported-model', text: trailing });
@@ -589,7 +595,7 @@ test('Sources headings and trailing link blocks become structured sources', () =
   assert.deepEqual(chatAnswer(chat(named)), {
     model: 'reported-model',
     text: 'Body.',
-    sources: [{ url: 'https://example.org/a', title: 'Example' }],
+    citations: [{ url: 'https://example.org/a', title: 'Example' }],
   });
   const single = 'Body text.\n\nhttps://example.org/a';
   assert.deepEqual(chatAnswer(chat(single)), { model: 'reported-model', text: single });
@@ -598,7 +604,7 @@ test('Sources headings and trailing link blocks become structured sources', () =
   assert.deepEqual(chatAnswer(chat(proseItem)), { model: 'reported-model', text: proseItem });
   const ordered =
     'Body.\n\n## Sources\n- bare https://example.org/a\n- [Titled](https://example.org/b)';
-  assert.deepEqual(chatAnswer(chat(ordered)).sources, [
+  assert.deepEqual(chatAnswer(chat(ordered)).citations, [
     { url: 'https://example.org/a' },
     { url: 'https://example.org/b', title: 'Titled' },
   ]);
@@ -607,7 +613,7 @@ test('Sources headings and trailing link blocks become structured sources', () =
   assert.deepEqual(chatAnswer(chat(parens)), {
     model: 'reported-model',
     text: 'Body.',
-    sources: [
+    citations: [
       { url: 'https://en.wikipedia.org/wiki/X_(company)', title: 'Company' },
       { url: 'https://example.org/b' },
     ],
@@ -676,7 +682,7 @@ test('Chat SSE requires stop plus DONE, closes without EOF and uses only index z
   assert.deepEqual(await streamAnswer(byteStream(cited).stream, 'chat-completions'), {
     model: 'actual',
     text: 'Body',
-    sources: [{ url: 'https://example.org/a' }, { url: 'https://example.org/b' }],
+    citations: [{ url: 'https://example.org/a' }, { url: 'https://example.org/b' }],
   });
   for (const text of [
     'data: [DONE]\n\n',
@@ -876,7 +882,7 @@ test('Streaming models can complete beyond twice the timeout while supplements r
       let extraCalls = 0;
       const plan = prepareCombinedSearch(
         'q',
-        { stream: true, timeout: 1, extraSources: 'exa' },
+        { stream: true, timeout: 1, sources: 'model,exa' },
         { providers: { model: { protocol } } },
         { ...modelEnv, UNISEARCH_EXA_API_KEY: 'fixture-exa-key' },
         'en',
@@ -913,11 +919,17 @@ test('Streaming models can complete beyond twice the timeout while supplements r
       );
       assert.equal(time.clock.now(), 2700);
       assert.equal(result.exitCode, supplement === 'completed' ? 0 : 6);
-      assert.equal(result.result.data?.answer?.text, 'Complete answer.');
+      assert.equal(
+        result.result.data?.sources.find((source) => source.provider === 'model')?.data?.text,
+        'Complete answer.',
+      );
       if (supplement === 'completed') {
-        assert.deepEqual(result.result.data?.extra_sources, [
-          { provider: 'exa', data: { results: [] } },
-        ]);
+        assert.deepEqual(
+          result.result.data?.sources.filter(
+            (source: { provider: string }) => source.provider !== 'model',
+          ),
+          [{ provider: 'exa', data: { results: [] } }],
+        );
       } else {
         const failures = result.result.error?.details?.failures as JsonObject[];
         assert.equal(failures.length, 1);
@@ -1285,7 +1297,7 @@ test('Model retries preserve settings, per-candidate counts and Exa is never res
   for (const retries of [0, 2]) {
     const plan = prepareCombinedSearch(
       'q',
-      { extraSources: 'exa' },
+      { sources: 'model,exa' },
       {
         execution: { retries },
         providers: {

@@ -27,7 +27,7 @@ unisearch --version
 
 ## 配置
 
-setup 在交互终端中运行，选择需要的连接、填写设置，并按需为 Agent 安装 Skill，保存前可以预览修改。
+运行交互式向导，配置服务连接并按需为 Agent 安装 Skill：
 
 ```sh
 unisearch setup

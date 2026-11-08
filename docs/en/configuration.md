@@ -107,6 +107,24 @@ Use `--timeout SECONDS` to override the time limit for one call. The limit inclu
 
 `--no-fallback` disables model or service switching without disabling retries. Provider-specific commands do not switch services.
 
+### Unified search
+
+| Field              | Type and values                                                                                                                        | Default     | Environment variable |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------------------- |
+| `search.providers` | Nonempty array of source IDs: `model`, `exa`, `tavily`, `firecrawl`, `jina`, `zhipu`, `zhipu-mcp`, `anysearch`, `tinyfish`, `deepseek` | `["model"]` | —                    |
+
+`unisearch search` runs every selected source in parallel and outputs them in selection order. Use `--sources IDS` to override `search.providers` for one call, separating multiple IDs with commas.
+
+If the list contains duplicate or unsupported IDs, or a selected service is disabled or lacks required settings, the command fails before sending any requests.
+
+```sh
+unisearch config set search.providers '["exa","tavily"]'
+unisearch search "search question"
+unisearch search "search question" --sources model,exa --effort low
+```
+
+Other sources require no model configuration. When `model` is selected, model-search options such as `--model` and `--effort` affect only its task. Using these options without selecting `model` is an error. See `unisearch model search --help` for the full option list.
+
 ### Unified fetch and map
 
 | Field             | Type and values                                                         | Default                                                                                                 | Environment variable |
@@ -134,7 +152,7 @@ unisearch config set providers.exa.enabled false
 
 ## Model settings
 
-These settings apply to `unisearch search`.
+These settings apply to `unisearch model search` and unified `unisearch search` calls that select `model`.
 
 | Field                             | Type and values                                                   | Default     | Environment variable       |
 | --------------------------------- | ----------------------------------------------------------------- | ----------- | -------------------------- |
@@ -194,7 +212,7 @@ Streaming model requests use the timeout duration from `execution.timeout_second
 - The model service must return the first text within the call's total time limit.
 - After receiving the first text, UniSearch resets the timer whenever it receives new model text. The request times out if no new text arrives within the timeout duration. Heartbeats and tool progress do not reset the timer.
 
-A request that keeps returning text can exceed the initial total limit; supplementary searches selected with `--extra-sources` remain subject to that limit. Once text starts arriving, an interrupted answer produces an error without retries or model switching.
+A model request that keeps returning text can exceed the initial total limit; other sources in a unified search remain subject to that limit. Once text starts arriving, an interrupted answer fails the model task without retries or model switching.
 
 ## Service settings
 
@@ -300,13 +318,14 @@ Default connection URLs: `https://open.bigmodel.cn/api/mcp` for BigModel and `ht
 
 ## Examples
 
-Configure Exa search and let unified fetch try Exa followed by Jina:
+Use Exa for unified search and let unified fetch try Exa followed by Jina:
 
 ```json
 {
   "providers": {
     "exa": { "api_key": "example-exa-key", "search": { "limit": 10 } }
   },
+  "search": { "providers": ["exa"] },
   "fetch": { "providers": ["exa", "jina"] }
 }
 ```
@@ -340,7 +359,7 @@ unisearch config get providers.model
 unisearch status
 ```
 
-`status` checks local configuration:
+`status` shows the effective unified search sources and checks each service's local configuration:
 
 | State      | Meaning                                  |
 | ---------- | ---------------------------------------- |

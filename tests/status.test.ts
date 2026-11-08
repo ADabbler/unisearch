@@ -46,11 +46,13 @@ test('Status checks four local states, collapses identical operations, and never
   assert.equal(result.services[1].issues?.[0].code, 'MISSING_REQUIRED');
   assert.equal(result.services[2].issues, undefined);
   assert.equal(result.issues, undefined);
+  assert.deepEqual(result.search, { providers: ['model'] });
   assert.doesNotMatch(
     JSON.stringify(result),
     /fixture-secret|invalid secret|"path"|"source"|selection/,
   );
   const md = renderStatus(result, 'zh');
+  assert.match(md, /^统一搜索来源：model\n/);
   assert.doesNotMatch(md, /仅检查本地配置|\|/);
   assert.match(md, /^exa：就绪/m);
   assert.match(md, /^tavily：缺少配置/m);
@@ -135,7 +137,10 @@ test('Invalid required settings outrank disabled, while missing settings do not'
     'en',
     definitions.slice(0, 2),
   );
-  assert.deepEqual(disabled, { services: [{ provider: 'exa', state: 'disabled' }] });
+  assert.deepEqual(disabled, {
+    search: { providers: ['model'] },
+    services: [{ provider: 'exa', state: 'disabled' }],
+  });
   const invalid = localStatus(
     { providers: { exa: { enabled: false, api_key: '' } } },
     {},
@@ -195,6 +200,7 @@ test('Configuration issues remain at top level when no operation definitions are
   const result = localStatus(
     {
       providers: { model: { api_key: 'valid-fixture' }, tinyfish: { enabled: 'secret' } },
+      search: { providers: [] },
       fetch: { providers: ['ctx7'] },
       map: { providers: ['unknown-secret'] },
       execution: { retries: -1 },
@@ -204,9 +210,17 @@ test('Configuration issues remain at top level when no operation definitions are
     'zh',
   );
   assert.deepEqual(result.services, []);
+  assert.equal(result.search, undefined);
   assert.deepEqual(
     result.issues?.map((issue) => issue.code),
-    ['INVALID_TYPE', 'UNSUPPORTED_OPERATION', 'UNKNOWN_PROVIDER', 'INVALID_VALUE', 'UNKNOWN_FIELD'],
+    [
+      'INVALID_TYPE',
+      'INVALID_VALUE',
+      'UNSUPPORTED_OPERATION',
+      'UNKNOWN_PROVIDER',
+      'INVALID_VALUE',
+      'UNKNOWN_FIELD',
+    ],
   );
   assert.doesNotMatch(JSON.stringify(result), /secret|valid-fixture/);
   const md = renderStatus(result, 'zh');
@@ -215,7 +229,7 @@ test('Configuration issues remain at top level when no operation definitions are
   assert.doesNotMatch(md, /\| 服务|setup|候选|path/);
   assert.deepEqual(
     localStatus({ fetch: { providers: ['exa', 'anysearch'] }, map: { providers: [] } }, {}, 'en'),
-    { services: [] },
+    { search: { providers: ['model'] }, services: [] },
   );
 });
 
@@ -223,11 +237,13 @@ test('Actual status commands are read-only and distinguish field issues from unr
   const root = temporary(t);
   const path = join(root, 'config.json');
   const config = context(root, { UNISEARCH_CONFIG_PATH: path, UNISEARCH_LANG: 'en' });
-  writeFileSync(path, '{"providers":{"exa":{"enabled":42}}}');
+  writeFileSync(path, '{"search":{"providers":["exa","jina"]},"providers":{"exa":{"enabled":42}}}');
   const original = readFileSync(path, 'utf8');
   const channels = capture();
   assert.equal(await createCli('1.2.3', { config, channels }).run(['status', '--json']), 0);
   const result = JSON.parse(channels.out);
+  assert.deepEqual(result.data.search, { providers: ['exa', 'jina'] });
+  assert.match(renderStatus(result.data, 'en'), /^Search sources: exa, jina\n/);
   const exa = result.data.services.find(
     (service: { provider: string }) => service.provider === 'exa',
   );

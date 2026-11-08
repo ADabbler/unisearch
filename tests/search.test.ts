@@ -57,6 +57,189 @@ async function body(req: IncomingMessage): Promise<JsonObject> {
   return JSON.parse(Buffer.concat(chunks).toString());
 }
 
+test('Unified search defaults to model and replaces source lists without requiring unused model settings', async (t) => {
+  const root = temporary(t);
+  const file = join(root, 'config.json');
+  const requests: string[] = [];
+  const base = await server(t, (req, res) => {
+    requests.push(req.url!);
+    res.end(JSON.stringify({ results: [] }));
+  });
+  const environment: NodeJS.ProcessEnv = {
+    UNISEARCH_LANG: 'en',
+    UNISEARCH_CONFIG_PATH: file,
+    UNISEARCH_EXA_API_KEY: 'fixture-exa',
+    UNISEARCH_EXA_BASE_URL: `${base}/exa`,
+    UNISEARCH_TAVILY_API_KEY: 'fixture-tavily',
+    UNISEARCH_TAVILY_BASE_URL: `${base}/tavily`,
+    UNISEARCH_RETRIES: '0',
+  };
+  const run = async (args: string[]) => {
+    const channels = capture();
+    const exit = await createCli('test', { config: context(root, environment), channels }).run([
+      ...args,
+      ...(args[0] === 'config' ? [] : ['--format=json']),
+    ]);
+    return { exit, json: JSON.parse(channels.out) };
+  };
+  writeFileSync(file, '{}');
+  const defaultSources = await run(['config', 'get', 'search.providers']);
+  assert.deepEqual(defaultSources.json.data.value, ['model']);
+  assert.equal((await run(['search', 'q'])).exit, 3);
+  assert.deepEqual(requests, []);
+  writeFileSync(
+    file,
+    JSON.stringify({
+      search: { providers: ['tavily', 'exa'] },
+      providers: { model: { enabled: false, base_url: 42 } },
+    }),
+  );
+  const configured = await run(['search', 'q']);
+  assert.equal(configured.exit, 0);
+  assert.deepEqual(configured.json.data.sources, [
+    { provider: 'tavily', data: { results: [] } },
+    { provider: 'exa', data: { results: [] } },
+  ]);
+  assert.deepEqual(requests.toSorted(), ['/exa/search', '/tavily/search']);
+  requests.length = 0;
+  writeFileSync(file, JSON.stringify({ search: { providers: ['unknown'] } }));
+  const override = await run(['search', 'q', '--sources', 'exa']);
+  assert.equal(override.exit, 0);
+  assert.deepEqual(override.json.data.sources, [{ provider: 'exa', data: { results: [] } }]);
+  assert.deepEqual(requests, ['/exa/search']);
+});
+
+test('Dedicated model search ignores the configured source list and shares model options with unified search', async (t) => {
+  const root = temporary(t);
+  const file = join(root, 'config.json');
+  const requests: JsonObject[] = [];
+  const base = await server(t, async (req, res) => {
+    assert.equal(req.url, '/responses');
+    requests.push(await body(req));
+    res.end(JSON.stringify(answer));
+  });
+  for (const command of [['model', 'search'], ['search']]) {
+    writeFileSync(
+      file,
+      JSON.stringify({
+        search: { providers: ['unknown'] },
+        providers: { model: { fallback_models: [{ id: 'backup' }] } },
+      }),
+    );
+    const channels = capture();
+    const exit = await createCli('test', {
+      config: context(root, {
+        ...env,
+        UNISEARCH_CONFIG_PATH: file,
+        UNISEARCH_MODEL_BASE_URL: base,
+      }),
+      channels,
+    }).run([
+      ...command,
+      'q',
+      ...(command.length === 1 ? ['--sources', 'model'] : []),
+      '--model',
+      'chosen',
+      '--effort',
+      'low',
+      '--no-stream',
+      '--no-fallback',
+      '--format=json',
+    ]);
+    assert.equal(exit, 0, channels.out);
+    assert.deepEqual(JSON.parse(channels.out).data.sources, [
+      { provider: 'model', data: { model: 'actual', text: 'Complete answer.' } },
+    ]);
+    const request = requests.at(-1)!;
+    assert.equal(request.model, 'chosen');
+    assert.equal(request.stream, false);
+    assert.deepEqual(request.reasoning, { effort: 'low' });
+  }
+  assert.equal(requests.length, 2);
+});
+
+test('Source validation and model-only options fail before requests when model is not selected', async (t) => {
+  const root = temporary(t);
+  const file = join(root, 'config.json');
+  let calls = 0;
+  const base = await server(t, (_req, res) => {
+    calls++;
+    res.end('{}');
+  });
+  const config = context(root, {
+    ...env,
+    UNISEARCH_CONFIG_PATH: file,
+    UNISEARCH_EXA_BASE_URL: base,
+  });
+  writeFileSync(file, JSON.stringify({ search: { providers: ['exa'] } }));
+  for (const options of [
+    ['--model', 'primary'],
+    ['--effort', 'low'],
+    ['--stream'],
+    ['--no-stream'],
+    ['--no-fallback'],
+  ]) {
+    const channels = capture();
+    assert.equal(
+      await createCli('test', { config, channels }).run([
+        'search',
+        'q',
+        ...options,
+        '--format=json',
+      ]),
+      2,
+    );
+    assert.equal(JSON.parse(channels.out).error.code, 'INVALID_ARGUMENT');
+  }
+  for (const providers of [[], ['ctx7'], ['exa', 'exa'], ['unknown']]) {
+    writeFileSync(file, JSON.stringify({ search: { providers } }));
+    assert.equal(await createCli('test', { config, channels: capture() }).run(['search', 'q']), 3);
+  }
+  assert.equal(calls, 0);
+});
+
+test('Mixed search keeps requested model placement and reports failures without changing other sources', async () => {
+  for (const modelOk of [true, false]) {
+    const plan = prepareCombinedSearch(
+      'q',
+      { sources: 'exa,model', model: 'chosen', effort: 'low', stream: false, fallback: false },
+      {},
+      env,
+      'en',
+    );
+    const requests: string[] = [];
+    const result = await combinedSearch(
+      plan,
+      new AbortController().signal,
+      'en',
+      {},
+      {
+        transport: async (url, init) => {
+          requests.push(String(url));
+          if (String(url).endsWith('/responses')) {
+            const request = JSON.parse(init!.body as string);
+            assert.equal(request.model, 'chosen');
+            assert.deepEqual(request.reasoning, { effort: 'low' });
+            return modelOk
+              ? Response.json(answer)
+              : Response.json({ error: { message: 'Rejected' } }, { status: 401 });
+          }
+          assert.equal(JSON.parse(init!.body as string).model, undefined);
+          return Response.json({ results: [] });
+        },
+      },
+    );
+    assert.equal(result.exitCode, modelOk ? 0 : 6);
+    assert.deepEqual(
+      result.result.data?.sources.map((source) => source.provider),
+      modelOk ? ['exa', 'model'] : ['exa'],
+    );
+    assert.equal(requests.length, 2);
+    if (!modelOk)
+      assert.equal((result.result.error?.details?.failures?.[0] as JsonObject).provider, 'model');
+  }
+});
+
 test('Model config management stores typed tools and independent efforts and rejects duplicate candidates without modifying the file', async (t) => {
   const root = temporary(t);
   const file = join(root, 'config.json');
@@ -136,11 +319,11 @@ test('Root search help, scalar validation and all selected prerequisites fail lo
     ['search', 'q', '--stream', '--stream'],
     ['search', 'q', '--no-stream', '--no-stream'],
     ['search', 'q', '--no-fallback', '--no-fallback'],
-    ['search', 'q', '--extra-sources', 'exa', '--extra-sources', 'exa'],
+    ['search', 'q', '--sources', 'model,exa', '--sources', 'model,exa'],
     ...['', ',exa', 'exa,', 'exa,exa', ' exa', 'unknown-source', 'tavily,tavily'].map((value) => [
       'search',
       'q',
-      '--extra-sources',
+      '--sources',
       value,
     ]),
   ]) {
@@ -171,8 +354,8 @@ test('Root search help, scalar validation and all selected prerequisites fail lo
       await createCli('test', { config: context(root, environment), channels: capture() }).run([
         'search',
         'q',
-        '--extra-sources',
-        'exa',
+        '--sources',
+        'model,exa',
       ]),
       3,
     );
@@ -200,7 +383,11 @@ test('Local HTTP barrier proves parallel execution and exact model/Exa mappings 
       if (waiting.length === 2)
         for (const [index, pending] of waiting.entries())
           pending.end(
-            JSON.stringify(requests[index].url.endsWith('/responses') ? answer : { results: [] }),
+            JSON.stringify(
+              requests[index].url.endsWith('/responses')
+                ? { ...answer, citations: ['https://example.org/cited'] }
+                : { results: [] },
+            ),
           );
     });
   });
@@ -220,8 +407,8 @@ test('Local HTTP barrier proves parallel execution and exact model/Exa mappings 
     await createCli('test', { config, channels }).run([
       'search',
       ' q ',
-      '--extra-sources',
-      'exa',
+      '--sources',
+      'model,exa',
       '--timeout',
       '2',
       '--format=json',
@@ -246,8 +433,17 @@ test('Local HTTP barrier proves parallel execution and exact model/Exa mappings 
   assert.equal(exa.headers['x-api-key'], 'exa-secret');
   const result = JSON.parse(channels.out);
   assert.deepEqual(result.data, {
-    answer: { model: 'actual', text: 'Complete answer.' },
-    extra_sources: [{ provider: 'exa', data: { results: [] } }],
+    sources: [
+      {
+        provider: 'model',
+        data: {
+          model: 'actual',
+          text: 'Complete answer.',
+          citations: [{ url: 'https://example.org/cited' }],
+        },
+      },
+      { provider: 'exa', data: { results: [] } },
+    ],
   });
   assert.deepEqual(
     result.meta.attempts.map((entry: JsonObject) => entry.provider),
@@ -262,8 +458,8 @@ test('Four actual combinations preserve data, deterministic failure order and mo
   for (const [modelOk, exaOk, expected, status] of [
     [true, true, 0, 'success'],
     [true, false, 6, 'partial'],
-    [false, true, 3, 'error'],
-    [false, false, 3, 'error'],
+    [false, true, 6, 'partial'],
+    [false, false, 4, 'error'],
   ] as const) {
     const base = await server(t, (req, res) => {
       if (req.url === '/responses') {
@@ -285,8 +481,8 @@ test('Four actual combinations preserve data, deterministic failure order and mo
       await createCli('test', { config, channels }).run([
         'search',
         'q',
-        '--extra-sources',
-        'exa',
+        '--sources',
+        'model,exa',
         '--format=json',
         '--output',
         file,
@@ -295,8 +491,20 @@ test('Four actual combinations preserve data, deterministic failure order and mo
     );
     const result = JSON.parse(modelOk || exaOk ? readFileSync(file, 'utf8') : channels.out);
     assert.equal(result.status, status);
-    assert.equal(Boolean(result.data?.answer), modelOk);
-    assert.equal(Boolean(result.data?.extra_sources), exaOk);
+    assert.equal(
+      Boolean(
+        result.data?.sources.find((source: { provider: string }) => source.provider === 'model')
+          ?.data,
+      ),
+      modelOk,
+    );
+    assert.equal(
+      Boolean(
+        result.data?.sources.filter((source: { provider: string }) => source.provider !== 'model')
+          .length,
+      ),
+      exaOk,
+    );
     assert.deepEqual(
       result.error?.details.failures.map((entry: JsonObject) => entry.provider) ?? [],
       [...(!modelOk ? ['model'] : []), ...(!exaOk ? ['exa'] : [])],
@@ -358,7 +566,12 @@ test('CLI stream overrides are independent of stored defaults and both protocols
           channels.out,
         );
         assert.equal(streams.at(-1), flag === undefined ? saved : flag === '--stream');
-        assert.equal(JSON.parse(channels.out).data.answer.text, 'Complete answer.');
+        assert.equal(
+          JSON.parse(channels.out).data.sources.find(
+            (source: { provider: string }) => source.provider === 'model',
+          )?.data.text,
+          'Complete answer.',
+        );
       }
 });
 
@@ -424,15 +637,23 @@ test('Native SSE completes beyond its initial deadline with successful supplemen
   });
   const plan = prepareCombinedSearch(
     'q',
-    { stream: true, timeout: 1, extraSources: 'exa' },
+    { stream: true, timeout: 1, sources: 'model,exa' },
     {},
     { ...env, UNISEARCH_MODEL_BASE_URL: base, UNISEARCH_EXA_BASE_URL: base },
     'en',
   );
   const result = await combinedSearch(plan, new AbortController().signal, 'en', {});
   assert.equal(result.exitCode, 0);
-  assert.equal(result.result.data?.answer?.text, 'Complete answer.');
-  assert.deepEqual(result.result.data?.extra_sources, [{ provider: 'exa', data: { results: [] } }]);
+  assert.equal(
+    result.result.data?.sources.find((source) => source.provider === 'model')?.data.text,
+    'Complete answer.',
+  );
+  assert.deepEqual(
+    result.result.data?.sources.filter(
+      (source: { provider: string }) => source.provider !== 'model',
+    ),
+    [{ provider: 'exa', data: { results: [] } }],
+  );
 });
 
 test('Slow native HTTP bodies and SSE honor deadlines while started model streams use idle timeouts', async (t) => {
@@ -455,7 +676,7 @@ test('Slow native HTTP bodies and SSE honor deadlines while started model stream
       });
       const plan = prepareCombinedSearch(
         'q',
-        { extraSources: 'exa', timeout: 0.15, stream: stallModel && stream },
+        { sources: 'model,exa', timeout: 0.15, stream: stallModel && stream },
         {},
         { ...env, UNISEARCH_MODEL_BASE_URL: base, UNISEARCH_EXA_BASE_URL: base },
         'en',
@@ -463,9 +684,23 @@ test('Slow native HTTP bodies and SSE honor deadlines while started model stream
       const record: JsonObject = {};
       const started = performance.now();
       const result = await combinedSearch(plan, new AbortController().signal, 'en', record);
-      assert.equal(result.exitCode, stallModel ? 4 : 6);
-      assert.equal(Boolean(result.result.data?.answer), !stallModel);
-      assert.equal(Boolean(result.result.data?.extra_sources), stallModel);
+      assert.equal(result.exitCode, 6);
+      assert.equal(
+        Boolean(
+          result.result.data?.sources.find(
+            (source: { provider: string }) => source.provider === 'model',
+          )?.data,
+        ),
+        !stallModel,
+      );
+      assert.equal(
+        Boolean(
+          result.result.data?.sources.filter(
+            (source: { provider: string }) => source.provider !== 'model',
+          ).length,
+        ),
+        stallModel,
+      );
       const timeout = result.result.error?.details?.failures?.[0].details;
       assert.equal(timeout?.timeout_scope, stallModel && stream ? 'stream_idle' : 'total');
       assert.ok(performance.now() - started < 1500);
@@ -474,7 +709,7 @@ test('Slow native HTTP bodies and SSE honor deadlines while started model stream
 });
 
 test('Internal programming failures cancel pending siblings with exit 5, never masquerade as user cancellation', async () => {
-  const plan = prepareCombinedSearch('q', { extraSources: 'exa' }, {}, env, 'en');
+  const plan = prepareCombinedSearch('q', { sources: 'model,exa' }, {}, env, 'en');
   let aborted = false;
   const result = await combinedSearch(
     plan,
@@ -508,7 +743,7 @@ test('Internal programming failures cancel pending siblings with exit 5, never m
 
 test('Internal failure after completed Exa retains its data and cancellation retains completed supplemental data without deltas', async () => {
   for (const cancel of [false, true]) {
-    const plan = prepareCombinedSearch('q', { extraSources: 'exa', stream: true }, {}, env, 'en');
+    const plan = prepareCombinedSearch('q', { sources: 'model,exa', stream: true }, {}, env, 'en');
     const abort = new AbortController();
     const result = await combinedSearch(
       plan,
@@ -529,7 +764,7 @@ test('Internal failure after completed Exa retains its data and cancellation ret
     );
     assert.equal(result.exitCode, cancel ? 130 : 5);
     assert.deepEqual(result.result.data, {
-      extra_sources: [{ provider: 'exa', data: { results: [] } }],
+      sources: [{ provider: 'exa', data: { results: [] } }],
     });
   }
 });
@@ -537,7 +772,7 @@ test('Internal failure after completed Exa retains its data and cancellation ret
 test('All known credentials are redacted across provider failures and verbose request IDs', async () => {
   const plan = prepareCombinedSearch(
     'q',
-    { extraSources: 'exa' },
+    { sources: 'model,exa' },
     { providers: { tavily: { api_key: 'third-secret' } } },
     env,
     'en',
@@ -564,7 +799,7 @@ test('Verbose execution details remain outside Markdown files', async (t) => {
   const root = temporary(t);
   const file = join(root, 'result.md');
   const channels = capture();
-  const plan = prepareCombinedSearch('q', { extraSources: 'exa' }, {}, env, 'en');
+  const plan = prepareCombinedSearch('q', { sources: 'model,exa' }, {}, env, 'en');
   const record: JsonObject = {};
   assert.equal(
     await execute(
@@ -622,8 +857,8 @@ test(
         'search',
         'q',
         '--stream',
-        '--extra-sources',
-        'exa',
+        '--sources',
+        'model,exa',
         '--format=json',
         '--output',
         output,
@@ -652,7 +887,7 @@ test(
       assert.equal(code, 130, stderr);
       assert.equal(signal, null);
       assert.deepEqual(JSON.parse(stdout).data, {
-        extra_sources: [{ provider: 'exa', data: { results: [] } }],
+        sources: [{ provider: 'exa', data: { results: [] } }],
       });
       assert.equal(JSON.parse(stdout).error.code, 'CANCELLED');
       assert.equal(readFileSync(output, 'utf8'), 'old');
@@ -665,15 +900,20 @@ test(
 
 test('Search sources render titled links, bare autolinks and no empty heading', () => {
   const data = {
-    answer: {
-      model: 'm',
-      text: 'Body.',
-      sources: [
-        { url: 'https://example.org/a' },
-        { url: 'https://example.org/b_(c)', title: 'B (c)' },
-      ],
-    },
-  } as unknown as CombinedData;
+    sources: [
+      {
+        provider: 'model',
+        data: {
+          model: 'm',
+          text: 'Body.',
+          citations: [
+            { url: 'https://example.org/a' },
+            { url: 'https://example.org/b_(c)', title: 'B (c)' },
+          ],
+        },
+      },
+    ],
+  } as CombinedData;
   assert.equal(
     renderCombinedSearch(data, 'en'),
     `Model: m

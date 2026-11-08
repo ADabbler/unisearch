@@ -44,6 +44,11 @@ export function renderConfig(
 
 export function renderStatus(data: StatusData, language: Language): string {
   const sections: string[] = [];
+  if (data.search)
+    sections.push(
+      `${text(language, 'searchSourcesLabel')}${colon(language)}${data.search.providers.join(', ')}`,
+      '',
+    );
   if (!data.services.length) sections.push(text(language, 'noOperations'));
   for (const service of data.services) {
     sections.push(

@@ -6,10 +6,10 @@ export type ModelAnswer = JsonObject & {
   model: string;
   text: string;
   /** Sources the answer cites. */
-  sources?: AnswerSource[];
+  citations?: AnswerSource[];
   /**
    * URLs the provider returned that the answer does not cite. Empty when the
-   * answer cites nothing, because the whole provider list becomes `sources`.
+   * answer cites nothing, because the whole provider list becomes `citations`.
    */
   searchedSources?: string[];
 };
@@ -206,7 +206,7 @@ function answerFields(model: string, answer: FinalAnswer): ModelAnswer {
   return {
     model,
     text: answer.text,
-    ...(answer.sources.length ? { sources: answer.sources } : {}),
+    ...(answer.sources.length ? { citations: answer.sources } : {}),
     ...(answer.searchedSources.length ? { searchedSources: answer.searchedSources } : {}),
   };
 }

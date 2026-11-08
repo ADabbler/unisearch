@@ -164,8 +164,8 @@ test('TinyFish and model search start concurrently with other explicit sources a
   const r = await f.run([
     'search',
     'query',
-    '--extra-sources',
-    'tinyfish,exa',
+    '--sources',
+    'model,tinyfish,exa',
     '--format=json',
     '--timeout',
     '2',
@@ -173,11 +173,22 @@ test('TinyFish and model search start concurrently with other explicit sources a
   assert.equal(r.exit, 0, r.channels.out);
   assert.equal(pending.length, 3);
   assert.deepEqual(
-    r.json().data.extra_sources.map((s: JsonObject) => s.provider),
+    r
+      .json()
+      .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
+      .map((s: JsonObject) => s.provider),
     ['tinyfish', 'exa'],
   );
-  assert.equal(r.json().data.extra_sources[0].data.provider, undefined);
-  assert.equal(r.json().data.extra_sources[0].data.page, 0);
+  assert.equal(
+    r.json().data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0]
+      .data.provider,
+    undefined,
+  );
+  assert.equal(
+    r.json().data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0]
+      .data.page,
+    0,
+  );
   assert.equal(
     f.calls.find((c) => c.path === '/tf-search/')!.url.searchParams.get('query'),
     'query',
@@ -185,14 +196,14 @@ test('TinyFish and model search start concurrently with other explicit sources a
   f.calls.length = 0;
   assert.equal(
     (
-      await f.run(['search', 'q', '--extra-sources', 'tinyfish'], {
+      await f.run(['search', 'q', '--sources', 'model,tinyfish'], {
         UNISEARCH_TINYFISH_API_KEY: '',
       })
     ).exit,
     3,
   );
   assert.equal(f.calls.length, 0);
-  assert.equal((await f.run(['search', 'x'.repeat(2001), '--extra-sources', 'tinyfish'])).exit, 2);
+  assert.equal((await f.run(['search', 'x'.repeat(2001), '--sources', 'model,tinyfish'])).exit, 2);
   assert.equal(f.calls.length, 0);
 });
 
@@ -202,7 +213,7 @@ test('TinyFish empty or failed search combines correctly and model fallback neve
   for (const [modelOk, extraOk, exit] of [
     [true, true, 0],
     [true, false, 6],
-    [false, true, 3],
+    [false, true, 6],
     [false, false, 3],
   ] as const) {
     f.handle((call, res) => {
@@ -217,10 +228,23 @@ test('TinyFish empty or failed search combines correctly and model fallback neve
           ),
         );
     });
-    const r = await f.run(['search', 'q', '--extra-sources', 'tinyfish', '--format=json']);
+    const r = await f.run(['search', 'q', '--sources', 'model,tinyfish', '--format=json']);
     assert.equal(r.exit, exit, r.channels.out);
-    if (extraOk) assert.deepEqual(r.json().data.extra_sources[0].data.results, []);
-    else assert.equal(r.json().data?.extra_sources, undefined);
+    if (extraOk)
+      assert.deepEqual(
+        r
+          .json()
+          .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0]
+          .data.results,
+        [],
+      );
+    else
+      assert.equal(
+        r
+          .json()
+          .data?.sources.filter((source: { provider: string }) => source.provider !== 'model')?.[0],
+        undefined,
+      );
   }
   f.save({ providers: { model: { fallback_models: [{ id: 'backup' }] } } });
   f.calls.length = 0;
@@ -232,7 +256,7 @@ test('TinyFish empty or failed search combines correctly and model fallback neve
       res.end(JSON.stringify({ error: { code: 'model_not_found', message: 'Model not found' } }));
     }
   });
-  const r = await f.run(['search', 'q', '--extra-sources', 'tinyfish', '--format=json']);
+  const r = await f.run(['search', 'q', '--sources', 'model,tinyfish', '--format=json']);
   assert.equal(r.exit, 0, r.channels.out);
   assert.equal(f.calls.filter((c) => c.path === '/tf-search/').length, 1);
   assert.equal(f.calls.filter((c) => c.path === '/model/responses').length, 2);
@@ -541,7 +565,7 @@ test(
 test('TinyFish internal failure terminates the whole combined search', async (t) => {
   const f = await fixture(t);
   f.env.UNISEARCH_MODEL_API_KEY = 'model-fixture-key';
-  const plan = prepareCombinedSearch('q', { extraSources: 'tinyfish' }, {}, f.env, 'en');
+  const plan = prepareCombinedSearch('q', { sources: 'model,tinyfish' }, {}, f.env, 'en');
   const r = await combinedSearch(
     plan,
     new AbortController().signal,

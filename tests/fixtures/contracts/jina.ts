@@ -409,9 +409,9 @@ Access denied. Please sign in.`,
     name: 'model failure with successful Jina supplement',
     renderer: 'search',
     result: {
-      status: 'error',
+      status: 'partial',
       data: {
-        extra_sources: [
+        sources: [
           {
             provider: 'jina',
             data: {
@@ -428,8 +428,8 @@ Access denied. Please sign in.`,
         ],
       },
       error: {
-        code: 'TIMEOUT',
-        message: '模型搜索失败',
+        code: 'PARTIAL_FAILURE',
+        message: '部分搜索来源失败',
         details: {
           failures: [
             {
@@ -445,18 +445,16 @@ Access denied. Please sign in.`,
         },
       },
     },
-    markdown: `> 错误：[TIMEOUT] 模型搜索失败
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分搜索来源失败
 > - model：[TIMEOUT] 本次调用的总执行时间已用尽
 >   - 模型：example-model
 >   - 超时范围：total
 
-## 补充检索
-
-### Jina
+## Jina
 
 网页搜索
 
-#### 1. [Release notes](https://example.org/release)
+### 1. [Release notes](https://example.org/release)
 
 Version 2 adds export support.`,
   },

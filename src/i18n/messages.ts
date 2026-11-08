@@ -923,14 +923,13 @@ const messages = {
     'Tools must be nonempty type strings or objects with a valid type',
   ],
   duplicateTool: ['工具声明不能完全重复', 'Tool declarations must not be duplicated'],
-  modelSearch: [
-    '由模型搜索并回答查询，可并行追加其他服务的检索结果',
-    'Answer the query with a model search, optionally adding results from other services in parallel',
+  modelSearch: ['使用模型搜索并回答查询', 'Search and answer the query with a model'],
+  searchSummary: ['使用选定来源进行搜索', 'Search using selected sources'],
+  searchCommand: [
+    '使用选定来源进行搜索；模型相关参数仅在来源包含 model 时可用',
+    'Search using selected sources; model options require model in the selected sources',
   ],
-  searchSummary: [
-    '使用模型搜索，可并行补充其他服务检索',
-    'Search with a model, optionally supplementing it with other services in parallel',
-  ],
+  modelCommand: ['模型搜索', 'Model search'],
   modelOption: [
     '指定本次搜索使用的模型，不回退',
     'Use this model for the search, without fallback',
@@ -939,9 +938,9 @@ const messages = {
     '指定本次搜索使用模型的思考等级',
     'Set the effort for the model used in this search',
   ],
-  extraSourcesOption: [
-    '补充来源，逗号分隔；支持已启用的 exa、tavily、firecrawl、jina、zhipu、zhipu-mcp、anysearch、tinyfish、deepseek',
-    'Comma-separated additional sources from enabled services: exa, tavily, firecrawl, jina, zhipu, zhipu-mcp, anysearch, tinyfish, deepseek',
+  sourcesOption: [
+    '本次搜索来源，逗号分隔；支持已启用的 model、exa、tavily、firecrawl、jina、zhipu、zhipu-mcp、anysearch、tinyfish、deepseek',
+    'Sources for this call, comma-separated; choose enabled services: model, exa, tavily, firecrawl, jina, zhipu, zhipu-mcp, anysearch, tinyfish, deepseek',
   ],
   streamOption: ['使用流式请求，收齐后输出', 'Use a streaming request, output after completion'],
   noStreamOption: ['使用非流式请求', 'Use a non-streaming request'],
@@ -949,10 +948,17 @@ const messages = {
     '关闭模型回退，保留同模型重试',
     'Disable model fallback, retaining same-model retries',
   ],
-  invalidExtraSources: [
-    '补充来源支持 exa、tavily、firecrawl、jina、zhipu、zhipu-mcp、anysearch、tinyfish、deepseek，不能包含空项、空白或重复项',
-    'Additional sources support exa, tavily, firecrawl, jina, zhipu, zhipu-mcp, anysearch, tinyfish and deepseek, without empty, whitespace, or duplicate entries',
+  emptySearchSources: ['至少选择一个搜索来源', 'Select at least one search source'],
+  modelSourceRequired: [
+    '模型专属参数要求搜索来源包含 model',
+    'Model options require model in the selected search sources',
   ],
+  setupSearchSources: ['配置统一搜索默认来源', 'Configure default search sources'],
+  setupKeepSearchSources: ['保持当前来源：{sources}', 'Keep current sources: {sources}'],
+  setupCustomSearchSources: ['自定义来源', 'Custom sources'],
+  setupSelectSearchSources: ['选择搜索来源', 'Select search sources'],
+  setupSearchSourcesRequired: ['至少选择一项', 'Select at least one option'],
+  searchSourcesLabel: ['统一搜索来源', 'Search sources'],
   streamConflict: [
     '--stream 与 --no-stream 不能并用',
     '--stream and --no-stream cannot be combined',
@@ -975,16 +981,12 @@ const messages = {
     'The response requires unsupported client tool execution or approval',
   ],
   modelIncomplete: ['模型响应未完成', 'The model response did not complete'],
-  modelFailed: ['模型搜索失败', 'Model search failed'],
-  modelPartial: [
-    '模型搜索已完成，部分补充来源失败',
-    'Model search completed, but some additional sources failed',
-  ],
+  searchFailed: ['搜索失败', 'Search failed'],
+  searchPartial: ['部分搜索来源失败', 'Some search sources failed'],
   modelLabel: ['模型', 'Model'],
   modelAnswerLabel: ['模型回答', 'Model answer'],
   modelSourcesLabel: ['模型提供的来源', 'Model-provided sources'],
   searchedSourcesLabel: ['检索过的来源', 'Searched sources'],
-  extraSourcesLabel: ['补充检索', 'Additional search'],
   modelFallbackLabel: ['模型回退', 'Model fallback'],
   upstreamTypeLabel: ['上游错误类型', 'Upstream error type'],
   upstreamParamLabel: ['上游参数', 'Upstream parameter'],
@@ -1293,12 +1295,12 @@ const messages = {
     'Remove a field or section from the configuration file',
   ],
   statusCommand: [
-    '根据本地配置判断各服务可用性，不联网验证',
-    'Check service availability from local configuration without network checks',
+    '显示统一搜索来源与各服务的本地配置状态，不联网验证',
+    'Show unified search sources and local service configuration status without network checks',
   ],
   statusSummary: [
-    '根据本地配置判断各服务可用性',
-    'Check service availability from local configuration',
+    '显示统一搜索来源与服务配置状态',
+    'Show unified search sources and service configuration status',
   ],
   configListAllOption: [
     '显示全部配置项，包含内置默认值',

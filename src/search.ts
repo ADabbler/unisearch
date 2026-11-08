@@ -17,13 +17,14 @@ import type { SearchData as TinyfishData } from './providers/tinyfish-response.j
 import type { SearchData as FirecrawlData } from './providers/firecrawl-response.js';
 import { prepareModel } from './providers/model-config.js';
 import type { ModelOptions, ModelRequest } from './providers/model-config.js';
-import { requestModel, searchInstructions } from './providers/model.js';
-import type { ModelAttempt } from './providers/model.js';
+import { searchModel } from './model-search.js';
 import type { ModelAnswer } from './providers/model-response.js';
 import { configuredSecrets, redactDiagnostics as redact } from './providers/transport.js';
 import { success } from './result.js';
 import type { JsonObject, JsonValue, Outcome, PublicError } from './result.js';
-import type { ModelCandidate } from './config/fields.js';
+import { assertValid, fieldAt, validate } from './config/fields.js';
+import type { Provider } from './config/fields.js';
+import { inspectConfig, resolveField } from './config/resolve.js';
 import {
   prepareTavilySearch,
   requestTavilySearch,
@@ -33,12 +34,16 @@ import type { TavilySearchRequest, TavilySearchData } from './providers/tavily.j
 import * as deepseek from './providers/deepseek.js';
 import type { SearchData as DeepseekData } from './providers/deepseek-response.js';
 
+export interface SearchOptions extends ModelOptions {
+  sources?: string;
+}
 export interface SearchPlan {
-  model: ModelRequest;
-  extraSources: ExtraPlan[];
+  sources: SourcePlan[];
+  timeout: number;
   secrets: string[];
 }
-type ExtraPlan =
+type SourcePlan =
+  | { provider: 'model'; request: ModelRequest }
   | { provider: 'zhipu'; request: zhipu.Request<'search'> }
   | { provider: 'tinyfish'; request: tinyfish.SearchRequest }
   | { provider: 'zhipu-mcp'; request: zhipuMcp.Request }
@@ -48,7 +53,7 @@ type ExtraPlan =
   | { provider: 'jina'; request: jina.SearchRequest }
   | { provider: 'tavily'; request: TavilySearchRequest }
   | { provider: 'deepseek'; request: deepseek.SearchRequest };
-type ExtraData =
+type SourceData =
   | SearchData
   | FirecrawlData
   | TavilySearchData
@@ -58,130 +63,103 @@ type ExtraData =
   | TinyfishData
   | DeepseekData
   | zhipuMcp.Data;
-type ExtraSource =
+type SearchSource =
+  | { provider: 'model'; data: ModelAnswer }
   | { provider: 'zhipu'; data: Omit<ZhipuData, 'provider'> }
   | { provider: 'tinyfish'; data: Omit<TinyfishData, 'provider'> }
   | { provider: 'zhipu-mcp'; data: Omit<zhipuMcp.ToolData, 'provider'> }
   | { provider: 'jina'; data: Omit<JinaData, 'provider'> }
-  | { provider: 'anysearch'; data: { results: anysearch.SearchData['results'] } }
-  | { provider: 'tavily'; data: { results: TavilySearchData['results'] } }
-  | { provider: 'exa'; data: { results: SearchData['results'] } }
-  | { provider: 'firecrawl'; data: { results: FirecrawlData['results']; warnings?: string[] } }
-  | { provider: 'deepseek'; data: { results: DeepseekData['results'] } };
+  | { provider: 'anysearch'; data: Omit<anysearch.SearchData, 'provider'> }
+  | { provider: 'tavily'; data: Pick<TavilySearchData, 'results'> }
+  | { provider: 'exa'; data: Pick<SearchData, 'results'> }
+  | { provider: 'firecrawl'; data: Pick<FirecrawlData, 'results' | 'warnings'> }
+  | { provider: 'deepseek'; data: Pick<DeepseekData, 'results'> };
 export type CombinedData = JsonObject & {
-  answer?: ModelAnswer;
-  extra_sources?: ExtraSource[];
+  sources: SearchSource[];
 };
-
-/** Share of the remaining budget a retry wait may consume. */
-const retryWaitShare = 0.5;
 
 export function prepareCombinedSearch(
   query: string,
-  options: ModelOptions,
+  options: SearchOptions,
   values: Record<string, unknown>,
   env: NodeJS.ProcessEnv,
   language: Language,
 ): SearchPlan {
-  const sources = options.extraSources === undefined ? [] : options.extraSources.split(',');
-  if (
-    sources.some(
-      (source) =>
-        ![
-          'exa',
-          'firecrawl',
-          'tavily',
-          'jina',
-          'anysearch',
-          'zhipu',
-          'zhipu-mcp',
-          'tinyfish',
-          'deepseek',
-        ].includes(source),
-    ) ||
-    new Set(sources).size !== sources.length
-  )
-    throw new AppError('INVALID_ARGUMENT', 'invalidExtraSources', { option: '--extra-sources' });
-  const model = prepareModel(query, options, values, env, language);
-  const extraSources: ExtraPlan[] = sources.map((provider) => {
-    if (provider === 'zhipu-mcp')
-      return {
-        provider,
-        request: zhipuMcp.prepare(
-          'search',
-          query,
-          { timeout: options.timeout },
-          values,
-          env,
-          language,
-        ),
-      };
-    if (provider === 'zhipu')
-      return {
-        provider,
-        request: zhipu.prepare(
-          'search',
-          query,
-          { timeout: options.timeout },
-          values,
-          env,
-          language,
-        ),
-      };
-    if (provider === 'tinyfish')
-      return {
-        provider,
-        request: tinyfish.prepareSearch(query, { timeout: options.timeout }, values, env, language),
-      };
-    if (provider === 'jina')
-      return {
-        provider,
-        request: jina.prepareSearch(query, { timeout: options.timeout }, values, env, language),
-      };
-    if (provider === 'anysearch')
-      return {
-        provider,
-        request: anysearch.prepare(
-          'search',
-          query,
-          { timeout: options.timeout },
-          values,
-          env,
-          language,
-        ),
-      };
-    if (provider === 'exa')
-      return {
-        provider,
-        request: prepareSearch(query, { timeout: options.timeout }, values, env, language),
-      };
-    if (provider === 'tavily')
-      return {
-        provider,
-        request: prepareTavilySearch(query, { timeout: options.timeout }, values, env, language),
-      };
-    if (provider === 'deepseek')
-      return {
-        provider,
-        request: deepseek.prepareSearch(query, { timeout: options.timeout }, values, env, language),
-      };
-    return {
-      provider: 'firecrawl',
-      request: firecrawl.prepareSearch(query, { timeout: options.timeout }, values, env, language),
-    };
+  if (!query.trim()) throw new AppError('INVALID_ARGUMENT', 'emptyQuery');
+  const field = fieldAt('search.providers');
+  let selected: Exclude<Provider, 'ctx7'>[];
+  if (options.sources !== undefined) {
+    selected = options.sources.split(',') as Exclude<Provider, 'ctx7'>[];
+    const invalid = validate(field, selected);
+    if (invalid) throw new AppError('INVALID_ARGUMENT', invalid.message, { option: '--sources' });
+  } else {
+    const inspected = inspectConfig(values, env, 'search');
+    assertValid(inspected.problems, language);
+    selected = inspected.resolved[0].value as Exclude<Provider, 'ctx7'>[];
+  }
+  if (!selected.includes('model')) {
+    for (const [key, option] of [
+      ['model', '--model'],
+      ['effort', '--effort'],
+      ['stream', '--stream/--no-stream'],
+      ['fallback', '--no-fallback'],
+    ] as const) {
+      if (options[key] !== undefined)
+        throw new AppError('INVALID_ARGUMENT', 'modelSourceRequired', { option });
+    }
+  }
+  const setting = resolveField(values, env, fieldAt('execution.timeout_seconds'));
+  if (options.timeout === undefined) assertValid(setting.problems, language);
+  const timeout = options.timeout ?? (setting.value as number);
+  const sources: SourcePlan[] = selected.map((provider) => {
+    switch (provider) {
+      case 'model':
+        return {
+          provider,
+          request: prepareModel(query, { ...options, timeout }, values, env, language),
+        };
+      case 'zhipu-mcp':
+        return {
+          provider,
+          request: zhipuMcp.prepare('search', query, { timeout }, values, env, language),
+        };
+      case 'zhipu':
+        return {
+          provider,
+          request: zhipu.prepare('search', query, { timeout }, values, env, language),
+        };
+      case 'tinyfish':
+        return {
+          provider,
+          request: tinyfish.prepareSearch(query, { timeout }, values, env, language),
+        };
+      case 'jina':
+        return { provider, request: jina.prepareSearch(query, { timeout }, values, env, language) };
+      case 'anysearch':
+        return {
+          provider,
+          request: anysearch.prepare('search', query, { timeout }, values, env, language),
+        };
+      case 'exa':
+        return { provider, request: prepareSearch(query, { timeout }, values, env, language) };
+      case 'tavily':
+        return {
+          provider,
+          request: prepareTavilySearch(query, { timeout }, values, env, language),
+        };
+      case 'deepseek':
+        return {
+          provider,
+          request: deepseek.prepareSearch(query, { timeout }, values, env, language),
+        };
+      case 'firecrawl':
+        return {
+          provider,
+          request: firecrawl.prepareSearch(query, { timeout }, values, env, language),
+        };
+    }
   });
-  return { model, extraSources, secrets: configuredSecrets(values, env) };
-}
-
-export function modelLabel(candidate: ModelCandidate): string {
-  return `${candidate.id}${candidate.effort ? `(${candidate.effort})` : ''}`;
-}
-/** The latest attempt decides the verdict; an attempt with none keeps the earlier one. */
-function latestFallback(
-  current: ModelAttempt['fallback'],
-  next: ModelAttempt['fallback'],
-): ModelAttempt['fallback'] {
-  return next ?? current;
+  return { sources, timeout, secrets: configuredSecrets(values, env) };
 }
 
 export async function combinedSearch(
@@ -193,14 +171,12 @@ export async function combinedSearch(
 ): Promise<Outcome<CombinedData>> {
   const time = options.clock ?? clock;
   const started = time.now();
-  const deadline = started + plan.model.timeout * 1000;
-  const instructions = `${searchInstructions}\n\nCurrent UTC time: ${new Date(time.wallNow()).toISOString()}`;
+  const deadline = started + plan.timeout * 1000;
   const controller = new AbortController();
   const cancel = () => controller.abort(new AppError('CANCELLED', 'cancelled'));
   if (signal.aborted) cancel();
   else signal.addEventListener('abort', cancel, { once: true });
   const attempts: JsonObject[] = [];
-  const fallbacks: JsonObject[] = [];
   let internal: Outcome | undefined;
   const stopInternal = <T extends JsonValue>(outcome: Outcome<T>): Outcome<T> => {
     if (outcome.exitCode === 5 && !internal) {
@@ -211,109 +187,16 @@ export async function combinedSearch(
   };
   const common = {
     deadline,
-    timeout: plan.model.timeout,
+    timeout: plan.timeout,
     signal: controller.signal,
     language,
     clock: time,
   };
-  async function modelTask(): Promise<Outcome<ModelAnswer>> {
-    if (controller.signal.aborted) return failure(controller.signal.reason, language);
-    const blockedIds = new Set<string>();
-    let previous: { candidate: ModelCandidate; error: PublicError; last?: JsonObject } | undefined;
-    let outcome: Outcome<ModelAnswer> = failure(
-      new AppError('INTERNAL_ERROR', 'internal'),
-      language,
-    );
-    // A model-level verdict blocks the rest of the ID, a candidate-level one does not.
-    const attemptable = (index: number, verdict: 'candidate' | 'model'): boolean =>
-      plan.model.candidates
-        .slice(index + 1)
-        .some(
-          (other) =>
-            !blockedIds.has(other.id) &&
-            (verdict === 'candidate' || other.id !== plan.model.candidates[index].id),
-        );
-    for (const [index, candidate] of plan.model.candidates.entries()) {
-      if (blockedIds.has(candidate.id)) continue;
-      if (controller.signal.aborted || time.now() >= deadline) break;
-      let attempted = false;
-      let policy: ModelAttempt['fallback'];
-      const localRecord: JsonObject = {};
-      outcome = await executeRequest(
-        async (context) => {
-          const result = await requestModel(
-            plan.model,
-            candidate,
-            instructions,
-            context,
-            language,
-            options.transport,
-          );
-          policy = latestFallback(policy, result.fallback);
-          if (result.outcome.result.error) {
-            result.outcome.result.error.details = {
-              ...result.outcome.result.error.details,
-              provider: 'model',
-              model: candidate.id,
-              ...(context.httpStatus === undefined ? {} : { http_status: context.httpStatus }),
-              ...(context.requestId ? { request_id: context.requestId } : {}),
-            };
-          }
-          return result;
-        },
-        {
-          ...common,
-          provider: 'model',
-          retries: plan.model.retries,
-          requestLimit: Infinity,
-          declineRetryWait: (wait, budget) =>
-            policy !== undefined && attemptable(index, policy) && wait >= budget * retryWaitShare,
-          record: localRecord,
-          onAttempt: (entry) => {
-            if (previous && !attempted) {
-              fallbacks.push({
-                from: modelLabel(previous.candidate),
-                to: modelLabel(candidate),
-                code: previous.error.code,
-                message: previous.error.message,
-              });
-              if (previous.last && previous.error.details?.request_id)
-                previous.last.request_id = previous.error.details.request_id;
-            }
-            attempted = true;
-            Object.assign(entry, {
-              provider: 'model',
-              model: candidate.id,
-              ...(candidate.effort ? { effort: candidate.effort } : {}),
-            });
-            attempts.push(entry);
-          },
-        },
-      );
-      stopInternal(outcome);
-      const error = outcome.result.error;
-      if (
-        !error ||
-        !policy ||
-        controller.signal.aborted ||
-        time.now() >= deadline ||
-        error.details?.timeout_scope === 'total'
-      )
-        return outcome;
-      if (policy === 'model') blockedIds.add(candidate.id);
-      previous = { candidate, error, last: (localRecord.attempts as JsonObject[]).at(-1) };
-    }
-    if (controller.signal.aborted) return failure(controller.signal.reason, language, outcome);
-    if (time.now() >= deadline)
-      return failure(
-        new AppError('TIMEOUT', 'totalTimeout', { provider: 'model', timeout_scope: 'total' }),
-        language,
-      );
-    return outcome;
-  }
-  async function extraTask(source: ExtraPlan): Promise<Outcome<ExtraData>> {
+  async function sourceTask(
+    source: Exclude<SourcePlan, { provider: 'model' }>,
+  ): Promise<Outcome<SourceData>> {
     return stopInternal(
-      await executeRequest<ExtraData>(
+      await executeRequest<SourceData>(
         (context) => {
           switch (source.provider) {
             case 'zhipu':
@@ -360,80 +243,63 @@ export async function combinedSearch(
       ),
     );
   }
-  async function guarded<T extends JsonValue>(
-    task: () => Promise<Outcome<T>>,
-  ): Promise<Outcome<T>> {
+
+  async function run(source: SourcePlan): Promise<Outcome<ModelAnswer | SourceData>> {
     try {
-      return await task();
+      if (source.provider === 'model')
+        return stopInternal(
+          await searchModel(source.request, {
+            ...common,
+            transport: options.transport,
+            onAttempt: (entry) => attempts.push(entry),
+          }),
+        );
+      return await sourceTask(source);
     } catch (error) {
-      return stopInternal(failure<T>(error, language));
+      return stopInternal(failure(error, language));
     }
   }
   try {
-    const [model, extras] = await Promise.all([
-      guarded(modelTask),
-      Promise.all(plan.extraSources.map((source) => guarded(() => extraTask(source)))),
-    ]);
-    const data: CombinedData = {};
-    if (model.result.data !== undefined) {
-      const { searchedSources, ...answer } = model.result.data;
-      data.answer = answer;
-      if (searchedSources?.length) record.searched_sources = redact(searchedSources, plan.secrets);
-    }
-    for (const extra of extras) {
-      const content = extra.result.data;
+    const outcomes = await Promise.all(plan.sources.map(run));
+    const data: CombinedData = { sources: [] };
+    for (const [index, outcome] of outcomes.entries()) {
+      const content = outcome.result.data;
       if (content === undefined) continue;
-      let source: ExtraSource;
-      if (content.provider === 'zhipu-mcp') {
-        const { provider, ...data } = content;
-        source = { provider, data };
-      } else if (content.provider === 'tinyfish') {
-        const { provider, ...data } = content;
-        source = { provider, data };
-      } else if (content.provider === 'anysearch') {
-        source = { provider: 'anysearch', data: { results: content.results } };
-      } else if (content.provider === 'exa') {
-        source = { provider: 'exa', data: { results: content.results } };
-      } else if (content.provider === 'zhipu') {
-        const { provider, ...data } = content;
-        source = { provider, data };
-      } else if (content.provider === 'jina') {
-        const { provider, ...data } = content;
-        source = { provider, data };
-      } else if (content.provider === 'tavily') {
-        source = { provider: 'tavily', data: { results: content.results } };
-      } else if (content.provider === 'deepseek') {
-        source = { provider: 'deepseek', data: { results: content.results } };
+      let source: SearchSource;
+      if (plan.sources[index].provider === 'model') {
+        const { searchedSources, ...answer } = content as ModelAnswer;
+        source = { provider: 'model', data: answer };
+        if (searchedSources?.length)
+          record.searched_sources = redact(searchedSources, plan.secrets);
       } else {
-        const sanitize = (message: string) => redact(message, plan.secrets) as string;
-        const sanitizeWarnings = (warnings: string[]) => [...new Set(warnings.map(sanitize))];
-        const results = content.results.map((item) => {
-          const result = { ...item };
-          if (item.warnings) result.warnings = sanitizeWarnings(item.warnings);
-          if (item.content_error?.message)
-            result.content_error = {
-              ...item.content_error,
-              message: sanitize(item.content_error.message),
-            };
-          return result;
-        });
-        source = {
-          provider: 'firecrawl',
-          data: {
-            results,
-            ...(content.warnings ? { warnings: sanitizeWarnings(content.warnings) } : {}),
-          },
-        };
+        const { provider, ...sourceData } = content as SourceData;
+        if (provider === 'firecrawl') {
+          const firecrawlData = sourceData as Pick<FirecrawlData, 'results' | 'warnings'>;
+          const sanitize = (message: string) => redact(message, plan.secrets) as string;
+          const warnings = (items: string[]) => [...new Set(items.map(sanitize))];
+          source = {
+            provider,
+            data: {
+              ...firecrawlData,
+              results: firecrawlData.results.map((item) => {
+                const result = { ...item };
+                if (item.warnings) result.warnings = warnings(item.warnings);
+                if (item.content_error?.message)
+                  result.content_error = {
+                    ...item.content_error,
+                    message: sanitize(item.content_error.message),
+                  };
+                return result;
+              }),
+              ...(firecrawlData.warnings ? { warnings: warnings(firecrawlData.warnings) } : {}),
+            },
+          };
+        } else source = { provider, data: sourceData } as SearchSource;
       }
-      (data.extra_sources ??= []).push(source);
+      data.sources.push(source);
     }
-    const failures = (
-      [
-        ['model', model],
-        ...extras.map((outcome, index) => [plan.extraSources[index].provider, outcome] as const),
-      ] as const
-    ).flatMap(([provider, outcome]) => {
-      const error = outcome?.result.error;
+    const failures = outcomes.flatMap((outcome, index) => {
+      const error = outcome.result.error;
       if (
         !error ||
         error.code === 'CANCELLED' ||
@@ -444,7 +310,7 @@ export async function combinedSearch(
       delete details.provider;
       return [
         {
-          provider,
+          provider: plan.sources[index].provider,
           code: error.code,
           message: error.message,
           ...(Object.keys(details).length ? { details } : {}),
@@ -452,7 +318,7 @@ export async function combinedSearch(
       ];
     });
     let outcome: Outcome<CombinedData>;
-    const content = Object.keys(data).length ? { data } : {};
+    const content = data.sources.length ? { data } : {};
     if (signal.aborted || internal) {
       outcome = failure(
         new AppError(
@@ -463,18 +329,21 @@ export async function combinedSearch(
         language,
       );
       Object.assign(outcome.result, content);
-    } else if (model.result.error) {
+    } else if (outcomes.every((item) => item.result.status === 'error')) {
+      const first = outcomes[0];
       outcome = {
         result: {
           status: 'error',
           ...content,
           error: {
-            code: model.result.error.code,
-            message: text(language, 'modelFailed'),
+            code: outcomes.length === 1 ? first.result.error!.code : 'ALL_PROVIDERS_FAILED',
+            message: text(language, 'searchFailed'),
             details: { failures },
           },
         },
-        exitCode: model.exitCode as 2 | 3 | 4 | 5 | 130,
+        exitCode: (outcomes.every((item) => item.exitCode === first.exitCode)
+          ? first.exitCode
+          : 4) as 2 | 3 | 4 | 5 | 130,
       };
     } else if (failures.length) {
       outcome = {
@@ -483,15 +352,16 @@ export async function combinedSearch(
           data,
           error: {
             code: 'PARTIAL_FAILURE',
-            message: text(language, 'modelPartial'),
+            message: text(language, 'searchPartial'),
             details: { failures },
           },
         },
         exitCode: 6,
       };
     } else outcome = success(data);
-    if (fallbacks.length)
-      outcome.result.meta = { model_fallbacks: redact(fallbacks, plan.secrets) };
+    const modelMeta = outcomes.find((_, index) => plan.sources[index].provider === 'model')?.result
+      .meta;
+    if (modelMeta) outcome.result.meta = redact(modelMeta, plan.secrets) as JsonObject;
     if (outcome.result.error)
       outcome.result.error = redact(outcome.result.error, plan.secrets) as PublicError;
     record.elapsed_ms = Math.max(0, Math.round(time.now() - started));

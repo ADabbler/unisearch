@@ -231,7 +231,7 @@ Setup steps and prerequisites.
         },
       },
     },
-    markdown: ``,
+    markdown: '',
     stderr: `错误：智谱 MCP 工具调用失败
 操作：tools/call
 服务：zhipu-mcp
@@ -253,14 +253,19 @@ Setup steps and prerequisites.
     result: {
       status: 'partial',
       data: {
-        answer: {
-          model: 'example-model',
-          text: 'Install the package with npm.',
-        },
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'example-model',
+              text: 'Install the package with npm.',
+            },
+          },
+        ],
       },
       error: {
         code: 'PARTIAL_FAILURE',
-        message: '模型搜索已完成，部分补充来源失败',
+        message: '部分搜索来源失败',
         details: {
           failures: [
             {
@@ -276,7 +281,7 @@ Setup steps and prerequisites.
         },
       },
     },
-    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分搜索来源失败
 > - zhipu-mcp：[AUTHENTICATION_ERROR] 智谱 MCP 拒绝了当前凭证。
 >   - 操作：initialize
 >   - HTTP 状态：401

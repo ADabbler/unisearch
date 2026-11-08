@@ -8,6 +8,7 @@ import stringWidth from 'fast-string-width';
 import * as clack from '@clack/prompts';
 import { terminalPrompts } from '../src/cli/prompts.js';
 import { AppError } from '../src/errors.js';
+import { text } from '../src/i18n/messages.js';
 
 const term = process.env.TERM;
 before(() => {
@@ -100,6 +101,31 @@ test('Terminal choices end the guide on the last option and show each keyboard h
   f.input.write('\r');
   assert.deepEqual(await targets, []);
   assert.match(f.take(), /未选择/);
+});
+
+test('Required source selection keeps the prompt open on empty Enter and accepts a selection', async (t) => {
+  for (const language of ['zh', 'en'] as const) {
+    const f = terminal(t, 28, 10);
+    const result = f.prompts.multi(
+      text(language, 'setupSelectSearchSources'),
+      choices,
+      [],
+      language,
+      (selected) => (selected?.length ? undefined : text(language, 'setupSearchSourcesRequired')),
+    );
+    f.take();
+    f.input.write('\r');
+    await setImmediate();
+    const error = f
+      .take()
+      .replace(/^[│└] {2}/gm, '')
+      .replace(/\s/g, '');
+    const message = text(language, 'setupSearchSourcesRequired').replace(/\s/g, '');
+    assert.ok(error.includes(language === 'zh' ? `（${message}）` : `(${message})`));
+    assert.ok(error.lastIndexOf(message) < error.lastIndexOf('Alpha'));
+    f.input.write(' \r');
+    assert.deepEqual(await result, ['a']);
+  }
 });
 
 test('Narrow prompts wrap text and keep the guide on every line', { timeout: 5000 }, async (t) => {

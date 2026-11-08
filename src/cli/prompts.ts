@@ -27,6 +27,7 @@ export interface Prompts {
     choices: Choice[],
     initial: string[],
     language: Language,
+    validate?: (selected: string[] | undefined) => string | undefined,
   ): Promise<string[]>;
   input(
     message: string,
@@ -172,7 +173,7 @@ export function terminalPrompts(
         }).prompt(),
       );
     },
-    multi: (message, choices, initial, language) => {
+    multi: (message, choices, initial, language, validate) => {
       const heading = hint(message, language, true);
       return ask<string[]>((signal) =>
         new MultiSelectPrompt({
@@ -180,10 +181,15 @@ export function terminalPrompts(
           signal,
           options: choices,
           initialValues: initial,
-          required: false,
+          validate,
           render() {
             const finished = this.state === 'submit' || this.state === 'cancel';
             const selected = this.value ?? [];
+            let title = heading;
+            if (this.state === 'error') {
+              const warning = language === 'zh' ? `（${this.error}）` : ` (${this.error})`;
+              title += styleText('yellow', warning);
+            }
             let lines: string[];
             if (finished) {
               const summary =
@@ -199,10 +205,10 @@ export function terminalPrompts(
                 selected,
                 true,
                 common.output,
-                wrappedLines(heading, common.output).length + 2,
+                wrappedLines(title, common.output).length + 2,
               );
             }
-            return promptFrame(heading, this.state, lines, common.output);
+            return promptFrame(title, this.state, lines, common.output);
           },
         }).prompt(),
       );

@@ -1,5 +1,12 @@
 import { isDeepStrictEqual } from 'node:util';
-import { fieldAt, providers, redact, valueAt } from './config/fields.js';
+import {
+  assertValid,
+  fieldAt,
+  providers,
+  searchProviders,
+  redact,
+  valueAt,
+} from './config/fields.js';
 import type { Field, Provider } from './config/fields.js';
 import { prepareMutation, checkCancellation } from './config/manage.js';
 import type { Mutation } from './config/manage.js';
@@ -8,7 +15,7 @@ import type { ConfigContext } from './config/path.js';
 import { resolveField } from './config/resolve.js';
 import { saveConfig } from './config/write.js';
 import { AppError, failure } from './errors.js';
-import { colon } from './i18n/messages.js';
+import { colon, text } from './i18n/messages.js';
 import type { Language } from './i18n/messages.js';
 import { providerName, operationName } from './i18n/providers.js';
 import type { Choice, Prompts } from './cli/prompts.js';
@@ -366,6 +373,37 @@ export async function promptSetup(
           if (!isDeepStrictEqual(current, value)) draft.set(key, JSON.stringify(value));
         }
       }
+    }
+    const currentSources = draft.current('search.providers');
+    assertValid(currentSources.problems, draft.language);
+    const currentProviders = currentSources.value as Provider[];
+    const mode = await prompts.select(
+      text(draft.language, 'setupSearchSources'),
+      [
+        {
+          value: 'keep',
+          label: text(draft.language, 'setupKeepSearchSources').replace('{sources}', () =>
+            currentProviders.map((provider) => serviceName(provider, draft.language)).join(', '),
+          ),
+        },
+        { value: 'custom', label: text(draft.language, 'setupCustomSearchSources') },
+      ],
+      'keep',
+      draft.language,
+    );
+    if (mode === 'custom') {
+      const sources = await prompts.multi(
+        text(draft.language, 'setupSelectSearchSources'),
+        searchProviders.map((provider) => ({
+          value: provider,
+          label: serviceName(provider, draft.language),
+        })),
+        currentSources.source === 'default' ? [] : currentProviders,
+        draft.language,
+        (selected) =>
+          selected?.length ? undefined : text(draft.language, 'setupSearchSourcesRequired'),
+      );
+      draft.set('search.providers', JSON.stringify(sources));
     }
     draft.skills = await selectSkillTargets(prompts, draft.language, draft.skills);
     await preview(draft);

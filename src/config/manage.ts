@@ -152,7 +152,11 @@ export function checkCancellation(signal?: AbortSignal): void {
 
 export function configText(values: Record<string, unknown>): string {
   const ordered: Record<string, unknown> = {};
-  for (const key of ['providers', ...Object.keys(values).filter((key) => key !== 'providers')]) {
+  const sectionOrder = ['providers', 'search', 'fetch', 'map', 'execution', 'language'];
+  for (const key of [
+    ...sectionOrder,
+    ...Object.keys(values).filter((key) => !sectionOrder.includes(key)),
+  ]) {
     if (!Object.hasOwn(values, key)) continue;
     let value = values[key];
     if (key === 'providers' && isObject(value)) {

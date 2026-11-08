@@ -159,11 +159,14 @@ Page B.`,
     result: {
       status: 'partial',
       data: {
-        answer: {
-          model: 'fixture-model',
-          text: 'See the command reference.',
-        },
-        extra_sources: [
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'fixture-model',
+              text: 'See the command reference.',
+            },
+          },
           {
             provider: 'exa',
             data: {
@@ -187,7 +190,7 @@ Page B.`,
       },
       error: {
         code: 'PARTIAL_FAILURE',
-        message: '模型搜索已完成，部分补充来源失败',
+        message: '部分搜索来源失败',
         details: {
           failures: [
             {
@@ -202,7 +205,7 @@ Page B.`,
         },
       },
     },
-    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分搜索来源失败
 > - tavily：[AUTHENTICATION_ERROR] Tavily 认证失败
 >   - HTTP 状态：401
 
@@ -212,17 +215,15 @@ Page B.`,
 
 See the command reference.
 
-## 补充检索
-
-### Exa
+## Exa
 
 未找到结果
 
-### Firecrawl
+## Firecrawl
 
 上游提示：Some sources were unavailable.
 
-#### 1. [Guide](https://example.org/docs)
+### 1. [Guide](https://example.org/docs)
 
 Command reference.`,
   },
@@ -289,7 +290,7 @@ Command reference.`,
         },
       },
     },
-    markdown: ``,
+    markdown: '',
     stderr: `错误：网页读取失败
 
 tavily：Tavily 认证失败

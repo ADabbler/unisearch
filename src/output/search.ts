@@ -15,70 +15,67 @@ import { renderSearch as renderDeepseek } from './deepseek.js';
 export function renderCombinedSearch(data: CombinedData, language: Language): string {
   const sections: string[] = [];
   const separator = colon(language);
-  if (data.answer) {
-    if (data.extra_sources) sections.push(`## ${text(language, 'modelAnswerLabel')}`);
-    sections.push(
-      `${text(language, 'modelLabel')}${separator}${inline(data.answer.model)}`,
-      data.answer.text,
-    );
-    if (data.answer.sources) {
-      const sources = data.answer.sources.map((source) =>
-        source.title
-          ? `- [${inline(source.title)}](${linkTarget(source.url)})`
-          : `- <${linkTarget(source.url)}>`,
+  for (const source of data.sources) {
+    if (source.provider === 'model') {
+      const answer = source.data;
+      if (data.sources.length > 1) sections.push(`## ${text(language, 'modelAnswerLabel')}`);
+      sections.push(
+        `${text(language, 'modelLabel')}${separator}${inline(answer.model)}`,
+        answer.text,
       );
-      sections.push(`### ${text(language, 'modelSourcesLabel')}\n\n${sources.join('\n')}`);
-    }
-  }
-  if (data.extra_sources) {
-    sections.push(`## ${text(language, 'extraSourcesLabel')}`);
-    for (const source of data.extra_sources) {
-      if (source.provider === 'zhipu')
-        sections.push(
-          `### ${text(language, 'zhipuLabel')}`,
-          renderZhipu({ provider: 'zhipu', ...source.data }, language, 4, false),
+      if (answer.citations) {
+        const citations = answer.citations.map((source) =>
+          source.title
+            ? `- [${inline(source.title)}](${linkTarget(source.url)})`
+            : `- <${linkTarget(source.url)}>`,
         );
-      else if (source.provider === 'tinyfish')
-        sections.push(
-          '### TinyFish',
-          renderTinyfish({ provider: 'tinyfish', ...source.data }, language, 4, false),
-        );
-      else if (source.provider === 'zhipu-mcp')
-        sections.push(
-          '### Zhipu MCP',
-          renderMcp({ provider: 'zhipu-mcp', ...source.data }, language, 'search', false),
-        );
-      else if (source.provider === 'anysearch')
-        sections.push(
-          '### AnySearch',
-          renderAnySearch({ provider: 'anysearch', ...source.data }, language, 4, false),
-        );
-      else if (source.provider === 'exa')
-        sections.push(
-          '### Exa',
-          renderSearch({ provider: 'exa', ...source.data }, language, 4, false),
-        );
-      else if (source.provider === 'tavily')
-        sections.push(
-          '### Tavily',
-          renderTavilySearch({ provider: 'tavily', ...source.data }, language, 4, false),
-        );
-      else if (source.provider === 'jina')
-        sections.push(
-          '### Jina',
-          renderJina({ provider: 'jina', ...source.data }, language, 4, false),
-        );
-      else if (source.provider === 'deepseek')
-        sections.push(
-          '### DeepSeek',
-          renderDeepseek({ provider: 'deepseek', ...source.data }, language, 4, false),
-        );
-      else
-        sections.push(
-          '### Firecrawl',
-          renderFirecrawlSearch({ provider: 'firecrawl', ...source.data }, language, 4, false),
-        );
-    }
+        sections.push(`### ${text(language, 'modelSourcesLabel')}\n\n${citations.join('\n')}`);
+      }
+    } else if (source.provider === 'zhipu')
+      sections.push(
+        `## ${text(language, 'zhipuLabel')}`,
+        renderZhipu({ provider: 'zhipu', ...source.data }, language, 3, false),
+      );
+    else if (source.provider === 'tinyfish')
+      sections.push(
+        '## TinyFish',
+        renderTinyfish({ provider: 'tinyfish', ...source.data }, language, 3, false),
+      );
+    else if (source.provider === 'zhipu-mcp')
+      sections.push(
+        '## Zhipu MCP',
+        renderMcp({ provider: 'zhipu-mcp', ...source.data }, language, 'search', false),
+      );
+    else if (source.provider === 'anysearch')
+      sections.push(
+        '## AnySearch',
+        renderAnySearch({ provider: 'anysearch', ...source.data }, language, 3, false),
+      );
+    else if (source.provider === 'exa')
+      sections.push(
+        '## Exa',
+        renderSearch({ provider: 'exa', ...source.data }, language, 3, false),
+      );
+    else if (source.provider === 'tavily')
+      sections.push(
+        '## Tavily',
+        renderTavilySearch({ provider: 'tavily', ...source.data }, language, 3, false),
+      );
+    else if (source.provider === 'jina')
+      sections.push(
+        '## Jina',
+        renderJina({ provider: 'jina', ...source.data }, language, 3, false),
+      );
+    else if (source.provider === 'deepseek')
+      sections.push(
+        '## DeepSeek',
+        renderDeepseek({ provider: 'deepseek', ...source.data }, language, 3, false),
+      );
+    else
+      sections.push(
+        '## Firecrawl',
+        renderFirecrawlSearch({ provider: 'firecrawl', ...source.data }, language, 3, false),
+      );
   }
   return sections.join('\n\n');
 }

@@ -7,10 +7,15 @@ export const cases: ContractCase[] = [
     result: {
       status: 'success',
       data: {
-        answer: {
-          model: 'search-primary',
-          text: '当前端点未提供实时搜索能力。',
-        },
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'search-primary',
+              text: '当前端点未提供实时搜索能力。',
+            },
+          },
+        ],
       },
     },
     markdown: `模型：search-primary
@@ -23,17 +28,20 @@ export const cases: ContractCase[] = [
     result: {
       status: 'success',
       data: {
-        answer: {
-          model: 'grok-4.7',
-          text: '示例文档介绍了命令用法。[文档](https://example.org/docs)',
-          sources: [
-            {
-              url: 'https://example.org/docs',
-              title: '示例文档',
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'grok-4.7',
+              text: '示例文档介绍了命令用法。[文档](https://example.org/docs)',
+              citations: [
+                {
+                  url: 'https://example.org/docs',
+                  title: '示例文档',
+                },
+              ],
             },
-          ],
-        },
-        extra_sources: [
+          },
           {
             provider: 'exa',
             data: {
@@ -58,9 +66,7 @@ export const cases: ContractCase[] = [
 
 - [示例文档](https://example.org/docs)
 
-## 补充检索
-
-### Exa
+## Exa
 
 1. [示例文档](https://example.org/docs)`,
   },
@@ -70,18 +76,23 @@ export const cases: ContractCase[] = [
     result: {
       status: 'success',
       data: {
-        answer: {
-          model: 'grok-4.7',
-          text: '正文引用了两个来源。',
-          sources: [
-            {
-              url: 'https://example.org/bare',
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'grok-4.7',
+              text: '正文引用了两个来源。',
+              citations: [
+                {
+                  url: 'https://example.org/bare',
+                },
+                {
+                  url: 'https://example.org/wiki/X_(y)',
+                },
+              ],
             },
-            {
-              url: 'https://example.org/wiki/X_(y)',
-            },
-          ],
-        },
+          },
+        ],
       },
     },
     markdown: `模型：grok-4.7
@@ -99,14 +110,19 @@ export const cases: ContractCase[] = [
     result: {
       status: 'partial',
       data: {
-        answer: {
-          model: 'grok-4.7',
-          text: '模型已完成回答。',
-        },
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'grok-4.7',
+              text: '模型已完成回答。',
+            },
+          },
+        ],
       },
       error: {
         code: 'PARTIAL_FAILURE',
-        message: '模型搜索已完成，部分补充来源失败',
+        message: '部分搜索来源失败',
         details: {
           failures: [
             {
@@ -121,7 +137,7 @@ export const cases: ContractCase[] = [
         },
       },
     },
-    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分搜索来源失败
 > - exa：[TIMEOUT] 本次调用的总执行时间已用尽
 >   - 超时范围：total
 
@@ -133,9 +149,9 @@ export const cases: ContractCase[] = [
     name: 'model failure with successful empty Exa results',
     renderer: 'search',
     result: {
-      status: 'error',
+      status: 'partial',
       data: {
-        extra_sources: [
+        sources: [
           {
             provider: 'exa',
             data: {
@@ -145,8 +161,8 @@ export const cases: ContractCase[] = [
         ],
       },
       error: {
-        code: 'AUTHENTICATION_ERROR',
-        message: '模型搜索失败',
+        code: 'PARTIAL_FAILURE',
+        message: '部分搜索来源失败',
         details: {
           failures: [
             {
@@ -162,14 +178,12 @@ export const cases: ContractCase[] = [
         },
       },
     },
-    markdown: `> 错误：[AUTHENTICATION_ERROR] 模型搜索失败
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分搜索来源失败
 > - model：[AUTHENTICATION_ERROR] 模型服务拒绝了本次凭证
 >   - 模型：grok-4.7
 >   - HTTP 状态：401
 
-## 补充检索
-
-### Exa
+## Exa
 
 未找到结果`,
   },
@@ -179,8 +193,8 @@ export const cases: ContractCase[] = [
     result: {
       status: 'error',
       error: {
-        code: 'INVALID_RESPONSE',
-        message: '模型搜索失败',
+        code: 'ALL_PROVIDERS_FAILED',
+        message: '搜索失败',
         details: {
           failures: [
             {
@@ -204,8 +218,8 @@ export const cases: ContractCase[] = [
         },
       },
     },
-    markdown: ``,
-    stderr: `错误：模型搜索失败
+    markdown: '',
+    stderr: `错误：搜索失败
 
 model：模型响应没有完整正文
   模型：grok-4.7
@@ -219,11 +233,14 @@ exa：Exa 拒绝了本次凭证
     result: {
       status: 'success',
       data: {
-        answer: {
-          model: 'search-backup',
-          text: '备用模型已完成回答。',
-        },
-        extra_sources: [
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'search-backup',
+              text: '备用模型已完成回答。',
+            },
+          },
           {
             provider: 'exa',
             data: {
@@ -272,9 +289,7 @@ exa：Exa 拒绝了本次凭证
 
 备用模型已完成回答。
 
-## 补充检索
-
-### Exa
+## Exa
 
 未找到结果`,
   },
@@ -284,10 +299,15 @@ exa：Exa 拒绝了本次凭证
     result: {
       status: 'success',
       data: {
-        answer: {
-          model: 'grok-4.7',
-          text: '本次候选已完成回答。',
-        },
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'grok-4.7',
+              text: '本次候选已完成回答。',
+            },
+          },
+        ],
       },
       meta: {
         model_fallbacks: [
@@ -312,7 +332,7 @@ exa：Exa 拒绝了本次凭证
     result: {
       status: 'error',
       data: {
-        extra_sources: [
+        sources: [
           {
             provider: 'exa',
             data: {
@@ -328,9 +348,7 @@ exa：Exa 拒绝了本次凭证
     },
     markdown: `> 错误：[CANCELLED] 操作已取消
 
-## 补充检索
-
-### Exa
+## Exa
 
 未找到结果`,
   },

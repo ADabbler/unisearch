@@ -32,7 +32,11 @@ export type ServiceStatus = JsonObject & {
   issues?: StatusIssue[];
   operations?: OperationStatus[];
 };
-export type StatusData = JsonObject & { services: ServiceStatus[]; issues?: StatusIssue[] };
+export type StatusData = JsonObject & {
+  search?: { providers: string[] };
+  services: ServiceStatus[];
+  issues?: StatusIssue[];
+};
 
 function requiredSettings(
   values: Record<string, unknown>,
@@ -93,7 +97,8 @@ export function localStatus(
   language: Language,
   definitions: readonly OperationDefinition[] = [],
 ): StatusData {
-  const { problems } = inspectConfig(values, env);
+  const { resolved, problems } = inspectConfig(values, env);
+  const search = resolved.find((setting) => setting.field.path === 'search.providers')!;
   const used = new Set<Problem>();
   const services: ServiceStatus[] = [];
   const operationProviders = new Set(definitions.map((definition) => definition.provider));
@@ -175,5 +180,9 @@ export function localStatus(
   const remaining = problems
     .filter((problem) => !used.has(problem))
     .map((problem) => issue(problem, language) as StatusIssue);
-  return { services, ...(remaining.length ? { issues: remaining } : {}) };
+  return {
+    ...(search.value === undefined ? {} : { search: { providers: search.value as string[] } }),
+    services,
+    ...(remaining.length ? { issues: remaining } : {}),
+  };
 }

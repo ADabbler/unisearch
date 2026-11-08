@@ -71,12 +71,15 @@ test('TinyFish useful failed search data survives root combination without dupli
       ),
     ),
   );
-  const r = await f.run(['search', 'q', '--extra-sources', 'tinyfish', '--format=json']);
+  const r = await f.run(['search', 'q', '--sources', 'model,tinyfish', '--format=json']);
   assert.equal(r.exit, 6);
   const data = r.json();
-  assert.equal(data.data.extra_sources[0].provider, 'tinyfish');
-  assert.equal(data.data.extra_sources[0].data.results.length, 2);
-  assert.equal(data.data.extra_sources[0].data.provider, undefined);
+  const source = data.data.sources.find(
+    (source: { provider: string }) => source.provider !== 'model',
+  );
+  assert.equal(source.provider, 'tinyfish');
+  assert.equal(source.data.results.length, 2);
+  assert.equal(source.data.provider, undefined);
   assert.equal(data.error.details.failures[0].provider, 'tinyfish');
   assert.equal(data.error.details.failures[0].details.provider, undefined);
   assert.equal(data.error.details.failures[0].details.http_status, undefined);

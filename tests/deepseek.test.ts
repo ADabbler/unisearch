@@ -227,9 +227,9 @@ test('DeepSeek appears in the extra-source list and its rejection message', asyn
     assert.equal(help.exit, 0);
     assert.match(help.channels.out, /deepseek/);
   }
-  const invalid = await f.run(['search', 'q', '--extra-sources', 'unknown', '--format', 'json']);
+  const invalid = await f.run(['search', 'q', '--sources', 'model,unknown', '--format', 'json']);
   assert.equal(invalid.exit, 2);
-  assert.match(invalid.json().error.message, /deepseek/);
+  assert.equal(invalid.json().error.code, 'INVALID_ARGUMENT');
 });
 
 test('DeepSeek 404 stays switchable because it only means no usable content', async (t) => {

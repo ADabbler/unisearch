@@ -27,7 +27,7 @@ Ensure `unisearch` is available on the PATH of the process running your agent.
 
 ## Configure
 
-Setup runs in an interactive terminal. Choose the connections you need, enter their settings, and optionally install the Skill for your agents. Review the changes before saving.
+Run the interactive wizard to configure service connections and optionally install the Skill for your agents:
 
 ```sh
 unisearch setup

@@ -226,7 +226,7 @@ Run the command.`,
         },
       },
     },
-    markdown: ``,
+    markdown: '',
     stderr: `错误：AnySearch 额度已用尽；响应可能包含敏感凭证，详情未保留
 服务：anysearch
 HTTP 状态：402
@@ -238,11 +238,14 @@ HTTP 状态：402
     result: {
       status: 'partial',
       data: {
-        answer: {
-          model: 'fixture-model',
-          text: 'See the release notes.',
-        },
-        extra_sources: [
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'fixture-model',
+              text: 'See the release notes.',
+            },
+          },
           {
             provider: 'anysearch',
             data: {
@@ -259,7 +262,7 @@ HTTP 状态：402
       },
       error: {
         code: 'PARTIAL_FAILURE',
-        message: '模型搜索已完成，部分补充来源失败',
+        message: '部分搜索来源失败',
         details: {
           failures: [
             {
@@ -274,7 +277,7 @@ HTTP 状态：402
         },
       },
     },
-    markdown: `> 部分完成：[PARTIAL_FAILURE] 模型搜索已完成，部分补充来源失败
+    markdown: `> 部分完成：[PARTIAL_FAILURE] 部分搜索来源失败
 > - exa：[AUTHENTICATION_ERROR] Exa 拒绝了本次凭证
 >   - HTTP 状态：401
 
@@ -284,11 +287,9 @@ HTTP 状态：402
 
 See the release notes.
 
-## 补充检索
+## AnySearch
 
-### AnySearch
-
-#### 1. [Go Release Notes](https://go.dev/doc/devel/release)
+### 1. [Go Release Notes](https://go.dev/doc/devel/release)
 
 Go release history.`,
   },

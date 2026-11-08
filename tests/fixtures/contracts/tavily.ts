@@ -171,7 +171,7 @@ Article A.`,
         },
       },
     },
-    markdown: ``,
+    markdown: '',
     stderr: `错误：未取得网页正文
 服务：tavily
 URL：https://example.com/empty
@@ -209,7 +209,7 @@ URL：https://example.com/empty
         },
       },
     },
-    markdown: ``,
+    markdown: '',
     stderr: `错误：网页提取失败
 服务：tavily
 
@@ -254,11 +254,14 @@ https://example.com/b：网页提取失败
     result: {
       status: 'success',
       data: {
-        answer: {
-          model: 'fixture-model',
-          text: 'See the [release policy](https://example.com/releases).',
-        },
-        extra_sources: [
+        sources: [
+          {
+            provider: 'model',
+            data: {
+              model: 'fixture-model',
+              text: 'See the [release policy](https://example.com/releases).',
+            },
+          },
           {
             provider: 'tavily',
             data: {
@@ -287,19 +290,17 @@ https://example.com/b：网页提取失败
 
 See the [release policy](https://example.com/releases).
 
-## 补充检索
+## Tavily
 
-### Tavily
-
-#### 1. [Release policy](https://example.com/releases)
+### 1. [Release policy](https://example.com/releases)
 
 相关性评分：0.81025416
 
-##### 摘要或片段
+#### 摘要或片段
 
 The policy lists supported releases.
 
-### Exa
+## Exa
 
 未找到结果`,
   },
@@ -318,7 +319,7 @@ The policy lists supported releases.
         },
       },
     },
-    markdown: ``,
+    markdown: '',
     stderr: `错误：Tavily 额度已用尽或达到使用上限
 服务：tavily
 HTTP 状态：433

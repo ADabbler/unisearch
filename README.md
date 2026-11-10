@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ADabbler/unisearch/main/.github/assets/logo.webp" alt="UniSearch logo" width="900">
+</p>
+
 <h1 align="center">UniSearch</h1>
 
 <p align="center">

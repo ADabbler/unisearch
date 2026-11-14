@@ -265,6 +265,10 @@ function readable<T extends JsonValue>(
   };
 }
 
+function resultJson(result: Result): string {
+  return json({ status: result.status, error: result.error, data: result.data, meta: result.meta });
+}
+
 export function render<T extends JsonValue>(
   outcome: Outcome<T>,
   options: RenderOptions<T>,
@@ -276,7 +280,7 @@ export function render<T extends JsonValue>(
           ? { ...outcome.result, meta: { ...outcome.result.meta, ...options.execution.data } }
           : { ...outcome.result };
       if (result.meta && Object.keys(result.meta).length === 0) delete result.meta;
-      return { outcome, content: json(result), details: '', execution: '' };
+      return { outcome, content: resultJson(result), details: '', execution: '' };
     }
     return readable(outcome, options);
   } catch {
@@ -293,7 +297,7 @@ export function render<T extends JsonValue>(
       }
     }
     if (options.format === 'json')
-      return { outcome: failed, content: json(failed.result), details: '', execution: '' };
+      return { outcome: failed, content: resultJson(failed.result), details: '', execution: '' };
     return readable(failed, {
       ...options,
       verbose: false,

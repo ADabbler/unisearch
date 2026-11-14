@@ -55,6 +55,10 @@ test('Result shapes preserve empty data, partial results, failures, and cancella
       outcome.exitCode,
     );
     assert.deepEqual(JSON.parse(channels.out), outcome.result);
+    assert.deepEqual(
+      Object.keys(JSON.parse(channels.out)),
+      outcome.result.error ? ['status', 'error', 'data'] : ['status', 'data'],
+    );
     assert.equal(channels.err, '');
   }
   const unknown = failure(new Error('secret=do-not-print'), 'en');

@@ -3,6 +3,7 @@ import type { Language } from '../i18n/messages.js';
 import type { SearchData, FetchData, ContentSource } from '../providers/exa.js';
 import type { JsonObject } from '../result.js';
 import { link } from './firecrawl.js';
+import { jsonBlock } from './zhipu-mcp.js';
 
 export function inline(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').replace(/[\\`*_[\]<>]/g, '\\$&');
@@ -53,7 +54,7 @@ export function renderSearch(
     if (item.missing_content) {
       const missing = item.missing_content.map((value) => {
         if (language !== 'zh') return value;
-        return text(language, value === 'text' ? 'textLabel' : 'highlightsLabel');
+        return text(language, 'textLabel');
       });
       sections.push(
         `${text(language, 'missingContentLabel')}${separator}${missing.join(language === 'zh' ? '、' : ', ')}`,
@@ -69,7 +70,23 @@ export function renderSearch(
       sections.push(`${'#'.repeat(level + 1)} ${text(language, 'textLabel')}\n\n${item.text}`);
     return sections.join('\n\n');
   });
-  return `${showProvider ? `${text(language, 'exaSource')}\n\n` : ''}${entries.length ? entries.join('\n\n---\n\n') : text(language, 'noResults')}`;
+  const diagnostics = (['warnings', 'notices'] as const).flatMap((key) =>
+    (data[key] ?? []).map(
+      (item) =>
+        `${text(language, key === 'warnings' ? 'upstreamWarningLabel' : 'upstreamNoticeLabel')}${separator}[${inline(item.code)}] ${inline(item.path)}: ${item.message}`,
+    ),
+  );
+  if (data.output)
+    diagnostics.push(
+      `${'#'.repeat(level)} ${text(language, 'exaSynthesis')}\n\n${jsonBlock(data.output)}`,
+    );
+  return [
+    showProvider ? text(language, 'exaSource') : '',
+    ...diagnostics,
+    entries.length ? entries.join('\n\n---\n\n') : text(language, 'noResults'),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 export function contentSources(sources: ContentSource[] | undefined, language: Language): string[] {

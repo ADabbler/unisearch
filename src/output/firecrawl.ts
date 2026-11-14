@@ -56,6 +56,10 @@ export function renderSearch(
         !!item.description?.trim() || !!item.text?.trim(),
       ),
     ];
+    if (item.category)
+      parts.push(
+        `${text(language, 'categoryLabel')}${separator(language)}${inline(item.category)}`,
+      );
     parts.push(...warnings(item.warnings, language));
     if (item.description) parts.push(item.description);
     parts.push(...contentInfo(item, language));

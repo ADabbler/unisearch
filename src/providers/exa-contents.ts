@@ -77,8 +77,6 @@ export function contentsData(
           if (highlights.length) result.highlights = highlights;
         }
       }
-      if (pageText !== undefined && !result.highlights && !invalidHighlights)
-        result.missing_content = ['highlights'];
       invalid ||= invalidHighlights;
     }
     if (pageText !== undefined) result.text = pageText;

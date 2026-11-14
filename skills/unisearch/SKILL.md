@@ -26,6 +26,8 @@ Common options for retrieval commands:
 - `unisearch <service> search QUERY`: Direct service search, such as `unisearch exa search QUERY`.
 - `unisearch fetch URL`: Read one page using the configured service order.
 - `unisearch map URL`: Discover links within a site, then select pages to read.
+- `unisearch ctx7 search QUERY`: Automatically select relevant libraries and retrieve documentation for the question.
+- `unisearch ctx7 fetch URL`: Read a known public web page, optionally returning only sections relevant to a question.
 - `unisearch ctx7 library NAME QUERY`: If the library ID is unknown, find candidates using the library name and the actual documentation question. Select the matching library and version when relevant.
 - `unisearch ctx7 docs LIBRARY_ID QUERY`: Retrieve documentation and code examples using the selected candidate's ID and the documentation question. Skip library lookup when an exact matching ID is already known.
 - `unisearch zhipu-mcp docs REPO QUERY`: Query repository documentation. Use `owner/repo`; discover directory and file operations through the group help.
@@ -40,8 +42,8 @@ Use dedicated service commands for service-specific filters, content, cache, or 
 Choose by task, configured availability, and user preference.
 
 - **Exa (`exa`)**: Natural-language web discovery with category, domain, and publication-date filters; page text, excerpts, and batch URL reading.
-- **Tavily (`tavily`)**: General, news, or finance search with date and domain filters; batch content extraction.
-- **Firecrawl (`firecrawl`)**: Markdown from dynamic or JavaScript-rendered pages, with control over which content to include.
+- **Tavily (`tavily`)**: General, news, or finance search with date and domain filters, language preference, and cache freshness controls; batch content extraction.
+- **Firecrawl (`firecrawl`)**: Web discovery with research/PDF, developer, or mainly US government categories; Markdown from dynamic or JavaScript-rendered pages.
 - **Context7 (`ctx7`)**: Library, framework, SDK, and API documentation or code examples, including specific versions.
 - **Jina (`jina`)**: Readable web pages and remote PDFs; web, news, and image search.
 - **Zhipu API (`zhipu`)**: Web search and page reading through BigModel or Z.AI. BigModel offers Zhipu, Sogou, and Quark search sources; Z.AI uses Search Prime.

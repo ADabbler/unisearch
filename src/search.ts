@@ -36,6 +36,7 @@ import type { SearchData as DeepseekData } from './providers/deepseek-response.j
 
 export interface SearchOptions extends ModelOptions {
   sources?: string;
+  highlights?: boolean;
 }
 export interface SearchPlan {
   sources: SourcePlan[];
@@ -71,7 +72,7 @@ type SearchSource =
   | { provider: 'jina'; data: Omit<JinaData, 'provider'> }
   | { provider: 'anysearch'; data: Omit<anysearch.SearchData, 'provider'> }
   | { provider: 'tavily'; data: Pick<TavilySearchData, 'results'> }
-  | { provider: 'exa'; data: Pick<SearchData, 'results'> }
+  | { provider: 'exa'; data: Pick<SearchData, 'results' | 'warnings' | 'notices' | 'output'> }
   | { provider: 'firecrawl'; data: Pick<FirecrawlData, 'results' | 'warnings'> }
   | { provider: 'deepseek'; data: Pick<DeepseekData, 'results'> };
 export type CombinedData = JsonObject & {
@@ -97,6 +98,10 @@ export function prepareCombinedSearch(
     assertValid(inspected.problems, language);
     selected = inspected.resolved[0].value as Exclude<Provider, 'ctx7'>[];
   }
+  if (options.highlights === false && !selected.includes('exa') && !selected.includes('firecrawl'))
+    throw new AppError('INVALID_ARGUMENT', 'highlightsSourceRequired', {
+      option: '--no-highlights',
+    });
   if (!selected.includes('model')) {
     for (const [key, option] of [
       ['model', '--model'],
@@ -141,7 +146,16 @@ export function prepareCombinedSearch(
           request: anysearch.prepare('search', query, { timeout }, values, env, language),
         };
       case 'exa':
-        return { provider, request: prepareSearch(query, { timeout }, values, env, language) };
+        return {
+          provider,
+          request: prepareSearch(
+            query,
+            { timeout, highlights: options.highlights },
+            values,
+            env,
+            language,
+          ),
+        };
       case 'tavily':
         return {
           provider,
@@ -155,7 +169,13 @@ export function prepareCombinedSearch(
       case 'firecrawl':
         return {
           provider,
-          request: firecrawl.prepareSearch(query, { timeout }, values, env, language),
+          request: firecrawl.prepareSearch(
+            query,
+            { timeout, highlights: options.highlights },
+            values,
+            env,
+            language,
+          ),
         };
     }
   });

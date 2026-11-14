@@ -7,6 +7,7 @@ export type SearchItem = JsonObject & {
   url: string;
   title?: string;
   description?: string;
+  category?: string;
   text?: string;
   final_url?: string;
   missing_content?: string[];
@@ -143,10 +144,12 @@ export function searchData(
     const url = requiredUrl(item.url);
     const title = optionalText(item.title);
     const description = optionalText(item.description);
+    const category = optionalText(item.category);
     const result: SearchItem = {
       url,
       ...(title ? { title } : {}),
       ...(description ? { description } : {}),
+      ...(category ? { category } : {}),
     };
     if (request.includeText) {
       const meta = metadata(item);

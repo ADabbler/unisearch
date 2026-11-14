@@ -42,7 +42,7 @@ export interface SearchOptions {
   limit?: string;
   searchType?: string;
   includeText?: boolean;
-  includeHighlights?: boolean;
+  highlights?: boolean;
   publishedAfter?: string;
   category?: string;
   includeDomains?: string;
@@ -75,9 +75,16 @@ export type SearchResult = JsonObject & {
   author?: string;
   text?: string;
   highlights?: string[];
-  missing_content?: string[];
+  missing_content?: ['text'];
 };
-export type SearchData = JsonObject & { provider: 'exa'; results: SearchResult[] };
+export type SearchNotice = JsonObject & { code: string; path: string; message: string };
+export type SearchData = JsonObject & {
+  provider: 'exa';
+  results: SearchResult[];
+  warnings?: SearchNotice[];
+  notices?: SearchNotice[];
+  output?: JsonObject;
+};
 
 function invalid(key: MessageKey, option: string): never {
   throw new AppError('INVALID_ARGUMENT', key, { option });
@@ -160,12 +167,9 @@ export function prepareSearch(
     filters.startPublishedDate = publishedDate(options.publishedAfter);
   if (options.category !== undefined) {
     if (!options.category.trim()) return invalid('invalidCategory', '--category');
-    if (
-      ['company', 'people'].includes(options.category) &&
-      (options.publishedAfter !== undefined || options.excludeDomains !== undefined)
-    )
+    if (['company', 'people'].includes(options.category) && options.publishedAfter !== undefined)
       return invalid('categoryConflict', '--category');
-    if (options.category === 'people' && options.includeDomains !== undefined)
+    if (options.category === 'people' && options.excludeDomains !== undefined)
       return invalid('peopleDomainConflict', '--category');
     filters.category = options.category;
   }
@@ -176,7 +180,7 @@ export function prepareSearch(
   const settings = operationConfig(values, env, language, exaSearch, overrides);
   const value = (path: string) => settings[path].value!;
   const includeText = options.includeText ?? false;
-  const highlights = options.includeHighlights ?? false;
+  const highlights = options.highlights ?? true;
   return {
     url: `${(value('providers.exa.base_url') as string).replace(/\/+$/, '')}/search`,
     apiKey: value('providers.exa.api_key') as string,
@@ -283,12 +287,11 @@ export function searchData(
       if (typeof value !== 'string') throw responseError();
       result[target] = value;
     }
-    const missing: string[] = [];
     if (request.text) {
       if (item.text !== undefined && item.text !== null && typeof item.text !== 'string')
         throw responseError();
       if (typeof item.text === 'string' && item.text.trim()) result.text = item.text;
-      else missing.push('text');
+      else result.missing_content = ['text'];
     }
     if (request.highlights) {
       const value = item.highlights;
@@ -303,12 +306,28 @@ export function searchData(
         ? (value as string[]).filter((entry) => entry.trim())
         : [];
       if (highlights.length) result.highlights = highlights;
-      else missing.push('highlights');
     }
-    if (missing.length) result.missing_content = missing;
     return result;
   });
-  return { provider: 'exa', results };
+  const data: SearchData = { provider: 'exa', results };
+  for (const key of ['warnings', 'notices'] as const) {
+    if (body[key] === undefined) continue;
+    if (!Array.isArray(body[key])) throw responseError();
+    data[key] = body[key].map((entry): SearchNotice => {
+      if (
+        !isObject(entry) ||
+        ['code', 'path', 'message'].some((key) => typeof entry[key] !== 'string')
+      )
+        throw responseError();
+      if (entry.details !== undefined && !isObject(entry.details)) throw responseError();
+      return entry as SearchNotice;
+    });
+  }
+  if (body.output !== undefined && body.output !== null) {
+    if (!isObject(body.output)) throw responseError();
+    data.output = body.output as JsonObject;
+  }
+  return data;
 }
 
 function httpError(
@@ -447,7 +466,21 @@ export function requestSearch(
     request,
     context,
     language,
-    (body) => success(searchData(body, request)),
+    (body) => {
+      const data = searchData(body, request);
+      const relaxed = data.notices?.some((item) => item.code === 'RESTRICTIONS_RELAXED');
+      if (data.warnings)
+        data.warnings = redactDiagnostics(data.warnings, request.secrets) as SearchNotice[];
+      if (data.notices)
+        data.notices = redactDiagnostics(data.notices, request.secrets) as SearchNotice[];
+      return relaxed
+        ? failure(
+            new AppError('UPSTREAM_ERROR', 'exaRestrictions', { provider: 'exa' }),
+            language,
+            success(data),
+          )
+        : success(data);
+    },
     transport,
   );
 }

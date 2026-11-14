@@ -59,6 +59,7 @@ Website documentation.`,
         code_snippets: [
           {
             title: 'Create a button',
+            rank: 1,
             description: 'Create a button with a visible label.',
             url: 'https://example.org/ui/button#example',
             examples: [
@@ -77,6 +78,7 @@ Website documentation.`,
           {
             url: 'https://example.org/ui/button',
             breadcrumb: 'Components > Button',
+            rank: 2,
             content: 'Use a **visible label**. See the [guide](https://example.org/ui/guide).',
           },
         ],
@@ -130,6 +132,7 @@ Use a **visible label**. See the [guide](https://example.org/ui/guide).`,
           {
             url: 'https://example.org/ui/button',
             description: 'Use a visible label.',
+            rank: 1,
           },
         ],
         info_snippets: [],

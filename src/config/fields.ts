@@ -527,7 +527,7 @@ export function validate(field: Field, value: unknown): Invalid | undefined {
       break;
     }
     case 'searchType':
-      if (value !== 'auto' && value !== 'fast' && value !== 'instant')
+      if (!['auto', 'lite', 'deep', 'deep-lite'].includes(value as string))
         return { code: 'INVALID_VALUE', message: 'invalidSearchType' };
       break;
     case 'boolean':
@@ -583,7 +583,7 @@ export function parseLiteral(field: Field, input: string): unknown {
     if (input === 'false') return false;
     return input;
   }
-  if (field.kind === 'integer') return /^(?:0|[1-9][0-9]*)$/.test(input) ? Number(input) : input;
+  if (field.kind === 'integer') return /^(?:0|-?[1-9][0-9]*)$/.test(input) ? Number(input) : input;
   if (['providers', 'models', 'tools'].includes(field.kind)) {
     try {
       return JSON.parse(input);

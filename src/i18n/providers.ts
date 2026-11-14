@@ -1,5 +1,6 @@
 import type { Provider } from '../config/fields.js';
 import type { Language } from './messages.js';
+import { text } from './messages.js';
 
 const names: Record<Provider, string> = {
   model: 'Model',
@@ -22,7 +23,8 @@ export function providerName(provider: Provider, language: Language): string {
   }
   return names[provider];
 }
-export function operationName(operation: string, language: Language): string {
+export function operationName(operation: string, language: Language, provider?: Provider): string {
+  if (provider === 'ctx7' && operation === 'search') return text(language, 'ctx7SearchLabel');
   if (language === 'en') return operation;
   const names: Record<string, string> = {
     search: '搜索',

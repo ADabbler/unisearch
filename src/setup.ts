@@ -230,7 +230,7 @@ export async function promptSetup(
         return {
           ...choice,
           description: providerOperations
-            .map((operation) => operationName(operation.operation, draft.language))
+            .map((operation) => operationName(operation.operation, draft.language, provider))
             .join(zh ? '、' : ', '),
         };
       }),

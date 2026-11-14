@@ -41,6 +41,7 @@ function errorLines(error: PublicError, language: Language, codes = true): strin
     path: 'pathLabel',
     field: error.code === 'INVALID_RESPONSE' ? 'responseFieldLabel' : 'fieldLabel',
     option: 'optionLabel',
+    maximum: 'maximumLengthLabel',
     operation: 'operationLabel',
     system_code: 'systemCodeLabel',
     source: 'sourceLabel',

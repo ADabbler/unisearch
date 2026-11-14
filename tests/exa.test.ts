@@ -106,19 +106,19 @@ test('Search mapping preserves defaults, explicit modes, dates, domains and requ
     query: ' query ',
     numResults: 5,
     type: 'auto',
-    contents: { text: false, highlights: false },
+    contents: { text: false, highlights: true },
   });
   assert.equal(prepare().timeout, 300);
   assert.equal(prepare().retries, 2);
   assert.equal(prepare().url, 'https://api.exa.ai/search');
-  for (const mode of ['auto', 'fast', 'instant'])
+  for (const mode of ['auto', 'lite', 'deep', 'deep-lite'])
     for (const limit of ['1', '100']) {
       assert.equal(prepare({ searchType: mode, limit }).body.numResults, Number(limit));
     }
   assert.deepEqual(
     prepare({
       includeText: true,
-      includeHighlights: true,
+      highlights: true,
       publishedAfter: '2024-02-29T10:20:30.12+08:00',
       category: 'research paper',
       includeDomains: '*.example.com/path,example.com/path',
@@ -186,9 +186,10 @@ test('Invalid dates, domain forms and category combinations fail before configur
   }
   for (const category of ['company', 'people']) {
     assert.throws(() => prepare({ category, publishedAfter: '2026-01-01' }), AppError);
-    assert.throws(() => prepare({ category, excludeDomains: 'example.com' }), AppError);
   }
-  assert.throws(() => prepare({ category: 'people', includeDomains: 'example.com' }), AppError);
+  assert.throws(() => prepare({ category: 'people', excludeDomains: 'example.com' }), AppError);
+  assert.ok(prepare({ category: 'people', includeDomains: 'example.com' }));
+  assert.ok(prepare({ category: 'company', excludeDomains: 'example.com' }));
   assert.ok(prepare({ category: 'company', includeDomains: 'example.com' }));
   assert.throws(() => prepare({ category: ' ' }), AppError);
 });
@@ -204,7 +205,7 @@ test('Configuration resolution is shared with status and uses only effective ope
   const environment = { ...env, UNISEARCH_EXA_BASE_URL: 'http://localhost:1234/prefix/' };
   const request = prepareSearch(
     'q',
-    { limit: '3', searchType: 'fast', timeout: 0.5 },
+    { limit: '3', searchType: 'lite', timeout: 0.5 },
     values,
     environment,
     'en',
@@ -244,7 +245,7 @@ test('Exa configuration fields support set/get/list/unset with validation and en
   for (const [field, value] of [
     ['base_url', 'http://localhost:1234/prefix/'],
     ['search.limit', '100'],
-    ['search.search_type', 'instant'],
+    ['search.search_type', 'deep'],
   ]) {
     const key = `providers.exa.${field}`;
     const channels = capture();
@@ -288,7 +289,7 @@ test('Exa configuration fields support set/get/list/unset with validation and en
   assert.equal(JSON.parse(get.out).data.source, 'UNISEARCH_EXA_BASE_URL');
   const list = capture();
   assert.equal(await createCli('test', { config, channels: list }).run(['config', 'list']), 0);
-  assert.match(list.out, /instant/);
+  assert.match(list.out, /deep/);
   assert.equal(
     await createCli('test', { config, channels: capture() }).run([
       'config',
@@ -338,7 +339,7 @@ test('Local HTTP CLI sends one exact POST and supports operation option position
       query: ' q ',
       numResults: 5,
       type: 'auto',
-      contents: { text: false, highlights: false },
+      contents: { text: false, highlights: true },
     },
   });
   assert.equal((requests[2].body as { query: string }).query, '--help');
@@ -351,9 +352,8 @@ test('Local HTTP CLI sends one exact POST and supports operation option position
       '--limit',
       '3',
       '--search-type',
-      'fast',
+      'lite',
       '--include-text',
-      '--include-highlights',
       '--published-after',
       '2026-01-01',
       '--category',
@@ -370,7 +370,7 @@ test('Local HTTP CLI sends one exact POST and supports operation option position
   assert.deepEqual(requests[3].body, {
     query: 'JavaScript runtime releases',
     numResults: 3,
-    type: 'fast',
+    type: 'lite',
     contents: { text: true, highlights: true },
     startPublishedDate: '2026-01-01T00:00:00.000Z',
     category: 'news',
@@ -575,8 +575,8 @@ test('Results preserve order, duplicates, original Markdown and optional-content
     { results: [{ title: '', url: item.url, text: '  ', highlights: ['', '  '] }] },
     { text: true, highlights: true },
   );
-  assert.deepEqual(missing.results, [{ url: item.url, missing_content: ['text', 'highlights'] }]);
-  assert.match(renderSearch(missing, 'en'), /Requested content unavailable: text, highlights/);
+  assert.deepEqual(missing.results, [{ url: item.url, missing_content: ['text'] }]);
+  assert.match(renderSearch(missing, 'en'), /Requested content unavailable: text/);
   const compact = searchData(
     { results: [{ ...item, text: 42, highlights: {} }] },
     { text: false, highlights: false },
@@ -621,7 +621,7 @@ test('Invalid retained response fields fail as a whole and never use id as URL',
     { results: [{ ...valid, author: null, publishedDate: '', text: null, highlights: null }] },
     { text: true, highlights: true },
   );
-  assert.deepEqual(data.results[0], { ...valid, missing_content: ['text', 'highlights'] });
+  assert.deepEqual(data.results[0], { ...valid, missing_content: ['text'] });
 });
 
 test('HTTP errors, malformed bodies and redirects retain their exact classifications without following', async (t) => {

@@ -12,6 +12,7 @@ import { redactDiagnostics, redactError } from '../src/providers/transport.js';
 import { capture, context, temporary } from './helpers.js';
 
 const code = {
+  rank: 1,
   codeId: 'https://example.org/ui/button',
   codeTitle: 'Button',
   codeDescription: 'Use a button.',
@@ -20,7 +21,7 @@ const code = {
 const docs = {
   codeSnippets: [code],
   infoSnippets: [
-    { content: '**Guide**', breadcrumb: 'UI > Button', pageId: 'https://example.org/ui' },
+    { rank: 2, content: '**Guide**', breadcrumb: 'UI > Button', pageId: 'https://example.org/ui' },
   ],
 };
 const library = {
@@ -121,7 +122,7 @@ test('Context7 mappings retain useful metadata, empty results and explanation-on
     '/a/b',
   );
   assert.deepEqual(explanation.code_snippets, [
-    { url: code.codeId, description: 'Same', is_dynamic: true, source_file: 'src/ui.ts' },
+    { rank: 1, url: code.codeId, description: 'Same', is_dynamic: true, source_file: 'src/ui.ts' },
   ]);
   assert.doesNotMatch(renderContext7(explanation, 'zh'), /```|### Same/);
   for (const value of [

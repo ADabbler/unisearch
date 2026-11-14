@@ -597,6 +597,8 @@ export function createCli(version: string, options: CliOptions = {}) {
       ['--no-fallback', 'noFallbackOption'],
     ] as const)
       addScalarOption(command, new Option(flags, text('en', key)));
+    if (command === unified)
+      addScalarOption(command, new Option('--no-highlights', text('en', 'rootNoHighlightsOption')));
     let streamSeen = false;
     for (const name of ['stream', 'no-stream'])
       command.on(`option:${name}`, () => {
@@ -739,6 +741,7 @@ export function createCli(version: string, options: CliOptions = {}) {
     ['--per-url-timeout-ms <N>', 'tinyfishUrlTimeoutOption'],
     ['--include-links', 'tinyfishLinksOption'],
     ['--include-image-links', 'tinyfishImagesOption'],
+    ['--include-iframe-links', 'tinyfishIframesOption'],
     ['--include-metadata', 'tinyfishMetadataOption'],
   ] as const)
     addScalarOption(tinyfishFetch, new Option(flags, text('en', key)));
@@ -1047,34 +1050,102 @@ export function createCli(version: string, options: CliOptions = {}) {
 
   const ctx7 = program.command('ctx7').description(text('en', 'ctx7Command'));
   for (const operation of ['library', 'docs'] as const) {
-    ctx7
+    const command = ctx7
       .command(operation)
       .description(text('en', operation === 'library' ? 'ctx7Library' : 'ctx7Docs'))
       .argument(
         operation === 'library' ? '<NAME>' : '<LIBRARY_ID>',
         text('en', operation === 'library' ? 'ctx7Name' : 'ctx7Id'),
       )
-      .argument('<QUERY>', text('en', 'queryArgument'))
-      .action(async (target: string, query: string) => {
-        const ui = language();
-        const request = context7.prepare(
-          operation,
-          target,
-          query,
-          active.opts().timeout,
-          getDocument().values,
-          config.env,
-          ui,
-        );
-        await runProviderRequest(
-          'ctx7',
-          request,
-          context7.requestLimit,
-          (context) => context7.request(request, context, ui),
-          renderContext7,
-        );
-      });
+      .argument('<QUERY>', text('en', 'queryArgument'));
+    if (operation === 'docs')
+      addScalarOption(
+        command,
+        new Option('--language <LANGUAGE>', text('en', 'ctx7LanguageOption')),
+      );
+    command.action(async (target: string, query: string) => {
+      const ui = language();
+      const request = context7.prepare(
+        operation,
+        target,
+        query,
+        active.opts().timeout,
+        getDocument().values,
+        config.env,
+        ui,
+        active.opts(),
+      );
+      await runProviderRequest(
+        'ctx7',
+        request,
+        context7.requestLimit,
+        (context) => context7.request(request, context, ui),
+        renderContext7,
+      );
+    });
   }
+
+  const ctx7Search = ctx7
+    .command('search')
+    .description(text('en', 'ctx7Search'))
+    .argument('<QUERY>', text('en', 'queryArgument'));
+  ctx7Search.addOption(
+    new Option('--library <NAME_OR_ID>', text('en', 'ctx7LibraryOption')).argParser(
+      (value, previous: string[] = []) => [...previous, value],
+    ),
+  );
+  addScalarOption(
+    ctx7Search,
+    new Option('--language <LANGUAGE>', text('en', 'ctx7LanguageOption')),
+  );
+  addScalarOption(
+    ctx7Search,
+    new Option('--library-version <VERSION>', text('en', 'ctx7VersionOption')),
+  );
+  ctx7Search.action(async (query: string, options: context7.SearchOptions) => {
+    const ui = language();
+    const request = context7.prepareSearch(
+      query,
+      { ...options, timeout: active.opts().timeout },
+      getDocument().values,
+      config.env,
+      ui,
+    );
+    await runProviderRequest(
+      'ctx7',
+      request,
+      context7.requestLimit,
+      (context) => context7.request(request, context, ui),
+      renderContext7,
+    );
+  });
+  const ctx7Fetch = ctx7
+    .command('fetch')
+    .description(text('en', 'ctx7Fetch'))
+    .argument('<URL>', text('en', 'pageUrlArgument'));
+  for (const [flags, key] of [
+    ['--query <TEXT>', 'ctx7QueryOption'],
+    ['--tokens <N>', 'ctx7TokensOption'],
+    ['--offset <N>', 'ctx7OffsetOption'],
+  ] as const)
+    addScalarOption(ctx7Fetch, new Option(flags, text('en', key)));
+  ctx7Fetch.action(async (url: string, options: context7.FetchOptions) => {
+    const ui = language();
+    const request = context7.prepareFetch(
+      url,
+      { ...options, timeout: active.opts().timeout },
+      getDocument().values,
+      config.env,
+      ui,
+    );
+    await runProviderRequest(
+      'ctx7',
+      request,
+      context7.requestLimit,
+      (context) => context7.request(request, context, ui),
+      renderContext7,
+    );
+  });
 
   const exa = program.command('exa').description(text('en', 'exaCommand'));
   const search = exa
@@ -1085,7 +1156,7 @@ export function createCli(version: string, options: CliOptions = {}) {
     ['--limit <N>', 'limitOption'],
     ['--search-type <TYPE>', 'searchTypeOption'],
     ['--include-text', 'textOption'],
-    ['--include-highlights', 'highlightsOption'],
+    ['--no-highlights', 'noHighlightsOption'],
     ['--published-after <DATE>', 'publishedOption'],
     ['--category <NAME>', 'categoryOption'],
     ['--include-domains <DOMAINS>', 'includeDomainsOption'],
@@ -1097,7 +1168,10 @@ export function createCli(version: string, options: CliOptions = {}) {
     const ui = language();
     const request = prepareSearch(
       query,
-      { ...options, timeout: active.opts().timeout },
+      {
+        ...options,
+        timeout: active.opts().timeout,
+      },
       loaded.values,
       config.env,
       ui,
@@ -1154,6 +1228,9 @@ export function createCli(version: string, options: CliOptions = {}) {
     ['--tbs <VALUE>', 'tbsOption'],
     ['--location <TEXT>', 'locationOption'],
     ['--country <CODE>', 'countryOption'],
+    ['--include-domains <DOMAINS>', 'firecrawlIncludeDomains'],
+    ['--exclude-domains <DOMAINS>', 'firecrawlExcludeDomains'],
+    ['--no-highlights', 'noHighlightsOption'],
   ] as const)
     addScalarOption(firecrawlSearch, new Option(flags, text('en', key)));
   addScalarOption(firecrawlSearch, new Option('--include-text', text('en', 'firecrawlTextOption')));
@@ -1289,6 +1366,8 @@ export function createCli(version: string, options: CliOptions = {}) {
     ['--time-range <RANGE>', 'tavilyTimeOption'],
     ['--start-date <DATE>', 'tavilyStartOption'],
     ['--end-date <DATE>', 'tavilyEndOption'],
+    ['--language <CODE>', 'tavilyLanguageOption'],
+    ['--max-age-hours <N>', 'tavilyMaxAgeOption'],
     ['--include-domains <LIST>', 'tavilyIncludeOption'],
     ['--exclude-domains <LIST>', 'tavilyExcludeOption'],
     ['--include-text', 'textOption'],
@@ -1397,6 +1476,10 @@ export function createCli(version: string, options: CliOptions = {}) {
   );
   (jinaGroup.commands as Command[]).sort(
     (a, b) => ['search', 'fetch'].indexOf(a.name()) - ['search', 'fetch'].indexOf(b.name()),
+  );
+  const ctx7Order = context7.operations.map((item) => item.operation);
+  (ctx7.commands as Command[]).sort(
+    (a, b) => ctx7Order.indexOf(a.name()) - ctx7Order.indexOf(b.name()),
   );
 
   async function run(argv: string[]): Promise<ExitCode> {

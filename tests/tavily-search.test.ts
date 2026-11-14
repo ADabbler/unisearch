@@ -87,7 +87,7 @@ test('Three native tasks start concurrently, reuse saved operation settings and 
     JSON.stringify({
       providers: {
         tavily: { search: { limit: 8, search_depth: 'advanced' } },
-        exa: { search: { limit: 2, search_type: 'fast' } },
+        exa: { search: { limit: 2, search_type: 'lite' } },
       },
     }),
   );
@@ -102,7 +102,7 @@ test('Three native tasks start concurrently, reuse saved operation settings and 
     const exa = pending.find((item) => item.path === '/exa/search')!;
     assert.equal(exa.body.query, ' original query ');
     assert.equal(exa.body.numResults, 2);
-    assert.equal(exa.body.type, 'fast');
+    assert.equal(exa.body.type, 'lite');
     const tavily = pending.find((item) => item.path === '/tavily/search')!;
     assert.equal(tavily.body.query, ' original query ');
     assert.equal(tavily.body.max_results, 8);

@@ -255,7 +255,7 @@ test('Context7 request IDs and redirects redact all credential sources while doc
   const ok = await ctx7.request(request, { signal: new AbortController().signal }, 'en', async () =>
     Response.json({
       codeSnippets: [],
-      infoSnippets: [{ content: 'old-secret exa-secret new-secret' }],
+      infoSnippets: [{ rank: 1, content: 'old-secret exa-secret new-secret' }],
     }),
   );
   assert.equal(

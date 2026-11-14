@@ -11,6 +11,7 @@ import { renderSetup, renderSetupPreview } from '../src/output/setup.js';
 import { display } from '../src/output/index.js';
 import { AppError } from '../src/errors.js';
 import { providers, fieldAt } from '../src/config/fields.js';
+import type { Provider } from '../src/config/fields.js';
 import { capture, context, temporary } from './helpers.js';
 import { createCli } from '../src/cli/program.js';
 import type { Prompts } from '../src/cli/prompts.js';
@@ -182,7 +183,12 @@ test('Setup saved configuration and Codex Skill are usable by new CLI processes'
   );
   assert.deepEqual(calls, []);
   assert.deepEqual(await runCli(['search', 'setup integration']), {
-    sources: [{ provider: 'exa', data: { results } }],
+    sources: [
+      {
+        provider: 'exa',
+        data: { results },
+      },
+    ],
   });
   assert.deepEqual(calls, [
     {
@@ -192,7 +198,7 @@ test('Setup saved configuration and Codex Skill are usable by new CLI processes'
         query: 'setup integration',
         numResults: 5,
         type: 'auto',
-        contents: { text: false, highlights: false },
+        contents: { text: false, highlights: true },
       },
     },
   ]);
@@ -485,7 +491,9 @@ test('Setup preselects effective choices and preserves existing sources when con
             assert.equal(
               choice.description,
               command.commands
-                .map((operation) => operationName(operation.name(), language))
+                .map((operation) =>
+                  operationName(operation.name(), language, choice.value as Provider),
+                )
                 .join(language === 'zh' ? '、' : ', '),
             );
           }

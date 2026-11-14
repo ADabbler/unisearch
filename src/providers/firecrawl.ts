@@ -55,6 +55,9 @@ export interface MapRequest extends RequestBase {
 export interface SearchOptions {
   limit?: string;
   includeText?: boolean;
+  highlights?: boolean;
+  includeDomains?: string;
+  excludeDomains?: string;
   categories?: string;
   tbs?: string;
   location?: string;
@@ -147,9 +150,33 @@ export function prepareSearch(
   if ([...query].length > 500) return invalid('firecrawlQuery', 'QUERY');
   const filters: JsonObject = {};
   if (options.categories !== undefined) {
-    if (options.categories !== 'developer' && options.categories !== 'pdf')
+    const categories = options.categories.split(',');
+    if (
+      categories.some((item) => !['developer', 'gov', 'research', 'pdf'].includes(item)) ||
+      (categories.length > 1 && categories.some((item) => item === 'developer' || item === 'gov'))
+    )
       return invalid('firecrawlCategory', '--categories');
-    filters.categories = [options.categories];
+    filters.categories = categories;
+  }
+  if (options.includeDomains !== undefined && options.excludeDomains !== undefined)
+    return invalid('firecrawlDomainConflict', '--include-domains/--exclude-domains');
+  for (const [key, flag] of [
+    ['includeDomains', '--include-domains'],
+    ['excludeDomains', '--exclude-domains'],
+  ] as const) {
+    const input = options[key];
+    if (input === undefined) continue;
+    const domains = input.split(',');
+    if (
+      domains.some(
+        (domain) =>
+          !/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(
+            domain,
+          ),
+      )
+    )
+      return invalid('firecrawlDomains', flag);
+    filters[key] = domains;
   }
   if (options.tbs !== undefined) filters.tbs = nonempty(options.tbs, '--tbs');
   if (options.location !== undefined) filters.location = nonempty(options.location, '--location');
@@ -163,11 +190,13 @@ export function prepareSearch(
   const includeText = options.includeText ?? false;
   const limit = value('limit') as number;
   if (
-    options.categories === 'developer' &&
+    ['developer', 'gov'].includes(options.categories ?? '') &&
     (includeText ||
       options.tbs !== undefined ||
       options.location !== undefined ||
-      options.country !== undefined)
+      options.country !== undefined ||
+      options.includeDomains !== undefined ||
+      options.excludeDomains !== undefined)
   )
     return invalid('developerConflict', '--categories');
   const body: JsonObject = {
@@ -176,7 +205,7 @@ export function prepareSearch(
     sources: ['web'],
     timeout: 60000,
     ignoreInvalidURLs: false,
-    highlights: false,
+    highlights: options.highlights ?? true,
     ...filters,
   };
   if (includeText)

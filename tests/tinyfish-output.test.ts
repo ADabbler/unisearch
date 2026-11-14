@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fixture, hit, page, search, url } from './tinyfish-fixture.js';
 
-test('TinyFish Markdown keeps metadata, alternate ranks, explicit empty links and diagnostic arrays', async (t) => {
+test('TinyFish Markdown keeps metadata, ranks and diagnostics while omitting empty links', async (t) => {
   const f = await fixture(t);
   f.reply({ ...search, results: [{ ...hit, position: 7, cited_by_count: 0 }] });
   const searched = await f.run(['tinyfish', 'search', 'q'], { UNISEARCH_LANG: 'zh' });
@@ -23,12 +23,27 @@ test('TinyFish Markdown keeps metadata, alternate ranks, explicit empty links an
     ['tinyfish', 'fetch', url, '--include-links', '--include-image-links', '--include-metadata'],
     { UNISEARCH_LANG: 'zh' },
   );
-  assert.match(extracted.channels.out, /无页面链接/);
+  assert.doesNotMatch(extracted.channels.out, /无页面链接|### 页面链接/);
   assert.match(extracted.channels.out, /`mailto:media@example.org`/);
   assert.match(extracted.channels.out, /"flag": false/);
   assert.match(extracted.channels.out, /"count": 0/);
   assert.ok(extracted.channels.out.includes(page().text));
   assert.equal(extracted.channels.err, '');
+  f.reply({ results: [{ ...page(), links: [], image_links: [], iframe_links: [] }], errors: [] });
+  const emptyArgs = [
+    'tinyfish',
+    'fetch',
+    url,
+    '--include-links',
+    '--include-image-links',
+    '--include-iframe-links',
+  ];
+  const emptyLists = await f.run(emptyArgs, { UNISEARCH_LANG: 'zh' });
+  assert.equal(emptyLists.exit, 0);
+  assert.doesNotMatch(emptyLists.channels.out, /无.*链接|### (页面链接|图片链接|iframe 链接)/);
+  const emptyJson = (await f.run([...emptyArgs, '--format=json'])).json();
+  for (const key of ['links', 'image_links', 'iframe_links'])
+    assert.deepEqual(emptyJson.data.results[0][key], []);
   f.reply({
     results: [],
     errors: [

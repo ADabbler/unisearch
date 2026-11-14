@@ -182,9 +182,10 @@ test('Exa contents independently retains text, highlights, dates, authors and ac
     ],
     content_sources: [{ url: a, source: 'cached' }],
   });
-  assert.deepEqual(parse({ results: [page] }, [a], true).result.data?.results[0].missing_content, [
-    'highlights',
-  ]);
+  assert.equal(
+    parse({ results: [page] }, [a], true).result.data?.results[0].missing_content,
+    undefined,
+  );
   for (const text of [undefined, null, '', ' ']) {
     const result = parse({ results: [{ ...page, text, highlights: ['quote'] }] }, [a], true);
     assert.equal(result.exitCode, 4);
@@ -312,7 +313,7 @@ test('Exa retains missing-highlight information independently of invalid metadat
     const result = parse({ results: [{ ...page, author: {}, highlights }] }, [a], true);
     assert.equal(result.result.error?.code, 'INVALID_RESPONSE');
     assert.equal(result.result.data?.results[0].text, page.text);
-    assert.deepEqual(result.result.data?.results[0].missing_content, ['highlights']);
+    assert.equal(result.result.data?.results[0].missing_content, undefined);
   }
   const invalidHighlights = parse({ results: [{ ...page, highlights: {} }] }, [a], true);
   assert.equal(invalidHighlights.result.error?.code, 'INVALID_RESPONSE');

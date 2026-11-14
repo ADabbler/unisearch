@@ -390,7 +390,7 @@ test('Each doctor check uses its fixed endpoint, method, auth and minimum input 
     assert.equal(result.json().meta.attempts.length, 1);
     assert.ok(result.json().meta.check.endpoint);
     if (provider === 'exa')
-      assert.deepEqual(call.body, { query: 'UniSearch', numResults: 1, type: 'fast' });
+      assert.deepEqual(call.body, { query: 'UniSearch', numResults: 1, type: 'lite' });
     if (provider === 'ctx7')
       assert.equal(call.url.search, '?libraryName=react&query=hooks&fast=false');
     if (provider === 'anysearch') assert.equal(call.url.search, '?domain=general');

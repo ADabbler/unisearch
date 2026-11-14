@@ -33,6 +33,7 @@ export type Page = JsonObject & {
   published_date?: string;
   links?: string[];
   image_links?: string[];
+  iframe_links?: string[];
   page_metadata?: JsonObject;
   unmatched_selectors?: string[];
   missing_content?: string[];
@@ -259,7 +260,7 @@ export function fetchData(
           details: { reason: 'empty_content' },
         });
       if (page.description === pageText) delete page.description;
-      for (const key of ['links', 'image_links'] as const) {
+      for (const key of ['links', 'image_links', 'iframe_links'] as const) {
         const value = read.strings(key, true);
         if (value !== undefined) page[key] = value;
         if (input.body[key] === true && item[key] === undefined)

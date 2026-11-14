@@ -46,6 +46,8 @@ export interface TavilySearchOptions extends CommonOptions {
   includeDomains?: string;
   excludeDomains?: string;
   includeText?: boolean;
+  language?: string;
+  maxAgeHours?: string;
 }
 export interface ExtractOptions extends CommonOptions {
   extractDepth?: string;
@@ -191,6 +193,26 @@ export function prepareTavilySearch(
 ): TavilySearchRequest {
   if (!query.trim()) throw new AppError('INVALID_ARGUMENT', 'emptyQuery');
   const filters: JsonObject = {};
+  if (options.language !== undefined) {
+    filters.language = nonempty(options.language, '--language');
+  }
+  if (options.maxAgeHours !== undefined) {
+    try {
+      filters.max_age_hours = parseInput(
+        {
+          path: '--max-age-hours',
+          kind: 'integer',
+          minimum: -1,
+          maximum: 720,
+          invalidMessage: 'tavilyMaxAge',
+        },
+        options.maxAgeHours,
+      );
+    } catch (error) {
+      if (error instanceof AppError) invalid(error.key, '--max-age-hours');
+      throw error;
+    }
+  }
   if (options.timeRange !== undefined) {
     if (!['day', 'week', 'month', 'year'].includes(options.timeRange))
       invalid('tavilyTime', '--time-range');

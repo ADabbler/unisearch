@@ -218,12 +218,12 @@ A model request that keeps returning text can exceed the initial total limit; ot
 
 ### Exa
 
-| Field                              | Type and values                        | Default              | Environment variable     |
-| ---------------------------------- | -------------------------------------- | -------------------- | ------------------------ |
-| `providers.exa.api_key`            | API key, required for search and fetch | None                 | `UNISEARCH_EXA_API_KEY`  |
-| `providers.exa.base_url`           | Connection URL                         | `https://api.exa.ai` | `UNISEARCH_EXA_BASE_URL` |
-| `providers.exa.search.limit`       | Integer `1–100`, search result limit   | `5`                  | —                        |
-| `providers.exa.search.search_type` | Search mode: `auto`, `fast`, `instant` | `auto`               | —                        |
+| Field                              | Type and values                                  | Default              | Environment variable     |
+| ---------------------------------- | ------------------------------------------------ | -------------------- | ------------------------ |
+| `providers.exa.api_key`            | API key, required for search and fetch           | None                 | `UNISEARCH_EXA_API_KEY`  |
+| `providers.exa.base_url`           | Connection URL                                   | `https://api.exa.ai` | `UNISEARCH_EXA_BASE_URL` |
+| `providers.exa.search.limit`       | Integer `1–100`, search result limit             | `5`                  | —                        |
+| `providers.exa.search.search_type` | Search mode: `auto`, `lite`, `deep`, `deep-lite` | `auto`               | —                        |
 
 ### Tavily
 
@@ -250,10 +250,10 @@ Unified fetch uses Firecrawl's scrape operation.
 
 ### Context7
 
-| Field                     | Type and values                                                                   | Default                    | Environment variable      |
-| ------------------------- | --------------------------------------------------------------------------------- | -------------------------- | ------------------------- |
-| `providers.ctx7.api_key`  | API key, optional for library and docs queries; omitted keys use anonymous access | None                       | `UNISEARCH_CTX7_API_KEY`  |
-| `providers.ctx7.base_url` | Connection URL                                                                    | `https://context7.com/api` | `UNISEARCH_CTX7_BASE_URL` |
+| Field                     | Type and values                                      | Default                    | Environment variable      |
+| ------------------------- | ---------------------------------------------------- | -------------------------- | ------------------------- |
+| `providers.ctx7.api_key`  | API key, optional; omitted keys use anonymous access | None                       | `UNISEARCH_CTX7_API_KEY`  |
+| `providers.ctx7.base_url` | Connection URL                                       | `https://context7.com/api` | `UNISEARCH_CTX7_BASE_URL` |
 
 ### Jina
 

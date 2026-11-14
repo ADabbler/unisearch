@@ -317,7 +317,7 @@ test('Compiled entry works outside the source directory with UTF-8 paths', (t) =
   assert.equal(version.stdout, `unisearch ${manifest.version}\n`);
 });
 
-test('All 42 operations expose and enforce the confirmed option matrix', async (t) => {
+test('All operations expose and enforce the confirmed option matrix', async (t) => {
   const root = temporary(t);
   const content = new Set([
     'search',
@@ -328,6 +328,8 @@ test('All 42 operations expose and enforce the confirmed option matrix', async (
     'exa fetch',
     'ctx7 library',
     'ctx7 docs',
+    'ctx7 search',
+    'ctx7 fetch',
     'anysearch search',
     'anysearch domains',
     'anysearch extract',
@@ -382,7 +384,7 @@ test('All 42 operations expose and enforce the confirmed option matrix', async (
     for (const child of command.commands) visit(child, [...path, child.name()]);
   };
   visit(createCli('test').program, []);
-  assert.equal(paths.length, 42);
+  assert.equal(paths.length, content.size + local.size);
   for (const path of paths) {
     const name = path.join(' ');
     let unsupported: string[];

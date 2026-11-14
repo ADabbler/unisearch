@@ -194,7 +194,7 @@ export function prepareDoctor(
     case 'exa': {
       const request = exa.prepareSearch(
         'UniSearch',
-        { timeout, limit: '1', searchType: 'fast' },
+        { timeout, limit: '1', searchType: 'lite' },
         values,
         env,
         language,

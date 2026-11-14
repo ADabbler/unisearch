@@ -1,4 +1,4 @@
-import { fieldAt, isObject } from '../config/fields.js';
+import { fieldAt, isObject, parseInput } from '../config/fields.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
 import { AppError, failure } from '../errors.js';
@@ -10,18 +10,21 @@ import type { JsonObject } from '../result.js';
 import { validPageUrl } from './firecrawl-response.js';
 import { configuredSecrets, redactDiagnostics, transportError } from './transport.js';
 
-export type Operation = 'library' | 'docs';
-export const operations: OperationDefinition[] = ['library', 'docs'].map((operation) => ({
-  provider: 'ctx7',
-  operation,
-  required: ['providers.ctx7.base_url', 'execution.timeout_seconds', 'execution.retries'],
-  optional: ['providers.ctx7.api_key'],
-}));
+export type Operation = 'library' | 'docs' | 'search' | 'fetch';
+export const operations: OperationDefinition[] = ['search', 'fetch', 'library', 'docs'].map(
+  (operation) => ({
+    provider: 'ctx7',
+    operation,
+    required: ['providers.ctx7.base_url', 'execution.timeout_seconds', 'execution.retries'],
+    optional: ['providers.ctx7.api_key'],
+  }),
+);
 export const requestLimit = 30;
 export interface Request {
   operation: Operation;
   url: string;
   libraryId?: string;
+  query?: string;
   apiKey?: string;
   secrets: string[];
   timeout: number;
@@ -42,7 +45,9 @@ export type LibraryData = {
   results: Library[];
   search_filter_applied?: boolean;
 };
-export type CodeSnippet = JsonObject & {
+export type CodeSnippet = {
+  rank: number;
+  library_id?: string;
   url: string;
   title?: string;
   description?: string;
@@ -50,15 +55,53 @@ export type CodeSnippet = JsonObject & {
   is_dynamic?: boolean;
   source_file?: string;
 };
-export type InfoSnippet = JsonObject & { content: string; url?: string; breadcrumb?: string };
+export type InfoSnippet = {
+  rank: number;
+  library_id?: string;
+  content: string;
+  url?: string;
+  breadcrumb?: string;
+};
+export type Version = {
+  library_id: string;
+  requested: string;
+  served: string | null;
+  status: 'verified' | 'unverified';
+};
 export type DocsData = {
   provider: 'ctx7';
-  library_id: string;
+  library_id?: string;
   code_snippets: CodeSnippet[];
   info_snippets: InfoSnippet[];
-  rules?: { global?: string[]; library_own?: string[]; library_team?: string[] };
+  rules?: {
+    global?: string[];
+    library_own?: string[];
+    library_team?: string[];
+    libraries?: { library_id: string; library_own?: string[]; library_team?: string[] }[];
+  };
+  version?:
+    Version | { status: 'verified' | 'unverified'; requested?: string; libraries: Version[] };
 };
-export type Data = LibraryData | DocsData;
+export type FetchData = {
+  provider: 'ctx7';
+  url: string;
+  title: string;
+  untrusted: true;
+  content_check: 'passed' | 'unavailable';
+  text?: string;
+  highlights?: { text: string; relevance?: number }[];
+  offset?: number;
+  total_length?: number;
+  next_offset?: number;
+  truncated?: boolean;
+};
+type ResponseMetadata = {
+  search_status?: string;
+  search_reason?: string;
+  search_version?: string;
+  content_check_header?: string;
+};
+export type Data = (LibraryData | DocsData | FetchData) & ResponseMetadata;
 
 export function validLibraryId(value: unknown): value is string {
   return (
@@ -66,13 +109,14 @@ export function validLibraryId(value: unknown): value is string {
   );
 }
 export function prepare(
-  operation: Operation,
+  operation: 'library' | 'docs',
   target: string,
   query: string,
   timeout: number | undefined,
   values: Record<string, unknown>,
   env: NodeJS.ProcessEnv,
   language: Language,
+  options: { language?: string } = {},
 ): Request {
   for (const [value, option] of [
     [target, operation === 'library' ? 'NAME' : 'LIBRARY_ID'],
@@ -83,6 +127,30 @@ export function prepare(
   }
   if (operation === 'docs' && !validLibraryId(target))
     throw new AppError('INVALID_ARGUMENT', 'ctx7InvalidId', { option: 'LIBRARY_ID' });
+  const { base, ...connection } = connectionSettings(operation, timeout, values, env, language);
+  const url = new URL(`${base}${operation === 'library' ? '/v2/libs/search' : '/v2/context'}`);
+  url.searchParams.set(operation === 'library' ? 'libraryName' : 'libraryId', target);
+  url.searchParams.set('query', query);
+  if (operation === 'docs') {
+    url.searchParams.set('type', 'json');
+    if (options.language !== undefined)
+      url.searchParams.set('language', preference(options.language, '--language', 40));
+  }
+  url.searchParams.set('fast', 'false');
+  return {
+    ...connection,
+    operation,
+    url: url.href,
+    ...(operation === 'docs' ? { libraryId: target } : {}),
+  };
+}
+function connectionSettings(
+  operation: Operation,
+  timeout: number | undefined,
+  values: Record<string, unknown>,
+  env: NodeJS.ProcessEnv,
+  language: Language,
+) {
   const settings = operationConfig(
     values,
     env,
@@ -100,20 +168,113 @@ export function prepare(
         },
   );
   const base = (settings['providers.ctx7.base_url'].value as string).replace(/\/+$/, '');
-  const url = new URL(`${base}${operation === 'library' ? '/v2/libs/search' : '/v2/context'}`);
-  url.searchParams.set(operation === 'library' ? 'libraryName' : 'libraryId', target);
-  url.searchParams.set('query', query);
-  if (operation === 'docs') url.searchParams.set('type', 'json');
-  url.searchParams.set('fast', 'false');
   return {
-    operation,
-    url: url.href,
-    ...(operation === 'docs' ? { libraryId: target } : {}),
+    base,
     apiKey: settings['providers.ctx7.api_key'].value as string | undefined,
     secrets: configuredSecrets(values, env),
     timeout: settings['execution.timeout_seconds'].value as number,
     retries: settings['execution.retries'].value as number,
   };
+}
+export interface SearchOptions {
+  library?: string[];
+  libraryVersion?: string;
+  language?: string;
+  timeout?: number;
+}
+export interface FetchOptions {
+  query?: string;
+  tokens?: string;
+  offset?: string;
+  timeout?: number;
+}
+function preference(value: string, option: string, maximum: number): string {
+  if (!value.trim() || [...value].length > maximum)
+    throw new AppError('INVALID_ARGUMENT', 'ctx7InputLimit', { option, maximum });
+  return value;
+}
+export function prepareSearch(
+  query: string,
+  options: SearchOptions,
+  values: Record<string, unknown>,
+  env: NodeJS.ProcessEnv,
+  language: Language,
+): Request {
+  preference(query, 'QUERY', 2000);
+  const { base, ...connection } = connectionSettings(
+    'search',
+    options.timeout,
+    values,
+    env,
+    language,
+  );
+  const url = new URL(`${base}/v3/search`);
+  url.searchParams.set('query', query);
+  url.searchParams.set('type', 'json');
+  if (options.library !== undefined) {
+    if (options.library.length < 1 || options.library.length > 4)
+      throw new AppError('INVALID_ARGUMENT', 'ctx7Libraries');
+    for (const value of options.library)
+      url.searchParams.append('library', preference(value, '--library', 120));
+  }
+  if (options.language !== undefined)
+    url.searchParams.set('language', preference(options.language, '--language', 40));
+  if (options.libraryVersion !== undefined) {
+    if (
+      !/^([Ll][Aa][Tt][Ee][Ss][Tt]|[Vv]?[0-9]+([._][0-9]+){0,2}([-+][a-zA-Z0-9.-]+)?)$/.test(
+        options.libraryVersion,
+      )
+    )
+      throw new AppError('INVALID_ARGUMENT', 'ctx7VersionInput');
+    url.searchParams.set('version', options.libraryVersion);
+  }
+  return { ...connection, operation: 'search', url: url.href };
+}
+export function prepareFetch(
+  target: string,
+  options: FetchOptions,
+  values: Record<string, unknown>,
+  env: NodeJS.ProcessEnv,
+  language: Language,
+): Request {
+  if (!validPageUrl(target) || target.length > 2048)
+    throw new AppError('INVALID_ARGUMENT', 'invalidPageUrl', { option: 'URL' });
+  if (options.query !== undefined && options.offset !== undefined)
+    throw new AppError('INVALID_ARGUMENT', 'ctx7OffsetConflict');
+  const { base, ...connection } = connectionSettings(
+    'fetch',
+    options.timeout,
+    values,
+    env,
+    language,
+  );
+  const url = new URL(`${base}/v3/fetch`);
+  url.searchParams.set('url', target);
+  url.searchParams.set('type', 'json');
+  if (options.query !== undefined)
+    url.searchParams.set('query', preference(options.query, '--query', 2000));
+  for (const [key, minimum, maximum, invalidMessage] of [
+    ['tokens', 100, 10000, 'ctx7Tokens'],
+    ['offset', 0, Number.MAX_SAFE_INTEGER, 'ctx7Offset'],
+  ] as const) {
+    if (options[key] === undefined) continue;
+    const option = `--${key}`;
+    try {
+      url.searchParams.set(
+        key,
+        String(
+          parseInput(
+            { path: option, kind: 'integer', minimum, maximum, invalidMessage },
+            options[key],
+          ),
+        ),
+      );
+    } catch (error) {
+      if (error instanceof AppError) throw new AppError('INVALID_ARGUMENT', error.key, { option });
+      throw error;
+    }
+  }
+  return { ...connection, operation: 'fetch', url: url.href, query: options.query };
 }
 function invalid(): never {
   throw new AppError('INVALID_RESPONSE', 'ctx7Response', { provider: 'ctx7', http_status: 200 });
@@ -180,7 +341,33 @@ export function libraryData(value: unknown): LibraryData {
     ...(body.searchFilterApplied ? { search_filter_applied: true } : {}),
   };
 }
-export function docsData(value: unknown, libraryId: string): DocsData {
+function rank(item: Record<string, unknown>): number {
+  if (typeof item.rank !== 'number' || !Number.isSafeInteger(item.rank) || item.rank < 1)
+    return invalid();
+  return item.rank;
+}
+function sourceLibrary(item: Record<string, unknown>, libraryId?: string): { library_id?: string } {
+  if (libraryId !== undefined) return {};
+  if (!validLibraryId(item.libraryId)) return invalid();
+  return { library_id: item.libraryId };
+}
+function versionData(value: unknown): Version {
+  const item = object(value);
+  if (
+    !validLibraryId(item.libraryId) ||
+    typeof item.requested !== 'string' ||
+    (item.served !== null && typeof item.served !== 'string') ||
+    !['verified', 'unverified'].includes(item.status as string)
+  )
+    return invalid();
+  return {
+    library_id: item.libraryId,
+    requested: item.requested,
+    served: item.served as string | null,
+    status: item.status as Version['status'],
+  };
+}
+export function docsData(value: unknown, libraryId?: string): DocsData {
   const body = object(value);
   if (!Array.isArray(body.codeSnippets) || !Array.isArray(body.infoSnippets)) return invalid();
   const code_snippets = body.codeSnippets.map((entry): CodeSnippet => {
@@ -196,7 +383,11 @@ export function docsData(value: unknown, libraryId: string): DocsData {
       return { ...(language ? { language } : {}), code };
     });
     if (!examples.length && !description) return invalid();
-    const result: CodeSnippet = { url: item.codeId };
+    const result: CodeSnippet = {
+      url: item.codeId,
+      rank: rank(item),
+      ...sourceLibrary(item, libraryId),
+    };
     if (title && (examples.length || title !== description)) result.title = title;
     if (description && (!examples.length || title !== description))
       result.description = description;
@@ -213,7 +404,7 @@ export function docsData(value: unknown, libraryId: string): DocsData {
     const item = object(entry);
     const content = requiredText(item.content);
     if (!content) return invalid();
-    const result: InfoSnippet = { content };
+    const result: InfoSnippet = { content, rank: rank(item), ...sourceLibrary(item, libraryId) };
     if (item.pageId !== undefined && item.pageId !== null) {
       if (!validPageUrl(item.pageId)) return invalid();
       result.url = item.pageId;
@@ -224,10 +415,29 @@ export function docsData(value: unknown, libraryId: string): DocsData {
   });
   const result: DocsData = {
     provider: 'ctx7',
-    library_id: libraryId,
+    ...(libraryId === undefined ? {} : { library_id: libraryId }),
     code_snippets,
     info_snippets,
   };
+  if (body.version !== undefined) {
+    if (libraryId !== undefined) {
+      result.version = versionData(body.version);
+      result.library_id = result.version.library_id;
+    } else {
+      const version = object(body.version);
+      if (
+        !Array.isArray(version.libraries) ||
+        !['verified', 'unverified'].includes(version.status as string)
+      )
+        return invalid();
+      const requested = optionalText(version.requested);
+      result.version = {
+        status: version.status as Version['status'],
+        ...(requested ? { requested } : {}),
+        libraries: version.libraries.map(versionData),
+      };
+    }
+  }
   if (body.rules !== undefined && body.rules !== null) {
     const rules = object(body.rules);
     const mapped: NonNullable<DocsData['rules']> = {};
@@ -239,7 +449,75 @@ export function docsData(value: unknown, libraryId: string): DocsData {
       const entries = strings(rules[source], true);
       if (entries) mapped[target] = entries;
     }
+    if (rules.libraries !== undefined) {
+      if (!Array.isArray(rules.libraries)) return invalid();
+      mapped.libraries = rules.libraries.map((value) => {
+        const item = object(value);
+        if (!validLibraryId(item.libraryId)) return invalid();
+        const own = strings(item.libraryOwn, true),
+          team = strings(item.libraryTeam, true);
+        return {
+          library_id: item.libraryId,
+          ...(own ? { library_own: own } : {}),
+          ...(team ? { library_team: team } : {}),
+        };
+      });
+    }
     if (Object.keys(mapped).length) result.rules = mapped;
+  }
+  return result;
+}
+export function fetchData(value: unknown, query: boolean): FetchData {
+  const body = object(value);
+  if (
+    !validPageUrl(body.url) ||
+    typeof body.title !== 'string' ||
+    body.untrusted !== true ||
+    !['passed', 'unavailable'].includes(body.contentCheck as string)
+  )
+    return invalid();
+  const result: FetchData = {
+    provider: 'ctx7',
+    url: body.url,
+    title: body.title,
+    untrusted: true,
+    content_check: body.contentCheck as FetchData['content_check'],
+  };
+  if (body.truncated !== undefined) {
+    if (typeof body.truncated !== 'boolean') return invalid();
+    result.truncated = body.truncated;
+  }
+  if (query) {
+    if (!Array.isArray(body.highlights)) return invalid();
+    result.highlights = body.highlights.map((value) => {
+      const item = object(value);
+      if (typeof item.text !== 'string' || !item.text.trim()) return invalid();
+      if (
+        item.relevance !== undefined &&
+        (typeof item.relevance !== 'number' ||
+          !Number.isFinite(item.relevance) ||
+          item.relevance < 0 ||
+          item.relevance > 1)
+      )
+        return invalid();
+      return {
+        text: item.text,
+        ...(item.relevance === undefined ? {} : { relevance: item.relevance as number }),
+      };
+    });
+  } else {
+    if (typeof body.content !== 'string') return invalid();
+    result.text = body.content;
+    for (const [source, target] of [
+      ['offset', 'offset'],
+      ['totalLength', 'total_length'],
+      ['nextOffset', 'next_offset'],
+    ] as const) {
+      if (source === 'nextOffset' && body[source] === undefined) continue;
+      const value = body[source];
+      if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return invalid();
+      result[target] = value;
+    }
   }
   return result;
 }
@@ -266,12 +544,20 @@ function httpError(
   if (!mapped) {
     if (operation === 'docs' && unavailable[status]?.includes(tag ?? ''))
       mapped = ['CONTENT_UNAVAILABLE', 'ctx7Unavailable'];
+    else if (operation === 'fetch' && [404, 422, 502].includes(status))
+      mapped = ['CONTENT_UNAVAILABLE', 'ctx7PageUnavailable'];
+    else if (operation === 'search' && status === 404)
+      mapped = ['CONTENT_UNAVAILABLE', 'ctx7NoDocumentation'];
     else if (status === 301 && tag === 'library_redirected')
       mapped = ['UPSTREAM_ERROR', 'ctx7Redirect'];
     else mapped = ['UPSTREAM_ERROR', 'ctx7Upstream'];
   }
   const [code, key] = mapped;
-  return { code, key, retry: [408, 429, 500, 502, 503, 504].includes(status) };
+  return {
+    code,
+    key,
+    retry: code !== 'CONTENT_UNAVAILABLE' && [408, 429, 500, 502, 503, 504].includes(status),
+  };
 }
 export async function request(
   request: Request,
@@ -314,13 +600,48 @@ export async function request(
     } catch {
       body = undefined;
     }
-    if (response.status === 200)
-      return {
-        outcome: success(
-          request.operation === 'library' ? libraryData(body) : docsData(body, request.libraryId!),
-        ),
-        retry: false,
-      };
+    if (response.status === 200) {
+      let data: Data;
+      switch (request.operation) {
+        case 'library':
+          data = libraryData(body);
+          break;
+        case 'fetch':
+          data = fetchData(body, request.query !== undefined);
+          break;
+        case 'search':
+        case 'docs':
+          data = docsData(body, request.libraryId);
+          break;
+      }
+      for (const [header, key] of [
+        ['x-context7-search-status', 'search_status'],
+        ['x-context7-search-reason', 'search_reason'],
+        ['x-context7-search-version', 'search_version'],
+        ['x-context7-content-check', 'content_check_header'],
+      ] as const) {
+        const value = response.headers.get(header);
+        if (value) data[key] = safe(value);
+      }
+      const unverified =
+        ('version' in data &&
+          data.version &&
+          (data.version.status === 'unverified' ||
+            ('libraries' in data.version &&
+              data.version.libraries.some((item) => item.status === 'unverified')))) ||
+        response.headers.get('x-context7-search-version') === 'unverified';
+      const outcome =
+        unverified || response.headers.get('x-context7-search-status') === 'partial'
+          ? failure(
+              new AppError('UPSTREAM_ERROR', unverified ? 'ctx7Unverified' : 'ctx7Partial', {
+                provider: 'ctx7',
+              }),
+              language,
+              success(data),
+            )
+          : success(data);
+      return { outcome, retry: false };
+    }
     const details: JsonObject = { provider: 'ctx7', http_status: response.status };
     let invalidBody = false;
     for (const [source, target] of [

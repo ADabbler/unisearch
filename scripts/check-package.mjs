@@ -184,7 +184,7 @@ assert.match(installed(['exa', 'search', '--help'], 'en'), /--search-type/);
 assert.match(installed(['exa', 'search', '--help']), /搜索模式/);
 assert.match(installed(['exa', 'fetch', '--help'], 'en'), /--max-length/);
 assert.match(installed(['exa', 'fetch', '--help']), /正文/);
-for (const operation of ['library', 'docs']) {
+for (const operation of ['search', 'fetch', 'library', 'docs']) {
   assert.match(installed(['ctx7', operation, '--help'], 'en'), /^Usage:/);
   assert.match(installed(['ctx7', operation, '--help']), /^用法：/);
 }

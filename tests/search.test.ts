@@ -394,7 +394,7 @@ test('Local HTTP barrier proves parallel execution and exact model/Exa mappings 
   const file = join(root, 'config.json');
   writeFileSync(
     file,
-    JSON.stringify({ providers: { exa: { search: { limit: 3, search_type: 'fast' } } } }),
+    JSON.stringify({ providers: { exa: { search: { limit: 3, search_type: 'lite' } } } }),
   );
   const channels = capture();
   const config = context(root, {
@@ -427,8 +427,8 @@ test('Local HTTP barrier proves parallel execution and exact model/Exa mappings 
   assert.deepEqual(exa.body, {
     query: ' q ',
     numResults: 3,
-    type: 'fast',
-    contents: { text: false, highlights: false },
+    type: 'lite',
+    contents: { text: false, highlights: true },
   });
   assert.equal(exa.headers['x-api-key'], 'exa-secret');
   const result = JSON.parse(channels.out);

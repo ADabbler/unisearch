@@ -49,6 +49,7 @@ export interface FetchOptions extends Options {
   removeSelector?: string[];
   includeLinks?: boolean;
   includeImageLinks?: boolean;
+  includeIframeLinks?: boolean;
   includeMetadata?: boolean;
 }
 interface Connection {
@@ -238,6 +239,7 @@ export function prepareFetch(
   for (const [key, name] of [
     ['includeLinks', 'links'],
     ['includeImageLinks', 'image_links'],
+    ['includeIframeLinks', 'iframe_links'],
     ['includeMetadata', 'page_metadata'],
   ] as const)
     if (options[key]) body[name] = true;

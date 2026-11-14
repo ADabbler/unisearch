@@ -60,7 +60,6 @@ example --help
             url: 'https://example.org/guide',
             title: 'Example guide',
             text: 'Installation instructions.',
-            missing_content: ['highlights'],
           },
         ],
       },
@@ -68,8 +67,6 @@ example --help
     markdown: `来源：Exa
 
 ## 1. [Example guide](https://example.org/guide)
-
-未取得请求的附带内容：摘录
 
 ### 正文
 

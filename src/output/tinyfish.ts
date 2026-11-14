@@ -69,29 +69,32 @@ export function renderFetch(data: FetchData, language: Language): string {
       parts.push(
         `${text(language, 'unmatchedSelectorsLabel')}${sep}${page.unmatched_selectors.map(inlineCode).join(language === 'zh' ? '、' : ', ')}`,
       );
-    if (page.missing_content)
+    if (page.missing_content) {
+      const missing = page.missing_content.map((key) => {
+        if (key === 'links') return text(language, 'tinyfishLinksLabel');
+        if (key === 'iframe_links') return text(language, 'tinyfishIframesLabel');
+        return text(language, 'tinyfishImagesLabel');
+      });
       parts.push(
-        `${text(language, 'tinyfishMissingLabel')}${sep}${page.missing_content.map((key) => text(language, key === 'links' ? 'tinyfishLinksLabel' : 'tinyfishImagesLabel')).join(language === 'zh' ? '、' : ', ')}`,
+        `${text(language, 'tinyfishMissingLabel')}${sep}${missing.join(language === 'zh' ? '、' : ', ')}`,
       );
+    }
     if (page.not_modified) parts.push(text(language, 'tinyfishUnchangedLabel'));
     if (page.etag) parts.push(`ETag${sep}${inlineCode(page.etag)}`);
     if (page.last_modified)
       parts.push(`${text(language, 'tinyfishModifiedLabel')}${sep}${inline(page.last_modified)}`);
     if (page.text) parts.push(page.text);
-    for (const [key, heading, empty] of [
-      ['links', 'tinyfishLinksLabel', 'tinyfishNoLinks'],
-      ['image_links', 'tinyfishImagesLabel', 'tinyfishNoImages'],
+    for (const [key, heading] of [
+      ['links', 'tinyfishLinksLabel'],
+      ['image_links', 'tinyfishImagesLabel'],
+      ['iframe_links', 'tinyfishIframesLabel'],
     ] as const) {
       const urls = page[key];
-      if (urls === undefined) continue;
-      if (!urls.length) parts.push(text(language, empty));
-      else
-        parts.push(
-          `### ${text(language, heading)}`,
-          urls
-            .map((url) => `- ${/^https?:\/\//.test(url) ? link(url) : inlineCode(url)}`)
-            .join('\n'),
-        );
+      if (!urls?.length) continue;
+      parts.push(
+        `### ${text(language, heading)}`,
+        urls.map((url) => `- ${/^https?:\/\//.test(url) ? link(url) : inlineCode(url)}`).join('\n'),
+      );
     }
     if (page.page_metadata)
       parts.push(

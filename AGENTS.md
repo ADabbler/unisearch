@@ -33,11 +33,14 @@ Use Node.js 24 or newer and npm. Install locked dependencies with `npm ci --igno
 - Run relevant checks before delivery. Include package verification when changing distributed files or installation behavior; use the full check sequence for changes spanning the repository.
 - Report only checks actually run and any remaining gaps. Repeat passing checks only when subsequent changes or unresolved concerns warrant it.
 
-## Documentation and Comments
+## Documentation, Comments, and CLI Text
 
-- Write for the intended reader, using terminology and detail appropriate to their task.
-- Replace outdated descriptions directly and update both language versions of affected documents. Keep current behavior and necessary explanations; omit session narration, editing history, and appended corrections or change summaries.
+- Write for the intended reader and task. Include implementation details only when they help that reader act or understand the behavior.
+- State current behavior directly. Replace outdated descriptions and update both language versions of affected documents; omit session narration, editing history, and appended corrections or change summaries.
 - Document non-obvious behavior, failure conditions, and constraints where readers need them. Do not restate code or duplicate explanations across files.
+- Keep `skills/unisearch/SKILL.md` focused on command selection and essential workflows; refer to `--help` for option details.
+- Explain CLI option purpose, units, defaults, allowed values, and service scope where needed for correct use. Keep names and terminology consistent across equivalent options, help, errors, and result labels.
+- Omit empty optional output sections and redundant absence messages. Preserve meaningful empty JSON values and information needed to judge success or failure.
 
 ## Git
 

@@ -61,6 +61,7 @@ const expectedFiles = [
   ...compiledFiles,
   'skills/unisearch/SKILL.md',
   'skills/unisearch/agents/openai.yaml',
+  'skills/unisearch/references/providers.md',
   'package.json',
   'LICENSE',
   'README.md',

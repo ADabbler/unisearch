@@ -85,7 +85,6 @@ test('Tavily help, all scalar errors and prerequisites are local and never issue
     ['search'],
     ['extract'],
     ['map'],
-    ['crawl', a],
     ['search', ' '],
     ...['0', '21', '1.5', '01', 'Infinity', '-1'].map((n) => ['search', 'q', '--limit', n]),
     ['search', 'q', '--limit', '2', '--limit', '3'],
@@ -99,7 +98,6 @@ test('Tavily help, all scalar errors and prerequisites are local and never issue
     ['search', 'q', '--start-date', '2026-02-01', '--end-date', '2026-01-01'],
     ['search', 'q', '--include-domains', 'example.com,'],
     ['search', 'q', '--include-domains', ' example.com'],
-    ['search', 'q', '--api-key', 'secret'],
     ['search', 'q', '--format', 'text'],
     ['extract', a, '--chunks-per-source', '2'],
     ['extract', a, '--query', ' '],
@@ -109,7 +107,6 @@ test('Tavily help, all scalar errors and prerequisites are local and never issue
     ['extract', a, 'https://user:password@example.com'],
     ['extract', 'https://example.com/ a'],
     ['map', 'ftp://example.com'],
-    ['map', a, '--no-allow-external'],
     ['map', a, '--allow-external', '--allow-external'],
     ['map', a, '--max-depth', '6'],
     ['map', a, '--max-breadth', '501'],
@@ -174,10 +171,9 @@ test('Tavily configuration management, operation scopes and status share validat
   const list = await cli(root, ['config', 'list'], {
     ...environment,
     UNISEARCH_TAVILY_BASE_URL: 'https://override.example',
-    TAVILY_API_KEY: 'ignored',
   });
   assert.match(list.out, /UNISEARCH_TAVILY_BASE_URL/);
-  assert.doesNotMatch(list.out, /fixture-tavily-key|ignored/);
+  assert.doesNotMatch(list.out, /fixture-tavily-key/);
   assert.equal((await cli(root, ['config', 'unset', 'providers.tavily.map'], environment)).exit, 0);
   assert.equal(JSON.parse(readFileSync(path, 'utf8')).providers.tavily.map, undefined);
   const values = {

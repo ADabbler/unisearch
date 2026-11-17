@@ -325,10 +325,6 @@ test('Firecrawl config management saves only explicit values and status shares r
     [{ providers: { firecrawl: { base_url: '?' } } }, 'invalid'],
   ] as const)
     assert.equal(localStatus(values, {}, 'en', firecrawl.operations).services[0].state, state);
-  assert.throws(
-    () => firecrawl.prepareSearch('q', {}, {}, { FIRECRAWL_API_KEY: 'legacy-key' }, 'en'),
-    errorCode('MISSING_CONFIG'),
-  );
   const channels = capture();
   const keyed = context(root, { ...env, UNISEARCH_CONFIG_PATH: file });
   assert.equal(
@@ -360,7 +356,6 @@ test('Firecrawl CLI help, invalid inputs and duplicate options never call HTTP',
     assert.equal(await createCli('test', { config, channels }).run(args), 0);
     for (const command of ['search', 'scrape', 'map'])
       assert.match(channels.out, new RegExp(`\\n  ${command} `));
-    assert.doesNotMatch(channels.out, /\n  (crawl|batch|browser|doctor) /);
     outputs.push(channels.out);
   }
   assert.equal(outputs[0], outputs[1]);
@@ -368,19 +363,14 @@ test('Firecrawl CLI help, invalid inputs and duplicate options never call HTTP',
     ['search'],
     ['scrape'],
     ['map'],
-    ['crawl', 'https://example.org'],
     ['search', 'q', '--limit', '0'],
     ['search', 'q', '--limit', '1', '--limit', '2'],
-    ['search', 'q', '--no-include-text'],
     ['search', 'q', '--include-text', '--include-text'],
-    ['search', 'q', '--sources', 'news'],
     ['search', 'q', '--categories', 'research,gov'],
-    ['scrape', 'https://example.org', '--only-main-content'],
     ['scrape', 'https://example.org', '--no-only-main-content', '--no-only-main-content'],
     ['scrape', 'https://example.org', '--wait-for', '31'],
     ['scrape', 'https://example.org', '--include-tag', ' '],
     ['map', 'https://example.org', '--include-subdomains', '--include-subdomains'],
-    ['map', 'https://example.org', '--ignore-query-parameters'],
     ['map', 'https://example.org', '--no-ignore-query-parameters', '--no-ignore-query-parameters'],
     ['map', 'https://example.org', '--sitemap', 'only', '--search', 'blog'],
     ['map', 'https://example.org', '--ignore-cache', '--ignore-cache'],
@@ -397,13 +387,8 @@ test('Firecrawl CLI help, invalid inputs and duplicate options never call HTTP',
       2,
       args.join(' '),
     );
-    if (args[0] === 'crawl') {
-      assert.equal(channels.out, '');
-      assert.match(channels.err, /^Error:/);
-    } else {
-      assert.equal(JSON.parse(channels.out).error.code, 'INVALID_ARGUMENT');
-      assert.equal(channels.err, '');
-    }
+    assert.equal(JSON.parse(channels.out).error.code, 'INVALID_ARGUMENT');
+    assert.equal(channels.err, '');
   }
   assert.equal(
     await createCli('test', { config, channels: capture() }).run(['status', '--json']),

@@ -18,7 +18,6 @@ test('Bare root, help aliases, and version follow Commander without configuratio
     assert.equal(await cli.run(args), 0);
     assert.equal(channels.err, '');
     assert.match(channels.out, /^Usage: unisearch/);
-    assert.doesNotMatch(channels.out, /--lang/);
     assert.match(channels.out, /\bsetup\b/);
     assert.doesNotMatch(channels.out, /--format|--output|--verbose|--timeout/);
     assert.match(channels.out, /\bexa\b/);
@@ -187,18 +186,12 @@ test('Invalid input produces one result using the recognized format', async (t) 
     ['--format'],
     ['--format=xml'],
     ['unknown-command'],
+    ['unknown-command', '--help'],
+    ['unknown-command', '--version'],
     ['search', 'query', '--format=json', '--format=markdown'],
     ['search', 'query', '--format=json', '--format'],
     ['search', 'query', '--format=xml'],
     ['status', '--unknown'],
-    ['list', '--help'],
-    ['list', '-h'],
-    ['list', '--version'],
-    ['list', '-V'],
-    ['exa', 'list', '--help'],
-    ['exa', 'list', '-h'],
-    ['exa', 'list', '--version'],
-    ['exa', 'list', '-V'],
   ]) {
     const channels = capture();
     const cli = createCli('1.2.3', { channels, config: context(root, { UNISEARCH_LANG: 'en' }) });

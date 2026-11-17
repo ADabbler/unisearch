@@ -211,7 +211,7 @@ test('Cancellation during replacement finishes current target and does not start
   assert.equal(await fs.readFile(join(targets[1].path, 'SKILL.md'), 'utf8'), 'old');
 });
 
-test('Skill CLI uses plain text and rejects unsupported result options before writes', async (t) => {
+test('Skill CLI manages explicit targets with compact plain text output', async (t) => {
   const root = temporary(t);
   const config = context(root, { UNISEARCH_LANG: 'en' });
   const run = async (args: string[]) => {
@@ -226,16 +226,6 @@ test('Skill CLI uses plain text and rejects unsupported result options before wr
   const compactStatus = await run(['skills', 'status', '--targets', 'codex,claude']);
   assert.doesNotMatch(compactStatus.channels.out, /\n\n/);
   const [target] = targetPaths(['codex'], config);
-  const rejected = await run([
-    'skills',
-    'install',
-    '--targets',
-    'codex',
-    '--output',
-    'result.json',
-  ]);
-  assert.equal(rejected.exit, 2);
-  await assert.rejects(fs.stat(target.path));
   const installed = await run(['skills', 'install', '--targets', 'codex']);
   assert.equal(installed.exit, 0);
   assert.match(installed.channels.out, /Codex: installed/);

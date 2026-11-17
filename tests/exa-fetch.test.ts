@@ -334,13 +334,11 @@ test('Exa contents CLI config, status, batch request and file outputs use public
     [a, '--max-length', '0'],
     [a, '--include-highlights', '--include-highlights'],
     [a, '--max-length', '1', '--max-length', '2'],
-    [a, '--no-max-length'],
     [a, '--highlights-query', ' '],
     Array(101).fill(a),
   ])
     assert.equal((await f.run(['exa', 'fetch', ...args])).exit, 2);
   assert.equal(f.calls.length, 0);
-  assert.equal((await f.run(['config', 'set', 'providers.exa.fetch.max_length', '55'])).exit, 2);
   const saved = readFileSync(f.config, 'utf8');
   f.replies['/exa/contents'] = { body: { results: [page, { ...page, url: b }, page] } };
   const output = join(f.root, 'pages.json');

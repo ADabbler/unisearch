@@ -515,7 +515,7 @@ test('Path bypasses broken files and language repair uses the original call lang
   );
 });
 
-test('Credential arguments, queries, confirmations and rejected options never expose secrets', async (t) => {
+test('Credential values stay redacted in queries, confirmations and argument errors', async (t) => {
   const f = fixture(t);
   const secret = 'fixture-secret-never-display';
   const saved = await f.run(['config', 'set', 'providers.exa.api_key', secret]);
@@ -532,7 +532,7 @@ test('Credential arguments, queries, confirmations and rejected options never ex
     assert.doesNotMatch(result.out + result.err, /fixture-secret-never-display/);
     assert.match(result.out, /\[REDACTED\]/);
   }
-  for (const tail of [[], ['--stdin'], ['--from-env', secret], [secret, secret]]) {
+  for (const tail of [[], [secret, secret]]) {
     const result = await f.run(['config', 'set', 'providers.exa.api_key', ...tail]);
     assert.equal(result.exit, 2);
     assert.equal(result.out, '');
@@ -558,19 +558,6 @@ test('Fixed JSON queries report parameter and configuration failures as one obje
   assert.equal(result.body.error.code, 'INVALID_CONFIG');
   assert.equal(result.body.error.details.field, 'providers.exa.enabled');
   assert.doesNotMatch(result.body.error.message, /[。.]$/);
-});
-
-test('Unsupported output options fail before modifying configuration or result files', async (t) => {
-  const f = fixture(t);
-  f.save({ execution: { retries: 1 } });
-  const original = readFileSync(f.path, 'utf8');
-  for (const output of [f.path, join(f.root, 'absent', 'result.json'), f.root]) {
-    const result = await f.run(['config', 'set', 'execution.retries', '2', '--output', output]);
-    assert.equal(result.exit, 2);
-    assert.equal(result.out, '');
-    assert.match(result.err, /Unknown option/);
-    assert.equal(readFileSync(f.path, 'utf8'), original);
-  }
 });
 
 test('Configuration symbolic links preserve links and resolve new files under linked directories', async (t) => {

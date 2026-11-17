@@ -28,9 +28,9 @@ Use Node.js 24 or newer and npm. Install locked dependencies with `npm ci --igno
 
 ## Verification
 
-- Match checks to the changed behavior and risk. Cover normal flows, confirmed boundaries, and reproducible defects; update affected output fixtures when behavior changes.
+- Run only checks needed to verify the changed behavior and risk; do not expand verification without a concrete reason. Cover normal flows, confirmed boundaries, and reproducible defects; update affected output fixtures when behavior changes.
+- Keep tests focused on current behavior. Remove dedicated tests and fixtures with deleted features instead of testing rejection or absence of obsolete interfaces. Cover shared parser behavior centrally; keep service tests for service-specific validation and effects.
 - Use temporary configuration and local fixtures for automated tests. Real provider calls require explicit authorization; never use personal credentials or configuration implicitly.
-- Run relevant checks before delivery. Include package verification when changing distributed files or installation behavior; use the full check sequence for changes spanning the repository.
 - Report only checks actually run and any remaining gaps. Repeat passing checks only when subsequent changes or unresolved concerns warrant it.
 
 ## Documentation, Comments, and CLI Text

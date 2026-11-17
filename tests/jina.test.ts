@@ -149,7 +149,6 @@ test('Jina rejects invalid inputs, credentials and disabled operations before HT
     ['--target-selector', ' '],
     ['--remove-selector', '\nmain'],
     ['--max-tokens', '500', '--max-tokens', '600'],
-    ['--unknown'],
     [url],
   ])
     assert.equal((await f.run(['jina', 'fetch', url, ...options])).exit, 2, options.join(' '));

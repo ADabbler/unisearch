@@ -234,8 +234,6 @@ test('Exa notices survive aggregation; relaxed restrictions fail once and unknow
     response({ ...body, notices: [{ ...notice, code: 'FUTURE_NOTICE' }] }),
   );
   assert.equal(unknown.outcome.exitCode, 0);
-  for (const searchType of ['fast', 'instant'])
-    assert.throws(() => exa.prepareSearch('q', { searchType }, {}, env, 'en'));
 });
 
 test('Firecrawl accepts research/pdf and host filters while preserving category and description', () => {

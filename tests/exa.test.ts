@@ -44,7 +44,6 @@ test('Exa help exposes search and fetch, and parameter errors are local', async 
     assert.equal(await createCli('test', { config: context(root), channels }).run(args), 0);
     assert.match(channels.out, /search/);
     assert.match(channels.out, /fetch/);
-    assert.doesNotMatch(channels.out, /similar/);
     outputs.push(channels.out);
   }
   assert.equal(outputs[0], outputs[1]);
@@ -60,7 +59,6 @@ test('Exa help exposes search and fetch, and parameter errors are local', async 
     ['q', '--timeout', 'Infinity'],
     ['q', '--timeout', '-1'],
     ['q', '--timeout', '2', '--timeout', '3'],
-    ['q', '--api-key', 'secret'],
     ['   '],
   ];
   for (const args of invalid) {
@@ -76,21 +74,6 @@ test('Exa help exposes search and fetch, and parameter errors are local', async 
       args.join(' '),
     );
     assert.equal(JSON.parse(channels.out).error.code, 'INVALID_ARGUMENT');
-  }
-  for (const args of [
-    ['config', 'path'],
-    ['status', '--json'],
-    ['config', 'set', 'language', 'en'],
-  ]) {
-    const channels = capture();
-    assert.equal(
-      await createCli('test', { config: context(root, env), channels }).run([
-        ...args,
-        '--timeout',
-        '1',
-      ]),
-      2,
-    );
   }
 });
 

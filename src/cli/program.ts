@@ -582,6 +582,8 @@ export function createCli(version: string, options: CliOptions = {}) {
     .summary(text('en', 'searchSummary'))
     .description(text('en', 'searchCommand'));
   addScalarOption(unified, new Option('--sources <IDS>', text('en', 'sourcesOption')));
+  addScalarOption(unified, new Option('--auto', text('en', 'autoOption')));
+  addScalarOption(unified, new Option('--no-auto', text('en', 'noAutoOption')));
   const dedicated = program
     .command('model')
     .description(text('en', 'modelCommand'))
@@ -597,8 +599,6 @@ export function createCli(version: string, options: CliOptions = {}) {
       ['--no-fallback', 'noFallbackOption'],
     ] as const)
       addScalarOption(command, new Option(flags, text('en', key)));
-    if (command === unified)
-      addScalarOption(command, new Option('--no-highlights', text('en', 'rootNoHighlightsOption')));
     let streamSeen = false;
     for (const name of ['stream', 'no-stream'])
       command.on(`option:${name}`, () => {
@@ -615,6 +615,7 @@ export function createCli(version: string, options: CliOptions = {}) {
         query,
         {
           ...options,
+          auto: explicitBoolean(command, 'auto'),
           sources: command === dedicated ? 'model' : options.sources,
           stream: explicitBoolean(command, 'stream'),
           fallback: explicitBoolean(command, 'fallback'),

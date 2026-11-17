@@ -1,6 +1,6 @@
 import { AppError, failure } from './errors.js';
 import { clock, executeRequest } from './execution.js';
-import type { ExecutionClock } from './execution.js';
+import type { AttemptContext, AttemptResult, ExecutionClock } from './execution.js';
 import { text } from './i18n/messages.js';
 import type { Language } from './i18n/messages.js';
 import { exaRequestLimit, prepareSearch, requestSearch } from './providers/exa.js';
@@ -22,7 +22,7 @@ import type { ModelAnswer } from './providers/model-response.js';
 import { configuredSecrets, redactDiagnostics as redact } from './providers/transport.js';
 import { success } from './result.js';
 import type { JsonObject, JsonValue, Outcome, PublicError } from './result.js';
-import { assertValid, fieldAt, validate } from './config/fields.js';
+import { assertValid, fieldAt, validate, searchProviders } from './config/fields.js';
 import type { Provider } from './config/fields.js';
 import { inspectConfig, resolveField } from './config/resolve.js';
 import {
@@ -33,17 +33,21 @@ import {
 import type { TavilySearchRequest, TavilySearchData } from './providers/tavily.js';
 import * as deepseek from './providers/deepseek.js';
 import type { SearchData as DeepseekData } from './providers/deepseek-response.js';
+import { prepareRouting } from './routing.js';
+import type { RoutingPlan } from './routing.js';
+import { requestParameters, requestSelection } from './classifiers/typesafe.js';
 
 export interface SearchOptions extends ModelOptions {
   sources?: string;
-  highlights?: boolean;
+  auto?: boolean;
 }
 export interface SearchPlan {
   sources: SourcePlan[];
   timeout: number;
   secrets: string[];
+  routing?: RoutingPlan;
 }
-type SourcePlan =
+export type SourcePlan =
   | { provider: 'model'; request: ModelRequest }
   | { provider: 'zhipu'; request: zhipu.Request<'search'> }
   | { provider: 'tinyfish'; request: tinyfish.SearchRequest }
@@ -88,6 +92,7 @@ export function prepareCombinedSearch(
 ): SearchPlan {
   if (!query.trim()) throw new AppError('INVALID_ARGUMENT', 'emptyQuery');
   const field = fieldAt('search.providers');
+  let auto = false;
   let selected: Exclude<Provider, 'ctx7'>[];
   if (options.sources !== undefined) {
     selected = options.sources.split(',') as Exclude<Provider, 'ctx7'>[];
@@ -95,14 +100,30 @@ export function prepareCombinedSearch(
     if (invalid) throw new AppError('INVALID_ARGUMENT', invalid.message, { option: '--sources' });
   } else {
     const inspected = inspectConfig(values, env, 'search');
-    assertValid(inspected.problems, language);
-    selected = inspected.resolved[0].value as Exclude<Provider, 'ctx7'>[];
+    if (options.auto !== undefined) auto = options.auto;
+    else {
+      const setting = inspected.resolved.find(
+        (item) => item.field.path === 'search.routing.enabled',
+      )!;
+      assertValid(setting.problems, language);
+      auto = setting.value as boolean;
+    }
+    assertValid(
+      inspected.problems.filter(
+        (problem) =>
+          problem.code === 'UNKNOWN_FIELD' &&
+          (problem.field === 'search' || (auto && problem.field === 'search.routing')),
+      ),
+      language,
+    );
+    if (auto) selected = searchProviders;
+    else {
+      const setting = inspected.resolved.find((item) => item.field.path === field.path)!;
+      assertValid(setting.problems, language);
+      selected = setting.value as Exclude<Provider, 'ctx7'>[];
+    }
   }
-  if (options.highlights === false && !selected.includes('exa') && !selected.includes('firecrawl'))
-    throw new AppError('INVALID_ARGUMENT', 'highlightsSourceRequired', {
-      option: '--no-highlights',
-    });
-  if (!selected.includes('model')) {
+  if (auto || !selected.includes('model')) {
     for (const [key, option] of [
       ['model', '--model'],
       ['effort', '--effort'],
@@ -110,13 +131,21 @@ export function prepareCombinedSearch(
       ['fallback', '--no-fallback'],
     ] as const) {
       if (options[key] !== undefined)
-        throw new AppError('INVALID_ARGUMENT', 'modelSourceRequired', { option });
+        throw new AppError('INVALID_ARGUMENT', auto ? 'autoModelOptions' : 'modelSourceRequired', {
+          option,
+        });
     }
   }
   const setting = resolveField(values, env, fieldAt('execution.timeout_seconds'));
   if (options.timeout === undefined) assertValid(setting.problems, language);
   const timeout = options.timeout ?? (setting.value as number);
-  const sources: SourcePlan[] = selected.map((provider) => {
+  let maxSources: number | undefined;
+  if (auto) {
+    const limit = resolveField(values, env, fieldAt('search.routing.max_sources'));
+    assertValid(limit.problems, language);
+    maxSources = limit.value as number;
+  }
+  const prepareSource = (provider: SourcePlan['provider']): SourcePlan => {
     switch (provider) {
       case 'model':
         return {
@@ -148,13 +177,7 @@ export function prepareCombinedSearch(
       case 'exa':
         return {
           provider,
-          request: prepareSearch(
-            query,
-            { timeout, highlights: options.highlights },
-            values,
-            env,
-            language,
-          ),
+          request: prepareSearch(query, { timeout }, values, env, language),
         };
       case 'tavily':
         return {
@@ -169,17 +192,37 @@ export function prepareCombinedSearch(
       case 'firecrawl':
         return {
           provider,
-          request: firecrawl.prepareSearch(
-            query,
-            { timeout, highlights: options.highlights },
-            values,
-            env,
-            language,
-          ),
+          request: firecrawl.prepareSearch(query, { timeout }, values, env, language),
         };
     }
-  });
-  return { sources, timeout, secrets: configuredSecrets(values, env) };
+  };
+  const sources: SourcePlan[] = [];
+  for (const provider of selected) {
+    try {
+      sources.push(prepareSource(provider));
+    } catch (error) {
+      if (
+        !auto ||
+        !(error instanceof AppError) ||
+        !(
+          ['MISSING_CONFIG', 'SERVICE_DISABLED'].includes(error.code) ||
+          (error.code === 'INVALID_ARGUMENT' &&
+            ['deepseekQueryTooLong', 'firecrawlQuery', 'zhipuQueryLimit'].includes(error.key))
+        )
+      )
+        throw error;
+    }
+  }
+  if (!sources.length) throw new AppError('MISSING_CONFIG', 'routingNoCandidates');
+  const routing = auto
+    ? prepareRouting(query, sources, maxSources!, values, env, language)
+    : undefined;
+  return {
+    sources,
+    timeout,
+    secrets: configuredSecrets(values, env),
+    routing,
+  };
 }
 
 export async function combinedSearch(
@@ -280,13 +323,73 @@ export async function combinedSearch(
     }
   }
   try {
-    const outcomes = await Promise.all(plan.sources.map(run));
+    let sources = plan.sources;
+    if (plan.routing) {
+      const routing = plan.routing;
+      const classify = <T extends JsonValue>(
+        request: (context: AttemptContext) => Promise<AttemptResult<T>>,
+      ) =>
+        executeRequest(request, {
+          ...common,
+          provider: 'classifier',
+          retries: routing.retries,
+          requestLimit: plan.timeout,
+          record: {},
+          onAttempt: (entry) => {
+            entry.provider = 'classifier';
+            attempts.push(entry);
+          },
+        });
+      if (sources.length > 1) {
+        const selected = await classify((context) =>
+          requestSelection(routing, plan.secrets, context, language, options.transport),
+        );
+        if (selected.exitCode !== 0) {
+          const { data: _selection, ...result } = selected.result;
+          return { ...selected, result } as Outcome<CombinedData>;
+        }
+        sources = selected.result.data!.map((id) =>
+          plan.sources.find((source) => source.provider === id)!,
+        );
+      }
+      const parameters = sources.flatMap((source) =>
+        routing.parameters.filter((parameter) => parameter.provider === source.provider),
+      );
+      if (parameters.length) {
+        const selected = await classify((context) =>
+          requestParameters(
+            routing,
+            parameters,
+            plan.secrets,
+            context,
+            language,
+            options.transport,
+          ),
+        );
+        if (selected.exitCode !== 0) {
+          const { data: _parameters, ...result } = selected.result;
+          return { ...selected, result } as Outcome<CombinedData>;
+        }
+        sources = sources.map((source) => {
+          const parameter = parameters.find((item) => item.provider === source.provider);
+          if (!parameter) return source;
+          const choices = Object.fromEntries(
+            Object.keys(parameter.questions).map((name) => [
+              name,
+              selected.result.data![`${source.provider}_${name}`],
+            ]),
+          );
+          return parameter.prepare(choices);
+        });
+      }
+    }
+    const outcomes = await Promise.all(sources.map(run));
     const data: CombinedData = { sources: [] };
     for (const [index, outcome] of outcomes.entries()) {
       const content = outcome.result.data;
       if (content === undefined) continue;
       let source: SearchSource;
-      if (plan.sources[index].provider === 'model') {
+      if (sources[index].provider === 'model') {
         const { searchedSources, ...answer } = content as ModelAnswer;
         source = { provider: 'model', data: answer };
         if (searchedSources?.length)
@@ -330,7 +433,7 @@ export async function combinedSearch(
       delete details.provider;
       return [
         {
-          provider: plan.sources[index].provider,
+          provider: sources[index].provider,
           code: error.code,
           message: error.message,
           ...(Object.keys(details).length ? { details } : {}),
@@ -379,15 +482,16 @@ export async function combinedSearch(
         exitCode: 6,
       };
     } else outcome = success(data);
-    const modelMeta = outcomes.find((_, index) => plan.sources[index].provider === 'model')?.result
-      .meta;
+    const modelMeta = outcomes.find((_, index) => sources[index].provider === 'model')?.result.meta;
     if (modelMeta) outcome.result.meta = redact(modelMeta, plan.secrets) as JsonObject;
     if (outcome.result.error)
       outcome.result.error = redact(outcome.result.error, plan.secrets) as PublicError;
+    return outcome;
+  } catch (error) {
+    return failure(error, language);
+  } finally {
     record.elapsed_ms = Math.max(0, Math.round(time.now() - started));
     record.attempts = redact(attempts, plan.secrets);
-    return outcome;
-  } finally {
     signal.removeEventListener('abort', cancel);
   }
 }

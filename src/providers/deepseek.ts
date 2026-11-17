@@ -150,12 +150,6 @@ export function prepareSearch(
   const composed = filters.length
     ? `${query} ${filters.map((item) => item.text).join(' ')}`
     : query;
-  if ([...composed].length > queryLimit) {
-    if ([...query].length > queryLimit) invalid('deepseekQueryTooLong', 'QUERY');
-    // Naming one filter would be arbitrary when several together pushed the query over.
-    const flags = [...new Set(filters.map((item) => item.flag))].join('/');
-    invalid('deepseekQueryLimit', flags);
-  }
   if (
     options.question !== undefined &&
     (!options.question.trim() || [...options.question].length > queryLimit)
@@ -186,6 +180,12 @@ export function prepareSearch(
     operations.find((item) => item.operation === 'search')!,
     overrides,
   );
+  if ([...composed].length > queryLimit) {
+    if ([...query].length > queryLimit) invalid('deepseekQueryTooLong', 'QUERY');
+    // Naming one filter would be arbitrary when several together pushed the query over.
+    const flags = [...new Set(filters.map((item) => item.flag))].join('/');
+    invalid('deepseekQueryLimit', flags);
+  }
   const body: JsonObject = {
     query: composed,
     count: settings['providers.deepseek.search.limit'].value as number,

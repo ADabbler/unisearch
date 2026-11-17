@@ -44,15 +44,29 @@ export function renderConfig(
 
 export function renderStatus(data: StatusData, language: Language): string {
   const sections: string[] = [];
-  if (data.search)
+  const { providers, routing } = data.search;
+  if (providers)
     sections.push(
-      `${text(language, 'searchSourcesLabel')}${colon(language)}${data.search.providers.join(', ')}`,
-      '',
+      `${text(language, 'searchSourcesLabel')}${colon(language)}${providers.join(', ')}`,
     );
+  if (routing.enabled !== undefined)
+    sections.push(
+      `${text(language, 'automaticSelectionLabel')}${colon(language)}${text(language, routing.enabled ? 'enabled' : 'notEnabled')}`,
+    );
+  sections.push(
+    `${text(language, 'classifierLabel')}${colon(language)}${text(language, routing.classifier.state)}`,
+    ...(routing.classifier.issues ?? []).map((problem) => `  ${issueText(problem, language)}`),
+    '',
+  );
   if (!data.services.length) sections.push(text(language, 'noOperations'));
   for (const service of data.services) {
+    const label = service.platform
+      ? text(language, 'servicePlatformLabel')
+          .replace('{provider}', service.provider)
+          .replace('{platform}', { bigmodel: 'BigModel', zai: 'Z.AI' }[service.platform])
+      : service.provider;
     sections.push(
-      `${service.provider}${colon(language)}${service.operations ? '' : text(language, service.state)}`,
+      `${label}${colon(language)}${service.operations ? '' : text(language, service.state)}`,
     );
     sections.push(...(service.issues ?? []).map((problem) => `  ${issueText(problem, language)}`));
     for (const operation of service.operations ?? []) {

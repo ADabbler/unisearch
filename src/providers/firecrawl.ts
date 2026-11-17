@@ -147,7 +147,6 @@ export function prepareSearch(
   language: Language,
 ): SearchRequest {
   if (!query.trim()) throw new AppError('INVALID_ARGUMENT', 'emptyQuery');
-  if ([...query].length > 500) return invalid('firecrawlQuery', 'QUERY');
   const filters: JsonObject = {};
   if (options.categories !== undefined) {
     const categories = options.categories.split(',');
@@ -188,6 +187,7 @@ export function prepareSearch(
     ['limit', options.limit, '--limit'],
   ]);
   const includeText = options.includeText ?? false;
+  if ([...query].length > 500) return invalid('firecrawlQuery', 'QUERY');
   const limit = value('limit') as number;
   if (
     ['developer', 'gov'].includes(options.categories ?? '') &&

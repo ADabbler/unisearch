@@ -297,6 +297,43 @@ export const fields: readonly Field[] = [
     minimum: 1,
   },
   {
+    path: 'search.routing.enabled',
+    kind: 'boolean',
+    default: false,
+    environment: 'UNISEARCH_ROUTING_ENABLED',
+  },
+  {
+    path: 'search.routing.max_sources',
+    kind: 'integer',
+    minimum: 1,
+    default: 3,
+    environment: 'UNISEARCH_ROUTING_MAX_SOURCES',
+  },
+  {
+    path: 'search.routing.classifier.protocol',
+    kind: 'token',
+    choices: ['typesafe'],
+    invalidMessage: 'classifierProtocol',
+    default: 'typesafe',
+    environment: 'UNISEARCH_CLASSIFIER_PROTOCOL',
+  },
+  {
+    path: 'search.routing.classifier.base_url',
+    kind: 'url',
+    default: 'https://api.typesafe.ai/v1',
+    environment: 'UNISEARCH_CLASSIFIER_BASE_URL',
+  },
+  {
+    path: 'search.routing.classifier.api_key',
+    kind: 'credential',
+    environment: 'UNISEARCH_CLASSIFIER_API_KEY',
+  },
+  {
+    path: 'search.routing.classifier.model',
+    kind: 'token',
+    environment: 'UNISEARCH_CLASSIFIER_MODEL_ID',
+  },
+  {
     path: 'fetch.providers',
     kind: 'providers',
     default: [

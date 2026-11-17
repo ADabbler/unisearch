@@ -113,7 +113,7 @@ UniSearch 读取一个用户配置文件：
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- |
 | `search.providers` | 非空来源 ID 数组；支持 `model`、`exa`、`tavily`、`firecrawl`、`jina`、`zhipu`、`zhipu-mcp`、`anysearch`、`tinyfish`、`deepseek` | `["model"]` | —        |
 
-`unisearch search` 并行执行列表中的全部来源，按列表顺序输出。使用 `--sources IDS` 可覆盖本次调用的 `search.providers`，多个 ID 用逗号分隔。
+`unisearch search` 在关闭自动选择时使用此列表。选定的来源并行执行，按选择顺序输出。使用 `--sources IDS` 可指定本次调用的来源，多个 ID 用逗号分隔，同时会跳过自动选择。
 
 若列表包含重复或不支持的 ID，或所选服务已禁用、缺少必要配置，命令会在发送任何请求前报错。
 
@@ -123,7 +123,22 @@ unisearch search "搜索问题"
 unisearch search "搜索问题" --sources model,exa --effort low
 ```
 
-只选其他来源时无需模型配置。选中 `model` 时可使用模型搜索专属参数，例如 `--model` 和 `--effort`，仅影响模型任务；未选中 `model` 时使用这些参数会报错。完整参数见 `unisearch model search --help`。
+只选其他来源时无需模型配置。未使用自动选择且来源包含 `model` 时，可使用 `--model`、`--effort` 等模型搜索专属参数。完整参数见 `unisearch model search --help`。
+
+#### 自动选择搜索来源
+
+| 字段                                 | 类型与取值                     | 默认值                       | 环境变量                        |
+| ------------------------------------ | ------------------------------ | ---------------------------- | ------------------------------- |
+| `search.routing.enabled`             | `true` 或 `false`              | `false`                      | `UNISEARCH_ROUTING_ENABLED`     |
+| `search.routing.max_sources`         | 正整数；每次最多选择的来源数量 | `3`                          | `UNISEARCH_ROUTING_MAX_SOURCES` |
+| `search.routing.classifier.protocol` | `typesafe`                     | `typesafe`                   | `UNISEARCH_CLASSIFIER_PROTOCOL` |
+| `search.routing.classifier.base_url` | HTTP(S) API 根地址             | `https://api.typesafe.ai/v1` | `UNISEARCH_CLASSIFIER_BASE_URL` |
+| `search.routing.classifier.api_key`  | 分类服务凭证                   | 无                           | `UNISEARCH_CLASSIFIER_API_KEY`  |
+| `search.routing.classifier.model`    | 分类模型 ID                    | 无                           | `UNISEARCH_CLASSIFIER_MODEL_ID` |
+
+`--auto` 为本次搜索启用自动选择。将 `search.routing.enabled` 设为 `true` 可默认启用；默认启用时，可用 `--no-auto` 为本次搜索禁用自动选择。
+
+自动选择会按需选择已选来源的搜索参数，仅影响本次请求。只有一个适用来源且无需选择参数时，不调用分类器。没有适用来源、分类失败或未选中来源时会报错。分类耗时计入本次搜索的超时预算。
 
 ### 统一 fetch 与 map
 
@@ -359,7 +374,7 @@ unisearch config get providers.model
 unisearch status
 ```
 
-`status` 显示当前生效的统一搜索来源，并检查各服务的本地配置：
+`status` 显示统一搜索的默认来源、是否默认启用自动选择，以及分类器和各服务的本地配置状态：
 
 | 状态       | 含义                     |
 | ---------- | ------------------------ |
@@ -368,7 +383,7 @@ unisearch status
 | `disabled` | 服务已禁用。             |
 | `invalid`  | 配置无效。               |
 
-出现 `missing` 或 `invalid` 时，按提示补齐或修正配置。`ready` 只表示本地配置有效；验证凭证和连接请使用 `doctor`。
+出现 `missing` 或 `invalid` 时，按提示补齐或修正配置。`ready` 只表示本地配置有效；各搜索服务的凭证和连接可通过 `doctor` 检查。
 
 需要联网检查时，选择已配置的服务：
 

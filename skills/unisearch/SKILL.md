@@ -9,7 +9,8 @@ description: Use the UniSearch CLI for current web search, source-backed fact ch
 
 Use `unisearch` from PATH. Consult the relevant command's `--help` for options as needed.
 
-- If the default search sources or service configuration are unknown, run `unisearch status --json`. `data.search.providers` lists the sources used when `search` has no `--sources` option; `data.services` reports local configuration status without network checks. When a service includes `operations`, check the target operation's state.
+- If the search defaults or service configuration are unknown, run `unisearch status --json`. `data.search.providers` lists the sources `search` uses when automatic search source selection is off and `--sources` is omitted. `data.search.routing.enabled: true` means automatic search source selection is the default.
+- `data.services` reports each service's configuration status. When an entry includes `operations`, read the `state` of the operation you intend to call. `data.search.routing.classifier.state` reports classifier configuration status. These checks do not access the network.
 - For configuration tasks, use `unisearch config list --all` to inspect effective settings, including defaults; fields without a value are omitted. Use `unisearch config get KEY` to inspect a field or section.
 
 Common options for retrieval commands:
@@ -21,7 +22,7 @@ Common options for retrieval commands:
 
 ## Choose an entry
 
-- `unisearch search QUERY`: Search the default sources reported by `status`. `--sources IDS` replaces the entire default list for this call with the comma-separated IDs. Multiple sources run in parallel.
+- `unisearch search QUERY`: Use the default search mode reported by `status`. `--sources IDS` replaces the entire source list for this call with comma-separated IDs and bypasses automatic search source selection. `--auto` selects suitable sources and their supported search settings; `--no-auto` uses the configured source list. Multiple sources run in parallel.
 - `unisearch model search QUERY`: Model-assisted web search; requires supported search tools to be configured.
 - `unisearch <service> search QUERY`: Direct service search, such as `unisearch exa search QUERY`.
 - `unisearch fetch URL`: Read one page using the configured service order.
@@ -33,7 +34,7 @@ Common options for retrieval commands:
 - `unisearch zhipu-mcp docs REPO QUERY`: Query repository documentation. Use `owner/repo`; discover directory and file operations through the group help.
 - For multiple URLs, prefer a batch operation when the chosen service supports it, such as `unisearch tavily extract URL...`.
 
-Use `search --sources model,exa` to run model search and Exa together. Model-specific options, such as `--model` and `--effort`, are available only when `model` is selected and apply only to its search.
+Use `search --sources model,exa` to run model search and Exa together. Model-specific options, such as `--model` and `--effort`, require automatic search source selection to be off and `model` to be selected.
 
 Use dedicated service commands for service-specific filters, content, cache, or discovery options.
 

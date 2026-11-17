@@ -6,6 +6,7 @@ import { AppError } from '../errors.js';
 import type { Problem, Provider } from './fields.js';
 import { inspectConfig, resolveField } from './resolve.js';
 import type { ResolvedField } from './resolve.js';
+import { inspectClassifier } from './classifier.js';
 
 export interface OperationDefinition {
   provider: Provider;
@@ -28,12 +29,16 @@ export type OperationStatus = JsonObject & {
 };
 export type ServiceStatus = JsonObject & {
   provider: string;
+  platform?: 'bigmodel' | 'zai';
   state: State;
   issues?: StatusIssue[];
   operations?: OperationStatus[];
 };
 export type StatusData = JsonObject & {
-  search?: { providers: string[] };
+  search: {
+    providers?: string[];
+    routing: { enabled?: boolean; classifier: { state: State; issues?: StatusIssue[] } };
+  };
   services: ServiceStatus[];
   issues?: StatusIssue[];
 };
@@ -99,7 +104,19 @@ export function localStatus(
 ): StatusData {
   const { resolved, problems } = inspectConfig(values, env);
   const search = resolved.find((setting) => setting.field.path === 'search.providers')!;
+  const routingEnabled = resolved.find(
+    (setting) => setting.field.path === 'search.routing.enabled',
+  )!;
   const used = new Set<Problem>();
+  const classifier = inspectClassifier(values, env);
+  const classifierIssues = [...classifier.problems, ...classifier.missing].map(
+    (problem) => issue(problem, language) as StatusIssue,
+  );
+  for (const problem of problems)
+    if (classifier.problems.some((item) => isDeepStrictEqual(item, problem))) used.add(problem);
+  let classifierState: State = 'ready';
+  if (classifier.problems.length) classifierState = 'invalid';
+  else if (classifier.missing.length) classifierState = 'missing';
   const services: ServiceStatus[] = [];
   const operationProviders = new Set(definitions.map((definition) => definition.provider));
   for (const provider of providers) {
@@ -170,8 +187,14 @@ export function localStatus(
           ),
         ]
       : common;
+    const platform =
+      provider === 'zhipu' || provider === 'zhipu-mcp'
+        ? (resolved.find((setting) => setting.field.path === `providers.${provider}.platform`)!
+            .value as ServiceStatus['platform'])
+        : undefined;
     services.push({
       provider,
+      ...(platform === undefined ? {} : { platform }),
       state,
       ...(issues.length ? { issues } : {}),
       ...(!same ? { operations } : {}),
@@ -181,7 +204,16 @@ export function localStatus(
     .filter((problem) => !used.has(problem))
     .map((problem) => issue(problem, language) as StatusIssue);
   return {
-    ...(search.value === undefined ? {} : { search: { providers: search.value as string[] } }),
+    search: {
+      ...(search.value === undefined ? {} : { providers: search.value as string[] }),
+      routing: {
+        ...(routingEnabled.value === undefined ? {} : { enabled: routingEnabled.value as boolean }),
+        classifier: {
+          state: classifierState,
+          ...(classifierIssues.length ? { issues: classifierIssues } : {}),
+        },
+      },
+    },
     services,
     ...(remaining.length ? { issues: remaining } : {}),
   };

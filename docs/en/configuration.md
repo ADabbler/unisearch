@@ -113,7 +113,7 @@ Use `--timeout SECONDS` to override the time limit for one call. The limit inclu
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------------------- |
 | `search.providers` | Nonempty array of source IDs: `model`, `exa`, `tavily`, `firecrawl`, `jina`, `zhipu`, `zhipu-mcp`, `anysearch`, `tinyfish`, `deepseek` | `["model"]` | —                    |
 
-`unisearch search` runs every selected source in parallel and outputs them in selection order. Use `--sources IDS` to override `search.providers` for one call, separating multiple IDs with commas.
+`unisearch search` uses this list when automatic selection is off. Selected sources run in parallel and are output in selection order. Use `--sources IDS` to set the sources for one call, separating multiple IDs with commas; this will also bypass automatic selection.
 
 If the list contains duplicate or unsupported IDs, or a selected service is disabled or lacks required settings, the command fails before sending any requests.
 
@@ -123,7 +123,22 @@ unisearch search "search question"
 unisearch search "search question" --sources model,exa --effort low
 ```
 
-Other sources require no model configuration. When `model` is selected, model-search options such as `--model` and `--effort` affect only its task. Using these options without selecting `model` is an error. See `unisearch model search --help` for the full option list.
+Other sources require no model configuration. Model-search options such as `--model` and `--effort` are available only when this call does not use automatic selection and the selected sources include `model`. See `unisearch model search --help` for the full option list.
+
+#### Automatic search source selection
+
+| Field                                | Type and values                            | Default                      | Environment variable            |
+| ------------------------------------ | ------------------------------------------ | ---------------------------- | ------------------------------- |
+| `search.routing.enabled`             | `true` or `false`                          | `false`                      | `UNISEARCH_ROUTING_ENABLED`     |
+| `search.routing.max_sources`         | Positive integer; maximum sources per call | `3`                          | `UNISEARCH_ROUTING_MAX_SOURCES` |
+| `search.routing.classifier.protocol` | `typesafe`                                 | `typesafe`                   | `UNISEARCH_CLASSIFIER_PROTOCOL` |
+| `search.routing.classifier.base_url` | HTTP(S) API base URL                       | `https://api.typesafe.ai/v1` | `UNISEARCH_CLASSIFIER_BASE_URL` |
+| `search.routing.classifier.api_key`  | Classifier API key                         | None                         | `UNISEARCH_CLASSIFIER_API_KEY`  |
+| `search.routing.classifier.model`    | Classifier model ID                        | None                         | `UNISEARCH_CLASSIFIER_MODEL_ID` |
+
+`--auto` enables automatic selection for this search. Set `search.routing.enabled` to `true` to enable it by default; when enabled by default, use `--no-auto` to disable it for this search.
+
+Automatic selection also chooses search settings for selected sources where supported, for this call only. The classifier is skipped when there is only one eligible source and no settings to choose. No eligible source, failed classification, or no selected source produces an error. Classification time counts toward the search timeout.
 
 ### Unified fetch and map
 
@@ -359,7 +374,7 @@ unisearch config get providers.model
 unisearch status
 ```
 
-`status` shows the effective unified search sources and checks each service's local configuration:
+`status` shows the default unified search sources, whether automatic source selection is enabled by default, and local configuration status for the classifier and each service:
 
 | State      | Meaning                                  |
 | ---------- | ---------------------------------------- |
@@ -368,7 +383,7 @@ unisearch status
 | `disabled` | The service is disabled.                 |
 | `invalid`  | Configuration is invalid.                |
 
-For `missing` or `invalid`, follow the reported issues to complete or correct the settings. `ready` means only that local configuration is valid. Use `doctor` to verify credentials and connectivity.
+For `missing` or `invalid`, follow the reported issues to complete or correct the settings. `ready` means only that local configuration is valid. Use `doctor` to verify search service credentials and connectivity.
 
 For an online check, choose a configured provider:
 

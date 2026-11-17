@@ -321,7 +321,7 @@ test('TinyFish returns optional iframe links without following them', async () =
   ]);
 });
 
-test('CLI search enables highlights by default and allows explicit disabling; v3 hints reach HTTP', async (t) => {
+test('CLI search preserves default highlights and service controls; v3 hints reach HTTP', async (t) => {
   const root = temporary(t);
   const calls: { path: string; body?: Record<string, unknown> }[] = [];
   const server = createServer(async (req, res) => {
@@ -374,44 +374,14 @@ test('CLI search enables highlights by default and allows explicit disabling; v3
   for (const prefix of [
     ['exa', 'search'],
     ['firecrawl', 'search'],
-    ['search', '--sources', 'exa,firecrawl'],
   ]) {
     await run([...prefix, 'q']);
     await run([...prefix, 'q', '--no-highlights']);
   }
+  await run(['search', 'q', '--sources', 'exa,firecrawl']);
   const highlights = (call: (typeof calls)[number]) =>
     call.body?.highlights ?? (call.body?.contents as { highlights: boolean }).highlights;
-  assert.deepEqual(calls.map(highlights), [true, false, true, false, true, true, false, false]);
-  const beforeInvalid = calls.length;
-  for (const sources of ['tavily', 'model']) {
-    const channels = capture();
-    const exit = await createCli('test', { config, channels }).run([
-      'search',
-      'q',
-      '--sources',
-      sources,
-      '--no-highlights',
-      '--format=json',
-    ]);
-    assert.equal(exit, 2);
-    const result = JSON.parse(channels.out);
-    assert.equal(result.error.code, 'INVALID_ARGUMENT');
-    assert.equal(result.error.details.option, '--no-highlights');
-    assert.match(result.error.message, /Exa or Firecrawl/);
-  }
-  writeFileSync(join(root, 'config.json'), JSON.stringify({ search: { providers: ['tavily'] } }));
-  const defaultSources = capture();
-  assert.equal(
-    await createCli('test', { config, channels: defaultSources }).run([
-      'search',
-      'q',
-      '--no-highlights',
-      '--format=json',
-    ]),
-    2,
-  );
-  assert.equal(JSON.parse(defaultSources.out).error.details.option, '--no-highlights');
-  assert.equal(calls.length, beforeInvalid);
+  assert.deepEqual(calls.map(highlights), [true, false, true, false, true, true]);
   await run([
     'ctx7',
     'search',
@@ -436,16 +406,13 @@ test('CLI search enables highlights by default and allows explicit disabling; v3
   assert.equal(fetched.searchParams.get('tokens'), '100');
   await run(['ctx7', 'docs', '/example/lib', 'q', '--language', 'Python']);
   assert.equal(new URL(calls.at(-1)!.path, base).searchParams.get('language'), 'Python');
-  for (const prefix of [['search'], ['exa', 'search'], ['firecrawl', 'search']]) {
+  for (const prefix of [
+    ['exa', 'search'],
+    ['firecrawl', 'search'],
+  ]) {
     const channels = capture();
     assert.equal(await createCli('test', { config, channels }).run([...prefix, '--help']), 0);
     assert.match(channels.out, /--no-highlights/);
-    assert.doesNotMatch(channels.out, /--include-highlights|--highlights\b/);
-    if (prefix.length === 1) {
-      assert.match(channels.out, /Disable search highlights for Exa and Firecrawl/);
-      assert.ok(channels.out.indexOf('--no-fallback') < channels.out.indexOf('--no-highlights'));
-      assert.ok(channels.out.indexOf('--no-highlights') < channels.out.indexOf('--format'));
-    }
   }
   const groupHelp = capture();
   assert.equal(await createCli('test', { config, channels: groupHelp }).run(['ctx7', '--help']), 0);

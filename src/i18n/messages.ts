@@ -983,8 +983,37 @@ const messages = {
   modelSearch: ['使用模型搜索并回答查询', 'Search and answer the query with a model'],
   searchSummary: ['使用选定来源进行搜索', 'Search using selected sources'],
   searchCommand: [
-    '使用选定来源进行搜索；模型相关参数仅在来源包含 model 时可用',
-    'Search using selected sources; model options require model in the selected sources',
+    '使用选定来源进行搜索；支持自动选择搜索来源。模型专属参数仅在未使用自动选择搜索来源且来源包含 model 时可用',
+    'Search using selected sources, with optional automatic search source selection. Model-specific options are available only when automatic search source selection is off and the selected sources include model',
+  ],
+  autoOption: [
+    '本次启用自动选择搜索来源',
+    'Enable automatic search source selection for this call',
+  ],
+  noAutoOption: [
+    '本次禁用自动选择搜索来源',
+    'Disable automatic search source selection for this call',
+  ],
+  autoModelOptions: [
+    '自动选择搜索来源时不能指定模型专属参数',
+    'Model options cannot be specified with automatic search source selection',
+  ],
+  classifierProtocol: ['分类接口协议仅支持 typesafe', 'Classifier protocol must be typesafe'],
+  classifierLabel: ['分类器配置', 'Classifier configuration'],
+  servicePlatformLabel: ['{provider}（平台：{platform}）', '{provider} (platform: {platform})'],
+  automaticSelectionLabel: ['默认自动选择搜索来源', 'Default automatic search source selection'],
+  enabled: ['已启用', 'Enabled'],
+  notEnabled: ['未启用', 'Not enabled'],
+  routingNoCandidates: [
+    '没有适用于本次查询的搜索来源',
+    'No search source is available for this query',
+  ],
+  routingNoSelection: ['分类器未选中搜索来源', 'The classifier selected no search source'],
+  classifierResponse: ['分类服务返回了无效响应', 'The classifier returned an invalid response'],
+  classifierNetwork: ['分类服务网络请求失败', 'The classifier network request failed'],
+  classifierHttp: [
+    '分类服务拒绝或未能完成请求',
+    'The classifier rejected or could not complete the request',
   ],
   modelCommand: ['模型搜索', 'Model search'],
   modelOption: [
@@ -996,8 +1025,8 @@ const messages = {
     'Set the effort for the model used in this search',
   ],
   sourcesOption: [
-    '本次搜索来源，逗号分隔；支持已启用的 model、exa、tavily、firecrawl、jina、zhipu、zhipu-mcp、anysearch、tinyfish、deepseek',
-    'Sources for this call, comma-separated; choose enabled services: model, exa, tavily, firecrawl, jina, zhipu, zhipu-mcp, anysearch, tinyfish, deepseek',
+    '本次搜索来源，逗号分隔，跳过自动选择搜索来源；支持已启用的 model、exa、tavily、firecrawl、jina、zhipu、zhipu-mcp、anysearch、tinyfish、deepseek',
+    'Sources for this call, comma-separated, bypassing automatic search source selection; choose enabled services: model, exa, tavily, firecrawl, jina, zhipu, zhipu-mcp, anysearch, tinyfish, deepseek',
   ],
   streamOption: ['使用流式请求，收齐后输出', 'Use a streaming request, output after completion'],
   noStreamOption: ['使用非流式请求', 'Use a non-streaming request'],
@@ -1015,7 +1044,7 @@ const messages = {
   setupCustomSearchSources: ['自定义来源', 'Custom sources'],
   setupSelectSearchSources: ['选择搜索来源', 'Select search sources'],
   setupSearchSourcesRequired: ['至少选择一项', 'Select at least one option'],
-  searchSourcesLabel: ['统一搜索来源', 'Search sources'],
+  searchSourcesLabel: ['统一搜索默认来源', 'Default search sources'],
   streamConflict: [
     '--stream 与 --no-stream 不能并用',
     '--stream and --no-stream cannot be combined',
@@ -1215,14 +1244,6 @@ const messages = {
   textOption: ['附带完整正文，默认关闭', 'Include full text; off by default'],
   highlightsOption: ['附带相关摘录，默认关闭', 'Include relevant highlights; off by default'],
   noHighlightsOption: ['关闭搜索摘录', 'Disable search highlights'],
-  rootNoHighlightsOption: [
-    '关闭 Exa、Firecrawl 的搜索摘录',
-    'Disable search highlights for Exa and Firecrawl',
-  ],
-  highlightsSourceRequired: [
-    '该参数要求搜索来源包含 Exa 或 Firecrawl',
-    'The selected search sources must include Exa or Firecrawl for this option',
-  ],
   exaRestrictions: [
     'Exa 上游已移除查询中的站点或引号限制',
     'Exa removed site or quoted-phrase constraints from the query',

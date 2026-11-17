@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { createCli } from '../src/cli/program.js';
 import { localStatus } from '../src/config/status.js';
 import type { OperationDefinition } from '../src/config/status.js';
+import { operations } from '../src/providers/operations.js';
 import { renderConfig, renderStatus } from '../src/output/config.js';
 import { render } from '../src/output/render.js';
 import { renderDoctor } from '../src/output/doctor.js';
@@ -46,13 +47,13 @@ test('Status checks four local states, collapses identical operations, and never
   assert.equal(result.services[1].issues?.[0].code, 'MISSING_REQUIRED');
   assert.equal(result.services[2].issues, undefined);
   assert.equal(result.issues, undefined);
-  assert.deepEqual(result.search, { providers: ['model'] });
+  assert.deepEqual(result.search?.providers, ['model']);
   assert.doesNotMatch(
     JSON.stringify(result),
     /fixture-secret|invalid secret|"path"|"source"|selection/,
   );
   const md = renderStatus(result, 'zh');
-  assert.match(md, /^统一搜索来源：model\n/);
+  assert.match(md, /^统一搜索默认来源：model\n/);
   assert.doesNotMatch(md, /仅检查本地配置|\|/);
   assert.match(md, /^exa：就绪/m);
   assert.match(md, /^tavily：缺少配置/m);
@@ -96,6 +97,44 @@ test('Different operation states expand the complete list and shared issues are 
   assert.equal((renderStatus(common, 'en').match(/providers.exa.enabled/g) ?? []).length, 1);
 });
 
+test('Status reports effective Zhipu platforms independently of service readiness', () => {
+  const definitions = operations.filter(
+    (definition) => definition.provider === 'zhipu' || definition.provider === 'zhipu-mcp',
+  );
+  const defaults = localStatus({}, {}, 'en', definitions);
+  assert.deepEqual(
+    defaults.services.map(({ provider, platform, state }) => [provider, platform, state]),
+    [
+      ['zhipu', 'bigmodel', 'missing'],
+      ['zhipu-mcp', 'bigmodel', 'missing'],
+    ],
+  );
+  const values = {
+    providers: {
+      zhipu: { platform: 'bigmodel', api_key: 'fixture-secret' },
+      'zhipu-mcp': { platform: 'bigmodel', enabled: false },
+    },
+  };
+  const result = localStatus(values, { UNISEARCH_ZHIPU_MCP_PLATFORM: 'zai' }, 'en', definitions);
+  assert.deepEqual(
+    result.services.map(({ provider, platform, state }) => [provider, platform, state]),
+    [
+      ['zhipu', 'bigmodel', 'ready'],
+      ['zhipu-mcp', 'zai', 'disabled'],
+    ],
+  );
+  assert.match(renderStatus(result, 'zh'), /^zhipu（平台：BigModel）：就绪$/m);
+  assert.match(renderStatus(result, 'zh'), /^zhipu-mcp（平台：Z\.AI）：已禁用$/m);
+  assert.match(renderStatus(result, 'en'), /^zhipu \(platform: BigModel\): Ready$/m);
+  assert.match(renderStatus(result, 'en'), /^zhipu-mcp \(platform: Z\.AI\): Disabled$/m);
+  const invalid = localStatus(values, { UNISEARCH_ZHIPU_PLATFORM: 'invalid' }, 'en', definitions);
+  assert.equal(invalid.services[0].platform, undefined);
+  assert.equal(invalid.services[0].state, 'invalid');
+  assert.ok(
+    invalid.services[0].issues?.some((issue) => issue.environment === 'UNISEARCH_ZHIPU_PLATFORM'),
+  );
+});
+
 test('Status and doctor wrap Chinese reasons within terminal columns and retain hierarchy', (t) => {
   const descriptor = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
   Object.defineProperty(process.stdout, 'columns', { value: 40, configurable: true });
@@ -106,6 +145,7 @@ test('Status and doctor wrap Chinese reasons within terminal columns and retain 
   const message = '凭证没有访问当前服务的权限，请检查配置与账户状态后再次执行诊断';
   const report = renderStatus(
     {
+      ...localStatus({}, {}, 'zh'),
       services: [
         {
           provider: 'exa',
@@ -115,7 +155,9 @@ test('Status and doctor wrap Chinese reasons within terminal columns and retain 
       ],
     },
     'zh',
-  );
+  )
+    .split('\n\n')
+    .at(-1)!;
   const doctor = renderDoctor(
     { services: [{ provider: 'exa', state: 'failed', error: { code: 'ACCESS_DENIED', message } }] },
     'zh',
@@ -137,10 +179,7 @@ test('Invalid required settings outrank disabled, while missing settings do not'
     'en',
     definitions.slice(0, 2),
   );
-  assert.deepEqual(disabled, {
-    search: { providers: ['model'] },
-    services: [{ provider: 'exa', state: 'disabled' }],
-  });
+  assert.deepEqual(disabled.services, [{ provider: 'exa', state: 'disabled' }]);
   const invalid = localStatus(
     { providers: { exa: { enabled: false, api_key: '' } } },
     {},
@@ -210,7 +249,7 @@ test('Configuration issues remain at top level when no operation definitions are
     'zh',
   );
   assert.deepEqual(result.services, []);
-  assert.equal(result.search, undefined);
+  assert.equal(result.search?.providers, undefined);
   assert.deepEqual(
     result.issues?.map((issue) => issue.code),
     [
@@ -224,13 +263,16 @@ test('Configuration issues remain at top level when no operation definitions are
   );
   assert.doesNotMatch(JSON.stringify(result), /secret|valid-fixture/);
   const md = renderStatus(result, 'zh');
-  assert.match(md, /^没有可展示的服务操作\n/);
+  assert.match(md, /^没有可展示的服务操作$/m);
   assert.match(md, /配置问题：/);
   assert.doesNotMatch(md, /\| 服务|setup|候选|path/);
-  assert.deepEqual(
-    localStatus({ fetch: { providers: ['exa', 'anysearch'] }, map: { providers: [] } }, {}, 'en'),
-    { search: { providers: ['model'] }, services: [] },
+  const valid = localStatus(
+    { fetch: { providers: ['exa', 'anysearch'] }, map: { providers: [] } },
+    {},
+    'en',
   );
+  assert.deepEqual(valid.services, []);
+  assert.equal(valid.issues, undefined);
 });
 
 test('Actual status commands are read-only and distinguish field issues from unreadable JSON', async (t) => {
@@ -242,8 +284,16 @@ test('Actual status commands are read-only and distinguish field issues from unr
   const channels = capture();
   assert.equal(await createCli('1.2.3', { config, channels }).run(['status', '--json']), 0);
   const result = JSON.parse(channels.out);
-  assert.deepEqual(result.data.search, { providers: ['exa', 'jina'] });
-  assert.match(renderStatus(result.data, 'en'), /^Search sources: exa, jina\n/);
+  assert.deepEqual(result.data.search.providers, ['exa', 'jina']);
+  assert.equal(result.data.search.routing.enabled, false);
+  assert.equal(result.data.search.routing.classifier.state, 'missing');
+  for (const provider of ['zhipu', 'zhipu-mcp'])
+    assert.equal(
+      result.data.services.find((service: { provider: string }) => service.provider === provider)
+        .platform,
+      'bigmodel',
+    );
+  assert.match(renderStatus(result.data, 'en'), /^Default search sources: exa, jina\n/);
   const exa = result.data.services.find(
     (service: { provider: string }) => service.provider === 'exa',
   );

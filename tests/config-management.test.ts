@@ -193,7 +193,10 @@ test('Configuration sections and providers share display order without reorderin
       const plain = await f.run([command], { UNISEARCH_LANG: language });
       assert.equal(plain.exit, 0);
       assert.equal(plain.err, '');
-      const pattern = command === 'status' ? /^([a-z0-9-]+)[:：]/gm : /^.*\(([a-z0-9-]+)\)[:：]/gm;
+      const pattern =
+        command === 'status'
+          ? /^([a-z0-9-]+)(?: \([^)]+\)|（[^）]+）)?[:：]/gm
+          : /^.*\(([a-z0-9-]+)\)[:：]/gm;
       assert.deepEqual(
         [...plain.out.matchAll(pattern)].map((match) => match[1]),
         order,

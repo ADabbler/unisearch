@@ -22,8 +22,10 @@ Common options for retrieval commands:
 
 ## Choose an entry
 
+For library, framework, SDK, or API documentation and code examples, prefer Context7.
+
 - `unisearch search QUERY`: Use the default search mode reported by `status`. `--sources IDS` replaces the entire source list for this call with comma-separated IDs and bypasses automatic search source selection. `--auto` selects suitable sources and their supported search settings; `--no-auto` uses the configured source list. Multiple sources run in parallel.
-- `unisearch model search QUERY`: Model-assisted web search; requires supported search tools to be configured.
+- `unisearch model search QUERY`: Search through the configured model, returning findings and available references.
 - `unisearch <service> search QUERY`: Direct service search, such as `unisearch exa search QUERY`.
 - `unisearch fetch URL`: Read one page using the configured service order.
 - `unisearch map URL`: Discover links within a site, then select pages to read.
@@ -38,24 +40,7 @@ Use `search --sources model,exa` to run model search and Exa together. Model-spe
 
 Use dedicated service commands for service-specific filters, content, cache, or discovery options.
 
-## Choose a service
-
-Choose by task, configured availability, and user preference.
-
-- **Exa (`exa`)**: Natural-language web discovery with category, domain, and publication-date filters; page text, excerpts, and batch URL reading.
-- **Tavily (`tavily`)**: General, news, or finance search with date and domain filters, language preference, and cache freshness controls; batch content extraction.
-- **Firecrawl (`firecrawl`)**: Web discovery with research/PDF, developer, or mainly US government categories; Markdown from dynamic or JavaScript-rendered pages.
-- **Context7 (`ctx7`)**: Library, framework, SDK, and API documentation or code examples, including specific versions.
-- **Jina (`jina`)**: Readable web pages and remote PDFs; web, news, and image search.
-- **Zhipu API (`zhipu`)**: Web search and page reading through BigModel or Z.AI. BigModel offers Zhipu, Sogou, and Quark search sources; Z.AI uses Search Prime.
-- **Zhipu MCP (`zhipu-mcp`)**: Coding Plan web search, page reading, and documentation, directories, or files from supported public GitHub repositories.
-- **AnySearch (`anysearch`)**: General search and vertical search with domain-specific tags and parameters.
-- **TinyFish (`tinyfish`)**: Web, news, or paper search with location, language, and paper-year conditions; batch URL reading.
-- **DeepSeek (`deepseek`)**: Chinese and multilingual web search with authority and rerank scores plus a long summary; single-page reading.
-
-For AnySearch vertical search, use `unisearch anysearch domains` to find an unknown domain and `unisearch anysearch domains DOMAIN` to discover its tags and parameters. Reuse known definitions; general search needs no domain discovery.
-
-For Zhipu API engine selection, check `unisearch config get providers.zhipu.platform` and consult `unisearch zhipu search --help`.
+Read the [provider guide](references/providers.md) when choosing a provider or comparing service capabilities. Choose by task, configured availability, and user preference.
 
 ## Form the query
 

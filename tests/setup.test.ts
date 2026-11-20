@@ -7,23 +7,37 @@ import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { promisify, stripVTControlCharacters } from 'node:util';
 import { SetupDraft, promptSetup, applySetup, setupFields } from '../src/setup.js';
-import { renderSetup, renderSetupPreview } from '../src/output/setup.js';
+import { renderSetup, setupPreviewLines } from '../src/output/setup.js';
 import { display } from '../src/output/index.js';
 import { AppError } from '../src/errors.js';
 import { providers, fieldAt } from '../src/config/fields.js';
 import type { Provider } from '../src/config/fields.js';
 import { capture, context, temporary } from './helpers.js';
 import { createCli } from '../src/cli/program.js';
-import type { Prompts } from '../src/cli/prompts.js';
+import { PromptBack } from '../src/cli/prompts.js';
+import type { Choice, Prompts } from '../src/cli/prompts.js';
 import { operationName } from '../src/i18n/providers.js';
 import { text } from '../src/i18n/messages.js';
+import { prepareCombinedSearch } from '../src/search.js';
 
 const isSearchSourcesPrompt = (message: string) =>
   (['en', 'zh'] as const).some(
     (language) => message === text(language, 'setupSelectSearchSources'),
   );
-const isSearchSourcesModePrompt = (message: string) =>
-  (['en', 'zh'] as const).some((language) => message === text(language, 'setupSearchSources'));
+const escape = Symbol('Escape');
+function navigateSetup(...steps: (string | typeof escape)[]) {
+  return (message: string, choices: Choice[]) => {
+    const menus = ['setupTitle', 'setupSearch', 'setupReview', 'setupLanguage'] as const;
+    if (!menus.some((key) => message === text('en', key) || message === text('zh', key))) return;
+    const next = steps.shift();
+    if (next === escape) throw new PromptBack();
+    assert.ok(
+      choices.some((choice) => choice.value === next),
+      `${message}: ${next}`,
+    );
+    return next;
+  };
+}
 
 test('Setup saved configuration and Codex Skill are usable by new CLI processes', async (t) => {
   const root = temporary(t),
@@ -74,24 +88,26 @@ test('Setup saved configuration and Codex Skill are usable by new CLI processes'
     context(root, env),
     'en',
   );
-  const selections = ['en', 'save'];
+  const navigate = navigateSetup(
+    'services',
+    'search',
+    'sources',
+    escape,
+    'skills',
+    'review',
+    'save',
+  );
   const multiple = [['exa'], ['codex']];
   const prompts: Prompts = {
-    async select(message, choices, initial) {
-      if (isSearchSourcesModePrompt(message)) {
-        assert.equal(initial, 'keep');
-        assert.deepEqual(choices, [
-          { value: 'keep', label: 'Keep current sources: Model search' },
-          { value: 'custom', label: 'Custom sources' },
-        ]);
-        return 'custom';
-      }
-      if (choices.some((choice) => choice.value === 'custom')) return 'custom';
-      return selections.shift()!;
+    async select(message, choices) {
+      const section = navigate(message, choices);
+      if (section) return section;
+      assert.ok(choices.some((choice) => choice.value === 'custom'));
+      return 'custom';
     },
     async multi(message, _choices, initial, _language, validate) {
       if (isSearchSourcesPrompt(message)) {
-        assert.deepEqual(initial, []);
+        assert.deepEqual(initial, ['model']);
         assert.equal(validate!([]), text('en', 'setupSearchSourcesRequired'));
         return ['exa'];
       }
@@ -106,19 +122,14 @@ test('Setup saved configuration and Codex Skill are usable by new CLI processes'
   await promptSetup(
     draft,
     prompts,
-    async (current) => {
-      const preview = stripVTControlCharacters(renderSetupPreview(current));
-      assert.doesNotMatch(
-        preview,
-        /fixture-setup-key|local configuration|missing configuration|^- /m,
-      );
-      assert.match(preview, /Skills installation locations/);
-      assert.ok(
-        preview
-          .replace(/\r?\n│  /g, '')
-          .includes(`Codex: ${join(root, '.codex', 'skills', 'unisearch')}`),
-      );
+    (current) => {
+      const lines = setupPreviewLines(current);
+      const preview = lines.join('\n');
+      assert.doesNotMatch(preview, /fixture-setup-key/);
+      assert.ok(preview.includes(join(root, '.codex', 'skills', 'unisearch')));
+      return lines;
     },
+    () => {},
     () => {},
   );
   const saved = await applySetup(draft, path, new AbortController().signal);
@@ -224,7 +235,7 @@ test('Setup preserves existing defaults and environment credentials; service sel
   draft.set('language', 'zh');
   draft.selectServices(['exa']);
   draft.set('providers.exa.base_url', 'https://example.org/exa');
-  const preview = renderSetupPreview(draft);
+  const preview = setupPreviewLines(draft).join('\n');
   assert.doesNotMatch(preview, /fixture-env-key/);
   assert.deepEqual(draft.values.providers, {
     ...original.providers,
@@ -241,7 +252,7 @@ test('Setup preserves existing defaults and environment credentials; service sel
   });
 });
 
-test('Prompt edit restarts at language, retains pending values, discards deselected edits, and never writes before save', async (t) => {
+test('Setup returns to the previous menu item and retains draft edits until save', async (t) => {
   const root = temporary(t),
     path = join(root, 'config.json');
   const draft = new SetupDraft(
@@ -249,28 +260,60 @@ test('Prompt edit restarts at language, retains pending values, discards deselec
     context(root),
     'en',
   );
-  const choices = ['zh', 'edit', 'en', 'save'];
+  const navigate = navigateSetup(
+    'language',
+    'zh',
+    'services',
+    'search',
+    'sources',
+    escape,
+    'skills',
+    'review',
+    'back',
+    'language',
+    'en',
+    'services',
+    'skills',
+    'review',
+    'save',
+  );
   const multiple = [['exa'], ['codex'], [], []];
-  let inputs = 0,
+  let page = 0,
+    inputs = 0,
     previews = 0;
-  const messages: string[] = [];
+  const mainFocus: string[] = [];
+  const languages: string[] = [];
+  const servicePages: number[] = [];
   const prompts: Prompts = {
-    async select(message, options) {
-      messages.push(message);
-      if (isSearchSourcesModePrompt(message)) return previews === 0 ? 'custom' : 'keep';
-      if (options.some((option) => option.value === 'custom')) return 'custom';
-      return choices.shift()!;
+    async select(message, options, initial, language) {
+      if (message === text(language, 'setupTitle')) {
+        if (!mainFocus.length) assert.equal(page, 0);
+        mainFocus.push(initial);
+        assert.deepEqual(
+          options.map((option) => option.value),
+          ['services', 'search', 'language', 'skills', 'review', 'cancel'],
+        );
+      }
+      const section = navigate(message, options);
+      if (section) return section;
+      if (options.some((option) => option.value === 'custom')) {
+        servicePages.push(page);
+        return 'custom';
+      }
+      assert.fail(message);
     },
     async multi(message, _choices, initial) {
       if (isSearchSourcesPrompt(message)) {
         assert.equal(previews, 0);
-        assert.deepEqual(initial, []);
-        return ['model'];
+        assert.deepEqual(initial, ['model']);
+        return ['exa'];
       }
-      return multiple.shift()!;
+      const selected = multiple.shift()!;
+      if (selected.includes('exa')) servicePages.push(page);
+      return selected;
     },
-    async input(message, secret, validate) {
-      messages.push(message);
+    async input(_message, secret, validate) {
+      servicePages.push(page);
       const value = secret ? 'fixture-new-secret' : '';
       assert.equal(validate(value), undefined);
       inputs++;
@@ -282,16 +325,32 @@ test('Prompt edit restarts at language, retains pending values, discards deselec
     prompts,
     async (current) => {
       previews++;
-      assert.doesNotMatch(renderSetupPreview(current), /fixture-new-secret/);
+      const lines = setupPreviewLines(current);
+      assert.doesNotMatch(lines.join('\n'), /fixture-new-secret/);
+      assert.equal(current.skills.length, previews === 1 ? 1 : 0);
       await assert.rejects(fs.stat(path));
+      return lines;
     },
-    (language) => assert.ok(['en', 'zh'].includes(language)),
+    (language) => languages.push(language),
+    () => page++,
   );
   assert.equal(previews, 2);
   assert.equal(inputs, 2);
-  assert.ok(messages.includes('Interface language'));
-  assert.ok(messages.includes('界面语言'));
-  assert.deepEqual(draft.values, { language: 'en', search: { providers: ['model'] } });
+  assert.equal(servicePages.length, 4);
+  assert.equal(new Set(servicePages).size, 1);
+  assert.deepEqual(languages, ['zh', 'en']);
+  assert.deepEqual(mainFocus, [
+    'services',
+    'language',
+    'services',
+    'search',
+    'skills',
+    'review',
+    'language',
+    'services',
+    'skills',
+  ]);
+  assert.deepEqual(draft.values, { language: 'en', search: { providers: ['exa'] } });
   assert.deepEqual(draft.skills, []);
 });
 
@@ -323,6 +382,91 @@ test('All service connection fields use common definitions; explicit default sel
   assert.equal(saved.result.data?.services, undefined);
 });
 
+test('Setup checks the effective classifier configuration before enabling automatic selection', async (t) => {
+  const root = temporary(t);
+  const path = join(root, 'config.json');
+  const classifierUrl = 'https://classifier.example.org/v1';
+  const env = { UNISEARCH_CLASSIFIER_BASE_URL: classifierUrl };
+  const draft = new SetupDraft(
+    {
+      path,
+      source: 'default',
+      exists: false,
+      values: {
+        providers: { exa: { api_key: 'fixture-exa' }, tavily: { api_key: 'fixture-tavily' } },
+        search: { providers: ['exa'] },
+      },
+    },
+    context(root, env),
+    'en',
+  );
+  const navigate = navigateSetup(
+    'search',
+    'routing',
+    'classifier',
+    'routing',
+    escape,
+    'review',
+    'save',
+  );
+  const classifierInputs = [
+    { secret: false, value: '' },
+    { secret: true, value: 'fixture-classifier-key' },
+    { secret: false, value: 'fixture-model' },
+  ];
+  let attempts = 0;
+  const prompts: Prompts = {
+    async select(message, choices, initial, _language, options) {
+      const section = navigate(message, choices);
+      if (section) return section;
+      assert.equal(initial, 'false');
+      assert.ok(options?.validate);
+      const error = options.validate('true');
+      if (attempts++ === 0) {
+        assert.ok(error);
+        throw new PromptBack();
+      }
+      assert.equal(error, undefined);
+      return 'true';
+    },
+    async multi() {
+      assert.fail('Other sections are skipped when configuring automatic selection');
+    },
+    async input(_message, secret, validate) {
+      const next = classifierInputs.shift();
+      assert.ok(next);
+      assert.equal(secret, next.secret);
+      assert.equal(validate(next.value), undefined);
+      return next.value;
+    },
+  };
+
+  await promptSetup(
+    draft,
+    prompts,
+    (current) => {
+      const lines = setupPreviewLines(current);
+      assert.doesNotMatch(lines.join('\n'), /fixture-classifier-key/);
+      return lines;
+    },
+    () => {},
+    () => {},
+  );
+  assert.equal((await applySetup(draft, path, new AbortController().signal)).exitCode, 0);
+  const saved = JSON.parse(await fs.readFile(path, 'utf8'));
+  assert.deepEqual(saved.search, {
+    providers: ['exa'],
+    routing: {
+      enabled: true,
+      classifier: { api_key: 'fixture-classifier-key', model: 'fixture-model' },
+    },
+  });
+  const automatic = prepareCombinedSearch('fixture query', {}, saved, env, 'en');
+  assert.ok(automatic.sources.some((source) => source.provider === 'tavily'));
+  assert.equal(automatic.routing?.baseUrl, classifierUrl);
+  assert.equal(automatic.routing.model, 'fixture-model');
+});
+
 test('Model setup defaults new tools to xAI and preserves existing and edited choices', async (t) => {
   const root = temporary(t);
   const path = join(root, 'config.json');
@@ -342,17 +486,21 @@ test('Model setup defaults new tools to xAI and preserves existing and edited ch
       context(root),
       'en',
     );
-    const selections = useShortcut
-      ? ['en', choice, 'edit', 'en', 'edit', 'en', 'xai', 'save']
-      : ['en', choice, 'edit', 'en', choice, 'save'];
-    const multiple = useShortcut
-      ? [['model'], [], ['model'], [], ['model'], []]
-      : [['model'], [], ['model'], []];
+    const navigate = navigateSetup(
+      'language',
+      'en',
+      'services',
+      ...(useShortcut ? ['services'] : []),
+      'services',
+      'review',
+      'save',
+    );
     const urls = useShortcut ? ['custom', 'xai', 'custom'] : ['custom', 'custom'];
     let toolsPrompts = 0;
     const prompts: Prompts = {
       async select(message, options, initial) {
-        if (isSearchSourcesModePrompt(message)) return initial;
+        const section = navigate(message, options);
+        if (section) return section;
         if (message === 'Model search tools') {
           const hasCurrentTools = 'tools' in original || toolsPrompts > 0;
           assert.deepEqual(
@@ -367,14 +515,14 @@ test('Model setup defaults new tools to xAI and preserves existing and edited ch
             options.find((option) => option.value === 'xai'),
             { value: 'xai', label: 'Enable xAI search tools' },
           );
-          return selections.shift()!;
+          return useShortcut && toolsPrompts > 1 ? 'xai' : choice;
         }
         if (message.startsWith('Select Model search API URL')) return urls.shift()!;
         if (message.startsWith('Select Model search protocol')) return initial;
-        return selections.shift()!;
+        assert.fail(message);
       },
       async multi() {
-        return multiple.shift()!;
+        return ['model'];
       },
       async input() {
         return '';
@@ -383,7 +531,8 @@ test('Model setup defaults new tools to xAI and preserves existing and edited ch
     await promptSetup(
       draft,
       prompts,
-      async () => {},
+      setupPreviewLines,
+      () => {},
       () => {},
     );
     assert.equal((await applySetup(draft, path, new AbortController().signal)).exitCode, 0);
@@ -424,23 +573,22 @@ test('Setup preselects effective choices and preserves existing sources when con
         context(root, env),
         language,
       );
-      let services = false;
+      const navigate = navigateSetup(
+        'services',
+        'search',
+        'sources',
+        escape,
+        'language',
+        language,
+        'review',
+        'save',
+      );
       const selections: string[] = [];
       const inputs: string[] = [];
       const prompts: Prompts = {
         async select(message, choices, initial) {
-          if (isSearchSourcesModePrompt(message)) {
-            assert.equal(initial, 'keep');
-            assert.equal(
-              choices[0].label,
-              language === 'zh'
-                ? '保持当前来源：Tavily, 模型搜索'
-                : 'Keep current sources: Tavily, Model search',
-            );
-            return initial;
-          }
-          if (choices.some((choice) => choice.value === 'zh')) return language;
-          if (choices.some((choice) => choice.value === 'save')) return 'save';
+          const section = navigate(message, choices);
+          if (section) return section;
           if (choices.some((choice) => choice.value === 'keep')) return 'keep';
           if (choices.some((choice) => choice.value === 'custom')) return initial;
           assert.ok(choices.every((choice) => choice.value !== ''));
@@ -462,9 +610,11 @@ test('Setup preselects effective choices and preserves existing sources when con
           selections.push(initial);
           return initial;
         },
-        async multi(_message, choices) {
-          if (services) return [];
-          services = true;
+        async multi(message, choices, initial) {
+          if (isSearchSourcesPrompt(message)) {
+            assert.deepEqual(initial, ['tavily', 'model']);
+            return initial;
+          }
           assert.deepEqual(
             choices.map((choice) => choice.value),
             [
@@ -499,9 +649,8 @@ test('Setup preselects effective choices and preserves existing sources when con
           }
           return ['zhipu-mcp', 'model', 'zhipu'];
         },
-        async input(message, _secret, validate, label, placeholder) {
+        async input(message, _secret, validate, _language, placeholder) {
           assert.equal(validate(''), undefined);
-          assert.equal(label, language === 'zh' ? '请输入：' : 'Enter: ');
           assert.doesNotMatch(
             message,
             /providers\.|未设置|unset|\n|明文|plaintext|fixture-existing-model-key/,
@@ -516,7 +665,8 @@ test('Setup preselects effective choices and preserves existing sources when con
       await promptSetup(
         draft,
         prompts,
-        async () => {},
+        setupPreviewLines,
+        () => {},
         () => {},
       );
       assert.equal(selections.length, 3);
@@ -551,13 +701,20 @@ test('XAI setup saves the official URL and tools and retains model, effort and c
     'en',
   );
   let previews = 0;
-  let services = false;
+  const navigate = navigateSetup(
+    'language',
+    'en',
+    'services',
+    'review',
+    'back',
+    'services',
+    'review',
+    'save',
+  );
   const prompts: Prompts = {
     async select(message, choices, initial) {
-      if (isSearchSourcesModePrompt(message)) return initial;
-      if (choices.some((choice) => choice.value === 'zh')) return 'en';
-      if (choices.some((choice) => choice.value === 'save'))
-        return previews === 1 ? 'edit' : 'save';
+      const section = navigate(message, choices);
+      if (section) return section;
       if (choices.some((choice) => choice.value === 'keep'))
         assert.fail('The xAI shortcut must skip tool selection');
       if (choices.some((choice) => choice.value === 'custom')) {
@@ -572,8 +729,7 @@ test('XAI setup saves the official URL and tools and retains model, effort and c
       return selected;
     },
     async multi() {
-      services = !services;
-      return services ? ['model', 'zhipu', 'zhipu-mcp'] : [];
+      return ['model', 'zhipu', 'zhipu-mcp'];
     },
     async input(message, _secret, validate) {
       let value = '';
@@ -591,17 +747,18 @@ test('XAI setup saves the official URL and tools and retains model, effort and c
   await promptSetup(
     draft,
     prompts,
-    async (current) => {
-      const preview = stripVTControlCharacters(renderSetupPreview(current));
-      assert.match(
-        preview
-          .split('\n')
-          .map((line) => line.replace(/^│  /, ''))
-          .join(''),
-        /overridden by environment variable UNISEARCH_MODEL_ID/,
+    (current) => {
+      const lines = setupPreviewLines(current);
+      assert.ok(
+        lines.some(
+          (line) =>
+            line.includes('providers.model.model.id') && line.includes('UNISEARCH_MODEL_ID'),
+        ),
       );
       previews++;
+      return lines;
     },
+    () => {},
     () => {},
   );
   assert.equal(previews, 2);
@@ -642,7 +799,7 @@ test('Setup credential previews mask short keys and never show invalid values', 
     assert.equal(draft.preview('providers.exa.api_key'), expected);
     assert.equal(draft.preview('providers.model.api_key'), '');
     draft.selectServices(['exa']);
-    assert.doesNotMatch(renderSetupPreview(draft), new RegExp(key));
+    assert.doesNotMatch(setupPreviewLines(draft).join('\n'), new RegExp(key));
   }
 });
 
@@ -658,10 +815,11 @@ test('Custom URL inputs preserve defaults on Enter and save only the edited Jina
   );
   const urls: string[] = [];
   const inputs: string[] = [];
-  let selected = false;
+  const navigate = navigateSetup('services', 'review', 'save');
   const prompts: Prompts = {
     async select(message, choices, initial) {
-      if (isSearchSourcesModePrompt(message)) return initial;
+      const section = navigate(message, choices);
+      if (section) return section;
       if (choices.some((choice) => choice.value === 'custom')) {
         assert.equal(initial, 'current');
         if (message.includes('Firecrawl')) {
@@ -672,15 +830,12 @@ test('Custom URL inputs preserve defaults on Enter and save only the edited Jina
         urls.push(message);
         return urls.length === 1 ? 'current' : 'custom';
       }
-      return initial;
+      assert.fail(message);
     },
     async multi() {
-      if (selected) return [];
-      selected = true;
       return ['jina', 'firecrawl'];
     },
-    async input(message, secret, validate, label, placeholder) {
-      assert.equal(label, '请输入：');
+    async input(message, secret, validate, _language, placeholder) {
       inputs.push(message);
       if (message.includes('Firecrawl') && !secret) {
         assert.equal(placeholder, 'https://api.firecrawl.dev/v2');
@@ -694,7 +849,8 @@ test('Custom URL inputs preserve defaults on Enter and save only the edited Jina
   await promptSetup(
     draft,
     prompts,
-    async () => {},
+    setupPreviewLines,
+    () => {},
     () => {},
   );
   assert.deepEqual(
@@ -705,14 +861,13 @@ test('Custom URL inputs preserve defaults on Enter and save only the edited Jina
   assert.match(urls[0], /UNISEARCH_JINA_SEARCH_URL/);
   assert.match(urls[1], /已配置/);
   assert.deepEqual(draft.values, {
-    language: 'zh',
     providers: { jina: { reader_url: customUrl } },
   });
   assert.equal(draft.current('search.providers').source, 'default');
   assert.deepEqual(draft.current('search.providers').value, ['model']);
   assert.deepEqual(
     draft.changes().map((change) => change.key),
-    ['language', 'providers.jina.reader_url'],
+    ['providers.jina.reader_url'],
   );
 });
 
@@ -818,7 +973,8 @@ test('Setup no-op preserves mtime and non-TTY returns usage error', async (t) =>
     promptSetup(
       draft,
       prompts,
-      async () => {},
+      setupPreviewLines,
+      () => {},
       () => {},
     ),
     (e: unknown) => e instanceof AppError && e.code === 'CANCELLED',

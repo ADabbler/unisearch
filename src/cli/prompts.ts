@@ -4,9 +4,11 @@ import {
   PasswordPrompt,
   SelectPrompt,
   TextPrompt,
+  getRows,
   wrapTextWithPrefix,
 } from '@clack/core';
-import type { State } from '@clack/core';
+import type { Prompt, State } from '@clack/core';
+import { clearScreenDown, cursorTo, moveCursor } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
 import { styleText } from 'node:util';
 import { AppError } from '../errors.js';
@@ -19,9 +21,21 @@ export interface Choice {
   value: string;
   label: string;
   description?: string;
+  action?: boolean;
+}
+interface SelectOptions {
+  menu?: { separateBefore?: string; details?: string[]; titleGap?: boolean };
+  validate?: (value: string | undefined) => string | undefined;
+  cancelOnEscape?: boolean;
 }
 export interface Prompts {
-  select(message: string, choices: Choice[], initial: string, language: Language): Promise<string>;
+  select(
+    message: string,
+    choices: Choice[],
+    initial: string,
+    language: Language,
+    options?: SelectOptions,
+  ): Promise<string>;
   multi(
     message: string,
     choices: Choice[],
@@ -33,10 +47,13 @@ export interface Prompts {
     message: string,
     secret: boolean,
     validate: (input: string) => string | undefined,
-    label: string,
+    language: Language,
     placeholder?: string,
   ): Promise<string>;
 }
+
+export class PromptBack extends Error {}
+
 export function requireTerminal(): void {
   if (!process.stdin.isTTY || !process.stderr.isTTY)
     throw new AppError('INVALID_ARGUMENT', 'interactiveRequired');
@@ -86,6 +103,12 @@ export function promptFrame(
     .join('\n')}${finished || endGuide ? '' : '\n'}`;
 }
 
+function choicePadding(title: string, footer: string, output: Writable): number {
+  const frameRows = wrappedLines(title, output).length + 2;
+  const footerRows = wrappedLines(footer, output).length + 1;
+  return frameRows + footerRows;
+}
+
 function choiceLines(
   choices: Choice[],
   cursor: number,
@@ -93,6 +116,7 @@ function choiceLines(
   multi: boolean,
   output: Writable,
   rowPadding: number,
+  separateBefore?: string,
 ): string[] {
   return clack.limitOptions({
     output,
@@ -107,76 +131,166 @@ function choiceLines(
       let color: 'green' | 'cyan' | 'dim' = 'dim';
       if (checked || (!multi && active)) color = 'green';
       else if (active) color = 'cyan';
-      const mark = styleText(color, symbol);
-      const label = choice.description ? `${choice.label}: ${choice.description}` : choice.label;
-      return `${mark} ${active ? label : styleText('dim', label)}`;
+      let line: string;
+      if (!multi && choice.action) {
+        const label = active
+          ? styleText('bold', styleText('green', choice.label), { validateStream: false })
+          : styleText('dim', choice.label);
+        line = `[ ${label} ]`;
+      } else {
+        const mark = styleText(color, symbol);
+        const label = choice.description ? `${choice.label}: ${choice.description}` : choice.label;
+        line = `${mark} ${active ? label : styleText('dim', label)}`;
+      }
+      return choice.value === separateBefore ? `\n${line}` : line;
     },
   });
 }
 
 export function terminalPrompts(
   signal: AbortSignal,
-  common: { input: Readable; output: Writable } = { input: process.stdin, output: process.stderr },
+  {
+    input = process.stdin,
+    output = process.stderr,
+    backOnEscape = false,
+  }: { input?: Readable; output?: Writable; backOnEscape?: boolean } = {},
 ): Prompts {
-  async function ask<T>(run: (signal: AbortSignal) => Promise<T | symbol | undefined>): Promise<T> {
-    const eof = new AbortController();
-    const end = () => eof.abort();
+  const common = { input, output };
+  async function ask<T>(
+    create: (signal: AbortSignal) => Prompt<T>,
+    back = backOnEscape,
+  ): Promise<T> {
+    const interrupt = new AbortController();
+    const cancel = () => interrupt.abort();
     const keypress = (_value: string, key: { ctrl?: boolean; name?: string }) => {
-      if (key.ctrl && key.name === 'd') queueMicrotask(end);
+      if (key.ctrl && key.name === 'd') queueMicrotask(cancel);
     };
-    common.input.once('end', end);
-    common.input.on('keypress', keypress);
+    // Clack keeps its abort handler after closing, so detach the caller's signal in finally.
+    signal.addEventListener('abort', cancel, { once: true });
+    input.once('end', cancel);
+    input.on('keypress', keypress);
     try {
-      if (common.input.readableEnded) eof.abort();
-      const result = await run(AbortSignal.any([signal, eof.signal]));
-      if (clack.isCancel(result)) throw new AppError('CANCELLED', 'cancelled');
+      if (signal.aborted || input.readableEnded) cancel();
+      const prompt = create(interrupt.signal);
+      let escaped = false;
+      if (back)
+        prompt.on('key', (_value, key) => {
+          escaped = key.name === 'escape';
+        });
+      const result = await prompt.prompt();
+      if (clack.isCancel(result)) {
+        if (escaped && !interrupt.signal.aborted) throw new PromptBack();
+        throw new AppError('CANCELLED', 'cancelled');
+      }
       if (result === undefined) throw new AppError('INTERNAL_ERROR', 'internal');
-      return result as T;
+      return result;
     } finally {
-      common.input.off('end', end);
-      common.input.off('keypress', keypress);
+      signal.removeEventListener('abort', cancel);
+      input.off('end', cancel);
+      input.off('keypress', keypress);
     }
   }
-  const hinted = new Set<boolean>();
-  const hint = (message: string, language: Language, multi = false) => {
-    if (hinted.has(multi)) return message;
-    hinted.add(multi);
-    const instructions =
-      language === 'zh'
-        ? `↑↓ 移动${multi ? '，空格选择' : ''}，回车确认，Esc 取消`
-        : `↑↓ move${multi ? ', Space select' : ''}, Enter confirm, Esc cancel`;
-    return `${message} ${styleText('dim', language === 'zh' ? `（${instructions}）` : `(${instructions})`)}`;
+  const keyFooter = (
+    language: Language,
+    keys: 'selectKeys' | 'multiSelectKeys' | 'inputKeys',
+    back = backOnEscape,
+  ) => {
+    const escape = text(language, back ? 'escapeBack' : 'escapeCancel');
+    return styleText('dim', `${text(language, keys)} · ${escape}`);
   };
+  const errorTitle = (heading: string, error: string, language: Language) =>
+    heading + styleText('yellow', language === 'zh' ? `（${error}）` : ` (${error})`);
   return {
-    select: (message, choices, initial, language) => {
-      const heading = hint(message, language);
-      return ask<string>((signal) =>
-        new SelectPrompt({
+    select: (message, choices, initial, language, options) => {
+      const menu = options?.menu;
+      const back = backOnEscape && !options?.cancelOnEscape;
+      const footer = keyFooter(language, 'selectKeys', back);
+      const titleGap = menu?.titleGap !== false;
+      let previewOffset = 0;
+      let previewCapacity = 0;
+      let previewLastOffset = 0;
+      let menuRows = 0;
+      const frame = (title: string, state: State, lines: string[]) => {
+        const value = promptFrame(title, state, lines, common.output);
+        if (menu) menuRows = value.split('\n').length - 1;
+        return value;
+      };
+      const create = (signal: AbortSignal) => {
+        const prompt = new SelectPrompt({
           ...common,
           signal,
           options: choices,
           initialValue: initial,
+          validate: options?.validate,
           render() {
             const finished = this.state === 'submit' || this.state === 'cancel';
-            const lines = finished
-              ? [styleText('dim', this.options[this.cursor].label)]
-              : choiceLines(
-                  this.options,
-                  this.cursor,
-                  [],
-                  false,
-                  common.output,
-                  wrappedLines(heading, common.output).length + 2,
-                );
-            return promptFrame(heading, this.state, lines, common.output);
+            if (finished) {
+              if (menu) {
+                menuRows = 0;
+                return;
+              }
+              return frame(message, this.state, [
+                styleText('dim', this.options[this.cursor].label),
+              ]);
+            }
+            const title =
+              this.state === 'error' ? errorTitle(message, this.error, language) : message;
+            const sectionGap = menu && (menu.details || titleGap) ? 1 : 0;
+            const padding = choicePadding(title, footer, common.output) + sectionGap;
+            const lines = choiceLines(
+              this.options,
+              this.cursor,
+              [],
+              false,
+              common.output,
+              padding,
+              menu?.separateBefore,
+            );
+            const keys = [footer];
+            if (menu?.details) {
+              const details = menu.details.flatMap((line) => wrappedLines(line, common.output));
+              let availableRows = getRows(common.output) - padding - lines.length;
+              if (details.length > Math.max(1, availableRows)) {
+                const scroll = styleText('dim', text(language, 'setupPreviewScroll'));
+                keys.unshift(scroll);
+                availableRows -= wrappedLines(scroll, common.output).length;
+              }
+              previewCapacity = Math.max(1, availableRows);
+              previewLastOffset = Math.max(0, details.length - previewCapacity);
+              previewOffset = Math.min(previewOffset, previewLastOffset);
+              // Give the preview a content row before reserving its gap above the actions.
+              if (availableRows > 0) lines.unshift('');
+              lines.unshift(...details.slice(previewOffset, previewOffset + previewCapacity));
+            } else if (menu && titleGap) {
+              lines.unshift('');
+            }
+            lines.push('', ...keys);
+            return frame(title, this.state, lines);
           },
-        }).prompt(),
-      );
+        });
+        if (menu) {
+          // Closing advances one row. An abort can close without clearing the menu.
+          const finishMenu = () => {
+            moveCursor(common.output, 0, -menuRows - 1);
+            if (menuRows) clearScreenDown(common.output);
+          };
+          prompt.once('submit', finishMenu);
+          prompt.once('cancel', finishMenu);
+        }
+        if (menu?.details)
+          prompt.on('key', (_value, key) => {
+            if (key.name === 'pageup') previewOffset = Math.max(0, previewOffset - previewCapacity);
+            if (key.name === 'pagedown')
+              previewOffset = Math.min(previewLastOffset, previewOffset + previewCapacity);
+          });
+        return prompt;
+      };
+      return ask(create, back);
     },
     multi: (message, choices, initial, language, validate) => {
-      const heading = hint(message, language, true);
-      return ask<string[]>((signal) =>
-        new MultiSelectPrompt({
+      const footer = keyFooter(language, 'multiSelectKeys');
+      return ask((signal) => {
+        return new MultiSelectPrompt({
           ...common,
           signal,
           options: choices,
@@ -185,11 +299,8 @@ export function terminalPrompts(
           render() {
             const finished = this.state === 'submit' || this.state === 'cancel';
             const selected = this.value ?? [];
-            let title = heading;
-            if (this.state === 'error') {
-              const warning = language === 'zh' ? `（${this.error}）` : ` (${this.error})`;
-              title += styleText('yellow', warning);
-            }
+            const title =
+              this.state === 'error' ? errorTitle(message, this.error, language) : message;
             let lines: string[];
             if (finished) {
               const summary =
@@ -205,17 +316,20 @@ export function terminalPrompts(
                 selected,
                 true,
                 common.output,
-                wrappedLines(title, common.output).length + 2,
+                choicePadding(title, footer, common.output),
               );
+              lines.push('', footer);
             }
             return promptFrame(title, this.state, lines, common.output);
           },
-        }).prompt(),
-      );
+        });
+      });
     },
-    input: (message, secret, validate, label, placeholder) =>
-      ask<string>((signal) =>
-        new (secret ? PasswordPrompt : TextPrompt)({
+    input: (message, secret, validate, language, placeholder) => {
+      const label = text(language, 'setupInput');
+      const footer = keyFooter(language, 'inputKeys');
+      return ask((signal) => {
+        return new (secret ? PasswordPrompt : TextPrompt)({
           ...common,
           signal,
           ...(secret ? { mask: clack.S_PASSWORD_MASK } : {}),
@@ -235,19 +349,50 @@ export function terminalPrompts(
             }
             const lines = [value];
             if (this.state === 'error') lines.push(styleText('yellow', this.error));
+            if (backOnEscape && !finished) lines.push('', footer);
             return promptFrame(message, this.state, lines, common.output);
           },
-        }).prompt(),
-      ),
+        });
+      });
+    },
   };
 }
+
+export async function withSetupScreen(
+  signal: AbortSignal,
+  run: (prompts: Prompts, nextPage: () => void) => Promise<void>,
+): Promise<void> {
+  const output = process.stderr;
+  let alternateScreen = false;
+  const nextPage = () => {
+    if (!alternateScreen) {
+      output.write('\x1b[?1049h');
+      alternateScreen = true;
+    }
+    cursorTo(output, 0, 0);
+    clearScreenDown(output);
+  };
+  try {
+    await run(terminalPrompts(signal, { backOnEscape: true }), nextPage);
+  } finally {
+    if (alternateScreen) output.write('\x1b[?1049l');
+  }
+}
+
+const skillTargetTitles = {
+  install: 'skillsSelectInstall',
+  update: 'skillsSelectUpdate',
+  remove: 'skillsSelectRemove',
+} as const;
+
 export async function selectSkillTargets(
   prompts: Prompts,
   language: Language,
+  action: keyof typeof skillTargetTitles,
   initial: SkillTarget[] = [],
 ): Promise<SkillTarget[]> {
   return (await prompts.multi(
-    text(language, 'skillsSelect'),
+    text(language, skillTargetTitles[action]),
     skillTargets.map(([value, label]) => ({ value, label })),
     initial,
     language,

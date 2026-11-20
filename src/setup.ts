@@ -8,6 +8,7 @@ import {
   valueAt,
 } from './config/fields.js';
 import type { Field, Provider } from './config/fields.js';
+import { inspectClassifier } from './config/classifier.js';
 import { prepareMutation, checkCancellation } from './config/manage.js';
 import type { Mutation } from './config/manage.js';
 import type { ConfigDocument } from './config/read.js';
@@ -16,10 +17,10 @@ import { resolveField } from './config/resolve.js';
 import { saveConfig } from './config/write.js';
 import { AppError, failure } from './errors.js';
 import { colon, text } from './i18n/messages.js';
-import type { Language } from './i18n/messages.js';
+import type { Language, MessageKey } from './i18n/messages.js';
 import { providerName, operationName } from './i18n/providers.js';
 import type { Choice, Prompts } from './cli/prompts.js';
-import { selectSkillTargets } from './cli/prompts.js';
+import { PromptBack, selectSkillTargets } from './cli/prompts.js';
 import { operations } from './providers/operations.js';
 import { targetPaths } from './skills/targets.js';
 import type { SkillTarget, TargetPath } from './skills/targets.js';
@@ -194,231 +195,337 @@ export class SetupDraft {
   }
 }
 
+function promptSetting(draft: SetupDraft, prompts: Prompts, key: string, message: string) {
+  const field = fieldAt(key);
+  return prompts.input(
+    message,
+    field.kind === 'credential',
+    (input) => {
+      if (input === '') return;
+      try {
+        prepareMutation(
+          { ...draft.document, values: draft.values },
+          draft.context.env,
+          draft.language,
+          key,
+          input,
+        );
+      } catch (error) {
+        if (error instanceof AppError) return error.public(draft.language).message;
+        throw error;
+      }
+    },
+    draft.language,
+    previewValue(field, draft.current(key).value),
+  );
+}
+
+async function promptServices(draft: SetupDraft, prompts: Prompts): Promise<void> {
+  const { language } = draft;
+  const zh = language === 'zh';
+  const selected = await prompts.multi(
+    text(language, 'setupSelectServices'),
+    providers.map((provider) => {
+      const choice = { value: provider, label: serviceName(provider, language) };
+      if (provider === 'model') return choice;
+      const providerOperations = operations.filter((operation) => operation.provider === provider);
+      if (provider === 'jina') {
+        const order = ['search', 'fetch'];
+        providerOperations.sort((a, b) => order.indexOf(a.operation) - order.indexOf(b.operation));
+      }
+      return {
+        ...choice,
+        description: providerOperations
+          .map((operation) => operationName(operation.operation, language, provider))
+          .join(zh ? '、' : ', '),
+      };
+    }),
+    draft.selected,
+    language,
+  );
+  draft.selectServices(providers.filter((provider) => selected.includes(provider)));
+  for (const provider of draft.selected) {
+    const providerOperations = operations.filter((operation) => operation.provider === provider);
+    const name = serviceName(provider, language);
+    const actionName = zh && /^[A-Za-z0-9]/.test(name) ? ` ${name}` : name;
+    let askModelTools = false;
+    let modelUsesXai = false;
+    for (const suffix of setupFields[provider]) {
+      if (provider === 'model' && suffix === 'protocol' && modelUsesXai) continue;
+      const key = `providers.${provider}.${suffix}`,
+        field = fieldAt(key);
+      const fieldLabel = fieldName(suffix, language);
+      const label = `${name} ${fieldLabel}`;
+      const optional =
+        providerOperations.some((operation) => operation.optional?.includes(key)) &&
+        !providerOperations.some((operation) => operation.required.includes(key));
+      const detail = draft.preview(key) || (optional ? text(language, 'setupOptional') : '');
+      let preview = '';
+      if (detail) preview = zh ? `（${detail}）` : ` (${detail})`;
+      const isChoice = suffix === 'protocol' || suffix === 'platform';
+      const selectionLabel = isChoice ? `${name}${fieldLabel}` : `${actionName} ${fieldLabel}`;
+      const selectionTitle = zh ? `请选择${selectionLabel}${preview}` : `Select ${label}${preview}`;
+      let input: string;
+      if (isChoice) {
+        const choices =
+          suffix === 'protocol' ? ['responses', 'chat-completions'] : field.choices!.map(String);
+        const resolved = draft.current(key);
+        input = await prompts.select(
+          selectionTitle,
+          choices.map((value) => ({
+            value,
+            label: choiceLabels[value],
+          })),
+          resolved.value === undefined ? '' : String(resolved.value),
+          language,
+        );
+        if (input === resolved.value) continue;
+      } else {
+        if (field.kind === 'url') {
+          const resolved = draft.current(key);
+          const choices: Choice[] = [];
+          let currentLabel = zh ? '当前地址' : 'Current URL';
+          if (provider === 'model') {
+            if (resolved.value !== undefined)
+              choices.push({ value: 'current', label: currentLabel });
+            choices.push({ value: 'xai', label: text(language, 'setupXaiPreset') });
+          } else {
+            if (resolved.source === 'default') currentLabel = zh ? '默认' : 'Default';
+            choices.push({ value: 'current', label: currentLabel });
+          }
+          choices.push({ value: 'custom', label: zh ? '自定义' : 'Custom' });
+          const mode = await prompts.select(
+            selectionTitle,
+            choices,
+            draft.selections.get(key) ?? choices[0].value,
+            language,
+          );
+          draft.selections.set(key, mode);
+          if (mode === 'current') {
+            if (provider === 'model' && resolved.value === xaiBaseUrl) {
+              modelUsesXai = true;
+              if (draft.current('providers.model.protocol').value !== 'responses')
+                draft.set('providers.model.protocol', 'responses');
+            }
+            continue;
+          }
+          if (provider === 'model' && mode === 'xai') {
+            modelUsesXai = true;
+            draft.set(key, xaiBaseUrl);
+            if (draft.current('providers.model.protocol').value !== 'responses')
+              draft.set('providers.model.protocol', 'responses');
+            draft.set('providers.model.tools', JSON.stringify(xaiTools));
+            draft.selections.set('providers.model.tools', 'xai');
+            continue;
+          }
+          if (provider === 'model') askModelTools = true;
+        }
+        let inputTitle = zh ? `配置${actionName} ${fieldLabel}` : `Configure ${label}`;
+        if (zh && (suffix === 'model.id' || suffix === 'model.effort'))
+          inputTitle = `配置${name}的${fieldLabel}`;
+        const titlePreview = field.kind === 'url' ? '' : preview;
+        input = await promptSetting(draft, prompts, key, `${inputTitle}${titlePreview}`);
+      }
+      if (input !== '') draft.set(key, input);
+    }
+    if (provider === 'model' && askModelTools) {
+      const key = 'providers.model.tools';
+      const resolved = draft.current(key);
+      const current = resolved.value;
+      const hasCurrentTools = resolved.source !== 'default' || draft.selections.has(key);
+      let initial = draft.selections.get(key);
+      if (initial === undefined) {
+        initial = 'keep';
+        if (!hasCurrentTools || isDeepStrictEqual(current, xaiTools)) initial = 'xai';
+        else if (isDeepStrictEqual(current, [])) initial = 'none';
+      }
+      const choices: Choice[] = [];
+      if (hasCurrentTools)
+        choices.push({ value: 'keep', label: zh ? '保持当前工具配置' : 'Keep current tools' });
+      choices.push(
+        { value: 'xai', label: zh ? '启用 xAI 搜索工具' : 'Enable xAI search tools' },
+        { value: 'none', label: zh ? '不使用工具' : 'Use no tools' },
+      );
+      const tools = await prompts.select(
+        zh ? '模型搜索工具' : 'Model search tools',
+        choices,
+        initial,
+        language,
+      );
+      draft.selections.set(key, tools);
+      if (tools !== 'keep') {
+        const value = tools === 'xai' ? xaiTools : [];
+        if (!isDeepStrictEqual(current, value)) draft.set(key, JSON.stringify(value));
+      }
+    }
+  }
+}
+
+async function promptSearchSources(draft: SetupDraft, prompts: Prompts): Promise<void> {
+  const { language } = draft;
+  const current = draft.current('search.providers');
+  assertValid(current.problems, language);
+  const sources = await prompts.multi(
+    text(language, 'setupSelectSearchSources'),
+    searchProviders.map((provider) => ({
+      value: provider,
+      label: serviceName(provider, language),
+    })),
+    current.value as string[],
+    language,
+    (selected) => (selected?.length ? undefined : text(language, 'setupSearchSourcesRequired')),
+  );
+  if (!isDeepStrictEqual(sources, current.value))
+    draft.set('search.providers', JSON.stringify(sources));
+}
+
+const classifierFields = [
+  ['base_url', 'setupClassifierUrl'],
+  ['api_key', 'setupClassifierKey'],
+  ['model', 'setupClassifierModel'],
+] as const;
+
+async function promptClassifier(draft: SetupDraft, prompts: Prompts): Promise<void> {
+  const { language } = draft;
+  for (const [suffix, label] of classifierFields) {
+    const key = `search.routing.classifier.${suffix}`;
+    const current =
+      suffix === 'base_url' && !draft.current(key).problems.length ? '' : draft.preview(key);
+    const hint = current ? (language === 'zh' ? `（${current}）` : ` (${current})`) : '';
+    const value = await promptSetting(draft, prompts, key, text(language, label) + hint);
+    if (value !== '') draft.set(key, value);
+  }
+}
+
+const routingEnabled = 'search.routing.enabled';
+
+function routingProblem(draft: SetupDraft): string | undefined {
+  const {
+    values,
+    context: { env },
+    language,
+  } = draft;
+  const classifier = inspectClassifier(values, env);
+  const limit = resolveField(values, env, fieldAt('search.routing.max_sources'));
+  const problem = classifier.problems[0] ?? limit.problems[0];
+  if (problem) {
+    const field = problem.environment ?? problem.field ?? text(language, 'classifierLabel');
+    return field + colon(language) + text(language, problem.message);
+  }
+  if (classifier.missing.length) return text(language, 'setupRoutingNeedsClassifier');
+}
+
+async function promptRouting(draft: SetupDraft, prompts: Prompts): Promise<void> {
+  const { language } = draft;
+  const current = draft.current(routingEnabled).value;
+  const choose = (value: string, label: MessageKey) => ({ value, label: text(language, label) });
+  const selected = await prompts.select(
+    text(language, 'setupRouting'),
+    [choose('true', 'setupRoutingEnable'), choose('false', 'setupRoutingDisable')],
+    current === true ? 'true' : 'false',
+    language,
+    {
+      menu: { titleGap: false },
+      validate: (value) => (value === 'true' ? routingProblem(draft) : undefined),
+    },
+  );
+  if (selected !== String(current)) draft.set(routingEnabled, selected);
+}
+
+async function promptSearch(
+  draft: SetupDraft,
+  prompts: Prompts,
+  nextPage: () => void,
+): Promise<void> {
+  const { language } = draft;
+  let section = 'sources';
+  while (true) {
+    section = await prompts.select(
+      text(language, 'setupSearch'),
+      [
+        { value: 'sources', label: text(language, 'setupSearchSources') },
+        { value: 'classifier', label: text(language, 'classifierLabel') },
+        { value: 'routing', label: text(language, 'setupRouting') },
+      ],
+      section,
+      language,
+      { menu: {} },
+    );
+    nextPage();
+    try {
+      if (section === 'sources') await promptSearchSources(draft, prompts);
+      if (section === 'classifier') await promptClassifier(draft, prompts);
+      if (section === 'routing') await promptRouting(draft, prompts);
+    } catch (error) {
+      if (!(error instanceof PromptBack)) throw error;
+    }
+    nextPage();
+  }
+}
+
 export async function promptSetup(
   draft: SetupDraft,
   prompts: Prompts,
-  preview: (draft: SetupDraft) => Promise<void>,
+  preview: (draft: SetupDraft) => string[] | Promise<string[]>,
   setLanguage: (language: Language) => void,
+  nextPage: () => void,
 ): Promise<void> {
+  let section = 'services';
   while (true) {
-    draft.language = (await prompts.select(
-      draft.language === 'zh' ? '界面语言' : 'Interface language',
+    const { language } = draft;
+    const choose = (value: string, label: MessageKey) => ({ value, label: text(language, label) });
+    section = await prompts.select(
+      text(language, 'setupTitle'),
       [
-        { value: 'zh', label: '中文' },
-        { value: 'en', label: 'English' },
+        choose('services', 'setupServices'),
+        choose('search', 'setupSearch'),
+        choose('language', 'setupLanguage'),
+        choose('skills', 'setupSkills'),
+        { value: 'review', label: text(language, 'setupReview'), action: true },
+        { value: 'cancel', label: text(language, 'setupCancel'), action: true },
       ],
-      draft.language,
-      draft.language,
-    )) as Language;
-    setLanguage(draft.language);
-    draft.set('language', draft.language);
-    const zh = draft.language === 'zh';
-    const selected = (await prompts.multi(
-      zh ? '配置并启用的服务' : 'Services to configure and enable',
-      providers.map((provider) => {
-        const choice = { value: provider, label: serviceName(provider, draft.language) };
-        if (provider === 'model') return choice;
-        const providerOperations = operations.filter(
-          (operation) => operation.provider === provider,
-        );
-        if (provider === 'jina') {
-          const order = ['search', 'fetch'];
-          providerOperations.sort(
-            (a, b) => order.indexOf(a.operation) - order.indexOf(b.operation),
-          );
-        }
-        return {
-          ...choice,
-          description: providerOperations
-            .map((operation) => operationName(operation.operation, draft.language, provider))
-            .join(zh ? '、' : ', '),
-        };
-      }),
-      draft.selected,
-      draft.language,
-    )) as Provider[];
-    draft.selectServices(providers.filter((provider) => selected.includes(provider)));
-    for (const provider of draft.selected) {
-      let askModelTools = false;
-      let modelUsesXai = false;
-      for (const suffix of setupFields[provider]) {
-        if (provider === 'model' && suffix === 'protocol' && modelUsesXai) continue;
-        const key = `providers.${provider}.${suffix}`,
-          field = fieldAt(key);
-        const name = serviceName(provider, draft.language);
-        const actionName = zh && /[A-Za-z0-9]/.test(name[0]) ? ` ${name}` : name;
-        const fieldLabel = fieldName(suffix, draft.language);
-        const label = `${name} ${fieldLabel}`;
-        const current = draft.preview(key);
-        let preview = '';
-        if (current) preview = zh ? `（${current}）` : ` (${current})`;
-        const isChoice = suffix === 'protocol' || suffix === 'platform';
-        const selectionLabel = isChoice ? `${name}${fieldLabel}` : `${actionName} ${fieldLabel}`;
-        const selectionTitle = zh
-          ? `请选择${selectionLabel}${preview}`
-          : `Select ${label}${preview}`;
-        let input: string;
-        if (isChoice) {
-          const choices =
-            suffix === 'protocol' ? ['responses', 'chat-completions'] : field.choices!.map(String);
-          const resolved = draft.current(key);
-          input = await prompts.select(
-            selectionTitle,
-            choices.map((value) => ({
-              value,
-              label: choiceLabels[value],
-            })),
-            resolved.value === undefined ? '' : String(resolved.value),
-            draft.language,
-          );
-          if (input === resolved.value) continue;
-        } else {
-          if (field.kind === 'url') {
-            const resolved = draft.current(key);
-            const choices: Choice[] = [];
-            let currentLabel = zh ? '当前地址' : 'Current URL';
-            if (provider === 'model') {
-              if (resolved.value !== undefined)
-                choices.push({ value: 'current', label: currentLabel });
-              choices.push({ value: 'xai', label: zh ? 'xAI 官方' : 'xAI official' });
-            } else {
-              if (resolved.source === 'default') currentLabel = zh ? '默认' : 'Default';
-              choices.push({ value: 'current', label: currentLabel });
-            }
-            choices.push({ value: 'custom', label: zh ? '自定义' : 'Custom' });
-            const mode = await prompts.select(
-              selectionTitle,
-              choices,
-              draft.selections.get(key) ?? choices[0].value,
-              draft.language,
-            );
-            draft.selections.set(key, mode);
-            if (mode === 'current') {
-              if (provider === 'model' && resolved.value === xaiBaseUrl) {
-                modelUsesXai = true;
-                if (draft.current('providers.model.protocol').value !== 'responses')
-                  draft.set('providers.model.protocol', 'responses');
-              }
-              continue;
-            }
-            if (provider === 'model' && mode === 'xai') {
-              modelUsesXai = true;
-              draft.set(key, xaiBaseUrl);
-              if (draft.current('providers.model.protocol').value !== 'responses')
-                draft.set('providers.model.protocol', 'responses');
-              draft.set('providers.model.tools', JSON.stringify(xaiTools));
-              draft.selections.set('providers.model.tools', 'xai');
-              continue;
-            }
-            if (provider === 'model') askModelTools = true;
-          }
-          let inputTitle = zh ? `配置${actionName} ${fieldLabel}` : `Configure ${label}`;
-          if (zh && (suffix === 'model.id' || suffix === 'model.effort'))
-            inputTitle = `配置${name}的${fieldLabel}`;
-          let example = '';
-          if (provider === 'model' && field.kind === 'url')
-            example = zh ? `（示例：${xaiBaseUrl}）` : ` (example: ${xaiBaseUrl})`;
-          const titlePreview = field.kind === 'url' ? '' : preview;
-          input = await prompts.input(
-            `${inputTitle}${titlePreview}${example}`,
-            field.kind === 'credential',
-            (input) => {
-              if (input === '') return;
-              try {
-                prepareMutation(
-                  { ...draft.document, values: draft.values },
-                  draft.context.env,
-                  draft.language,
-                  key,
-                  input,
-                );
-              } catch (error) {
-                if (error instanceof AppError) return error.public(draft.language).message;
-                throw error;
-              }
-            },
-            zh ? '请输入：' : 'Enter: ',
-            previewValue(field, draft.current(key).value),
-          );
-        }
-        if (input !== '') draft.set(key, input);
-      }
-      if (provider === 'model' && askModelTools) {
-        const key = 'providers.model.tools';
-        const resolved = draft.current(key);
-        const current = resolved.value;
-        const hasCurrentTools = resolved.source !== 'default' || draft.selections.has(key);
-        let initial = draft.selections.get(key);
-        if (initial === undefined) {
-          initial = 'keep';
-          if (!hasCurrentTools || isDeepStrictEqual(current, xaiTools)) initial = 'xai';
-          else if (isDeepStrictEqual(current, [])) initial = 'none';
-        }
-        const choices: Choice[] = [];
-        if (hasCurrentTools)
-          choices.push({ value: 'keep', label: zh ? '保持当前工具配置' : 'Keep current tools' });
-        choices.push(
-          { value: 'xai', label: zh ? '启用 xAI 搜索工具' : 'Enable xAI search tools' },
-          { value: 'none', label: zh ? '不使用工具' : 'Use no tools' },
-        );
-        const tools = await prompts.select(
-          zh ? '模型搜索工具' : 'Model search tools',
-          choices,
-          initial,
-          draft.language,
-        );
-        draft.selections.set(key, tools);
-        if (tools !== 'keep') {
-          const value = tools === 'xai' ? xaiTools : [];
-          if (!isDeepStrictEqual(current, value)) draft.set(key, JSON.stringify(value));
-        }
-      }
-    }
-    const currentSources = draft.current('search.providers');
-    assertValid(currentSources.problems, draft.language);
-    const currentProviders = currentSources.value as Provider[];
-    const mode = await prompts.select(
-      text(draft.language, 'setupSearchSources'),
-      [
-        {
-          value: 'keep',
-          label: text(draft.language, 'setupKeepSearchSources').replace('{sources}', () =>
-            currentProviders.map((provider) => serviceName(provider, draft.language)).join(', '),
-          ),
-        },
-        { value: 'custom', label: text(draft.language, 'setupCustomSearchSources') },
-      ],
-      'keep',
-      draft.language,
+      section,
+      language,
+      { menu: { separateBefore: 'review' }, cancelOnEscape: true },
     );
-    if (mode === 'custom') {
-      const sources = await prompts.multi(
-        text(draft.language, 'setupSelectSearchSources'),
-        searchProviders.map((provider) => ({
-          value: provider,
-          label: serviceName(provider, draft.language),
-        })),
-        currentSources.source === 'default' ? [] : currentProviders,
-        draft.language,
-        (selected) =>
-          selected?.length ? undefined : text(draft.language, 'setupSearchSourcesRequired'),
-      );
-      draft.set('search.providers', JSON.stringify(sources));
+    if (section === 'cancel') throw new AppError('CANCELLED', 'cancelled');
+    nextPage();
+    try {
+      if (section === 'services') await promptServices(draft, prompts);
+      if (section === 'search') await promptSearch(draft, prompts, nextPage);
+      if (section === 'language') {
+        draft.language = (await prompts.select(
+          text(language, 'setupLanguage'),
+          [
+            { value: 'zh', label: '中文' },
+            { value: 'en', label: 'English' },
+          ],
+          language,
+          language,
+        )) as Language;
+        draft.set('language', draft.language);
+        setLanguage(draft.language);
+      }
+      if (section === 'skills')
+        draft.skills = await selectSkillTargets(prompts, language, 'install', draft.skills);
+      if (section === 'review') {
+        const details = await preview(draft);
+        const decision = await prompts.select(
+          text(language, 'setupReview'),
+          [
+            { value: 'save', label: text(language, 'setupSave'), action: true },
+            { value: 'back', label: text(language, 'setupBack'), action: true },
+          ],
+          'save',
+          language,
+          { menu: { details } },
+        );
+        if (decision === 'save') return;
+      }
+    } catch (error) {
+      if (!(error instanceof PromptBack)) throw error;
     }
-    draft.skills = await selectSkillTargets(prompts, draft.language, draft.skills);
-    await preview(draft);
-    const decision = await prompts.select(
-      zh ? '应用配置' : 'Apply configuration',
-      [
-        { value: 'save', label: zh ? '保存并应用' : 'Save and apply' },
-        { value: 'edit', label: zh ? '继续修改' : 'Edit' },
-        { value: 'cancel', label: zh ? '取消' : 'Cancel' },
-      ],
-      'save',
-      draft.language,
-    );
-    if (decision === 'cancel') throw new AppError('CANCELLED', 'cancelled');
-    if (decision === 'save') return;
+    nextPage();
   }
 }
 

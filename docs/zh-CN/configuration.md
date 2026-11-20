@@ -25,7 +25,9 @@
 
 ## 配置与查询
 
-首次配置运行 `unisearch setup`，按提示填写服务连接信息，并选择是否安装 UniSearch Skill。后续可用 `unisearch config` 查询、修改设置，或直接编辑[配置文件](#文件位置)。
+通过 `unisearch setup` 可交互式配置服务连接与凭证、统一搜索和界面语言，并为所选 Agent 安装 UniSearch Skill。保存前可预览配置改动和 Skill 安装路径。
+
+设置可通过 `unisearch config` 查询和修改，也可直接在[配置文件](#文件位置)中编辑。
 
 `KEY` 填写下方配置表中的字段名。点号 `.` 分隔配置文件中的嵌套层级，例如 `providers.exa.search.limit` 对应 JSON 中的 `providers` → `exa` → `search` → `limit`。
 
@@ -136,7 +138,7 @@ unisearch search "搜索问题" --sources model,exa --effort low
 | `search.routing.classifier.api_key`  | 分类服务凭证                   | 无                           | `UNISEARCH_CLASSIFIER_API_KEY`  |
 | `search.routing.classifier.model`    | 分类模型 ID                    | 无                           | `UNISEARCH_CLASSIFIER_MODEL_ID` |
 
-`--auto` 为本次搜索启用自动选择。将 `search.routing.enabled` 设为 `true` 可默认启用；默认启用时，可用 `--no-auto` 为本次搜索禁用自动选择。
+`search.routing.enabled` 为 `true` 时，默认启用自动选择。`--auto` 和 `--no-auto` 分别启用和禁用自动选择，仅对本次搜索生效。
 
 自动选择会按需选择已选来源的搜索参数，仅影响本次请求。只有一个适用来源且无需选择参数时，不调用分类器。没有适用来源、分类失败或未选中来源时会报错。分类耗时计入本次搜索的超时预算。
 

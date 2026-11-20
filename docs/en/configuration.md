@@ -25,7 +25,9 @@
 
 ## Configure and inspect
 
-For initial configuration, run `unisearch setup` to enter service connection details and choose whether to install the UniSearch Skill. Use `unisearch config` for later queries and changes, or edit the [configuration file](#file-location) directly.
+With `unisearch setup`, you can interactively configure service connections and credentials, unified search, and the interface language, and install the UniSearch Skill for selected agents. The preview shows configuration changes and Skill installation paths before saving.
+
+Settings can be inspected and changed with `unisearch config`. The [configuration file](#file-location) can also be edited directly.
 
 Replace `KEY` with a field name from the configuration tables below. Dots (`.`) separate nested levels in the configuration file: `providers.exa.search.limit` follows the JSON path `providers` → `exa` → `search` → `limit`.
 
@@ -136,7 +138,7 @@ Other sources require no model configuration. Model-search options such as `--mo
 | `search.routing.classifier.api_key`  | Classifier API key                         | None                         | `UNISEARCH_CLASSIFIER_API_KEY`  |
 | `search.routing.classifier.model`    | Classifier model ID                        | None                         | `UNISEARCH_CLASSIFIER_MODEL_ID` |
 
-`--auto` enables automatic selection for this search. Set `search.routing.enabled` to `true` to enable it by default; when enabled by default, use `--no-auto` to disable it for this search.
+Automatic selection is enabled by default when `search.routing.enabled` is `true`. For the current search, `--auto` enables automatic selection and `--no-auto` disables it.
 
 Automatic selection also chooses search settings for selected sources where supported, for this call only. The classifier is skipped when there is only one eligible source and no settings to choose. No eligible source, failed classification, or no selected source produces an error. Classification time counts toward the search timeout.
 

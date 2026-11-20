@@ -65,10 +65,15 @@ import { success } from '../result.js';
 import type { ExitCode, JsonObject, JsonValue, Outcome } from '../result.js';
 import { manageSkills, preflightSkills } from '../skills/manage.js';
 import { parseTargets, skillTargets, targetPaths } from '../skills/targets.js';
-import { requireTerminal, selectSkillTargets, terminalPrompts } from './prompts.js';
+import {
+  requireTerminal,
+  selectSkillTargets,
+  terminalPrompts,
+  withSetupScreen,
+} from './prompts.js';
 import { renderSkills } from '../output/skills.js';
 import { SetupDraft, promptSetup, applySetup } from '../setup.js';
-import { renderSetup, renderSetupPreview } from '../output/setup.js';
+import { renderSetup, setupPreviewLines } from '../output/setup.js';
 import { diagnoseAll, prepareDoctor, prepareDoctorBatch } from '../doctor.js';
 import { renderDoctor, renderDoctorExecution } from '../output/doctor.js';
 import { operations } from '../providers/operations.js';
@@ -386,13 +391,16 @@ export function createCli(version: string, options: CliOptions = {}) {
       try {
         let path: string;
         try {
-          await promptSetup(
-            draft,
-            terminalPrompts(abort.signal),
-            (draft) => channels.stderr(renderSetupPreview(draft)),
-            (ui) => {
-              selectedLanguage = ui;
-            },
+          await withSetupScreen(abort.signal, (prompts, nextPage) =>
+            promptSetup(
+              draft,
+              prompts,
+              setupPreviewLines,
+              (ui) => {
+                selectedLanguage = ui;
+              },
+              nextPage,
+            ),
           );
           path = await configWriteTarget(loaded.path);
           await preflightSkills(draft.targets(), undefined, path);
@@ -449,7 +457,7 @@ export function createCli(version: string, options: CliOptions = {}) {
         else if (action === 'status') ids = skillTargets.map((item) => item[0]);
         else {
           requireTerminal();
-          ids = await selectSkillTargets(terminalPrompts(abort.signal), ui);
+          ids = await selectSkillTargets(terminalPrompts(abort.signal), ui, action);
         }
         const targets = targetPaths(ids, config);
         if (action !== 'status') await preflightSkills(targets);

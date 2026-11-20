@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import type { TestContext } from 'node:test';
+import { once } from 'node:events';
+import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { setImmediate } from 'node:timers/promises';
 import { stripVTControlCharacters } from 'node:util';
@@ -9,6 +11,9 @@ import * as clack from '@clack/prompts';
 import { terminalPrompts } from '../src/cli/prompts.js';
 import { AppError } from '../src/errors.js';
 import { text } from '../src/i18n/messages.js';
+import { setupPreviewLines } from '../src/output/setup.js';
+import { promptSetup, SetupDraft } from '../src/setup.js';
+import { context, temporary } from './helpers.js';
 
 const term = process.env.TERM;
 before(() => {
@@ -56,22 +61,22 @@ const choices = [
   { value: 'b', label: 'Beta' },
 ];
 
-test('Terminal choices end the guide on the last option and show each keyboard hint once', async (t) => {
+test('Terminal choices place keys after the options and retain only the submitted selection', async (t) => {
   const f = terminal(t);
-  const first = f.prompts.select('界面语言', choices, 'b', 'zh');
-  const firstFrame = f.take();
-  assert.match(firstFrame, /↑↓ 移动，回车确认，Esc 取消/);
-  assert.ok(firstFrame.split('\n')[1].startsWith(`${clack.S_STEP_ACTIVE}  界面语言 （↑↓`));
-  assert.ok(firstFrame.endsWith(`${clack.S_BAR_END}  ${clack.S_RADIO_ACTIVE} Beta\n`));
+  const single = f.prompts.select('界面语言', choices, 'a', 'zh');
+  const singleFrame = f.take().trimEnd().split('\n');
+  assert.equal(singleFrame[1], `${clack.S_STEP_ACTIVE}  界面语言`);
+  assert.deepEqual(singleFrame.slice(-3, -1), [
+    `${clack.S_BAR}  ${clack.S_RADIO_INACTIVE} Beta`,
+    clack.S_BAR,
+  ]);
+  assert.ok(singleFrame.at(-1)!.startsWith(`${clack.S_BAR_END}  `));
+  f.input.write('\x1b[B');
+  await setImmediate();
+  f.take();
   f.input.write('\r');
-  assert.equal(await first, 'b');
-  f.take();
-
-  const next = f.prompts.select('协议', choices, 'a', 'zh');
-  assert.doesNotMatch(f.take(), /↑↓|Esc/);
-  f.input.write('\x1b[B\r');
-  assert.equal(await next, 'b');
-  f.take();
+  assert.equal(await single, 'b');
+  assert.ok(f.take().trimEnd().endsWith(`${clack.S_BAR}  Beta`));
 
   const multi = f.prompts.multi(
     '服务',
@@ -82,25 +87,28 @@ test('Terminal choices end the guide on the last option and show each keyboard h
     [],
     'zh',
   );
-  const multiFrame = f.take();
-  assert.match(multiFrame, /空格选择/);
-  assert.ok(
-    multiFrame.endsWith(`${clack.S_BAR_END}  ${clack.S_CHECKBOX_INACTIVE} Exa: 搜索、网页读取\n`),
-  );
+  const multiFrame = f.take().trimEnd().split('\n');
+  assert.equal(multiFrame[1], `${clack.S_STEP_ACTIVE}  服务`);
+  assert.deepEqual(multiFrame.slice(-3, -1), [
+    `${clack.S_BAR}  ${clack.S_CHECKBOX_INACTIVE} Exa: 搜索、网页读取`,
+    clack.S_BAR,
+  ]);
+  assert.ok(multiFrame.at(-1)!.startsWith(`${clack.S_BAR_END}  `));
   f.input.write(' \x1b[B ');
   await setImmediate();
   f.take();
   f.input.write('\r');
   assert.deepEqual(await multi, ['a', 'b']);
   const submitted = f.take();
-  assert.match(submitted, /模型搜索, Exa/);
-  assert.doesNotMatch(submitted, /网页读取/);
+  assert.ok(submitted.trimEnd().endsWith(`${clack.S_BAR}  模型搜索, Exa`));
 
   const targets = f.prompts.multi('Skill', choices, [], 'zh');
-  assert.doesNotMatch(f.take(), /↑↓|空格选择|Esc/);
+  f.take();
   f.input.write('\r');
   assert.deepEqual(await targets, []);
   assert.match(f.take(), /未选择/);
+  f.abort.abort();
+  assert.equal(f.take(), '');
 });
 
 test('Required source selection keeps the prompt open on empty Enter and accepts a selection', async (t) => {
@@ -128,12 +136,32 @@ test('Required source selection keeps the prompt open on empty Enter and accepts
   }
 });
 
+test('A long configuration preview can be paged without losing its actions', async (t) => {
+  const details = Array.from({ length: 8 }, (_, index) => `Change ${index + 1}`);
+  for (const columns of [32, 24]) {
+    const f = terminal(t, columns, 10);
+    const menu = f.prompts.select('Preview', choices, 'a', 'en', { menu: { details } });
+    const first = f.take();
+    assert.ok(first.split('\n').length <= f.output.rows);
+    assert.match(first, /Change 1/);
+    assert.doesNotMatch(first, /Change 8/);
+    f.input.write('\x1b[6~'.repeat(details.length));
+    await setImmediate();
+    assert.match(f.take(), /Change 8/);
+    f.input.write('\x1b[5~'.repeat(details.length));
+    await setImmediate();
+    assert.match(f.take(), /Change 1/);
+    f.input.write('\x1b[B\r');
+    assert.equal(await menu, 'b');
+  }
+});
+
 test('Narrow prompts wrap text and keep the guide on every line', { timeout: 5000 }, async (t) => {
   const f = terminal(t, 28);
   const result = f.prompts.select('界面语言', choices, 'a', 'zh');
   const frame = f.take().trimEnd().split('\n');
   assert.ok(frame.length > 4);
-  assert.ok(frame[1].startsWith(`${clack.S_STEP_ACTIVE}  界面语言 （↑↓`));
+  assert.equal(frame[1], `${clack.S_STEP_ACTIVE}  界面语言`);
   for (const line of frame) {
     assert.ok(stringWidth(line) <= 28, line);
     assert.ok(
@@ -149,7 +177,7 @@ test('Narrow prompts wrap text and keep the guide on every line', { timeout: 500
     '配置模型搜索 API Key（UNISEARCH_MODEL_API_KEY：fixt•••-key）',
     true,
     (value) => (value === secret ? undefined : 'API Key 必须是不含空白的非空字符串，请重新输入'),
-    '请输入：',
+    'zh',
   );
   const initial = f.take().trimEnd().split('\n');
   assert.ok(initial.length > 4);
@@ -176,7 +204,7 @@ test('Narrow prompts wrap text and keep the guide on every line', { timeout: 500
     '配置 API 地址',
     false,
     () => undefined,
-    '请输入：',
+    'zh',
     'https://example.org/default',
   );
   const placeholderFrame = f
@@ -197,7 +225,7 @@ test('Narrow prompts wrap text and keep the guide on every line', { timeout: 500
     '配置 Tavily API 地址',
     false,
     () => undefined,
-    '请输入：',
+    'zh',
     'https://api.tavily.com',
   );
   f.take();
@@ -214,7 +242,7 @@ test('Narrow prompts wrap text and keep the guide on every line', { timeout: 500
       secret ? 'Configure API Key' : 'Configure model ID',
       secret,
       () => undefined,
-      'Enter: ',
+      'en',
       placeholder,
     );
     const active = f.take();
@@ -234,7 +262,7 @@ test('Terminal choice lists scroll within the viewport and retain every selectab
   const result = f.prompts.multi('Skill targets', options, [], 'en');
   const first = f.take().trimEnd().split('\n');
   assert.ok(first.length <= 10);
-  assert.equal(first.at(-1), `${clack.S_BAR_END}  ...`);
+  assert.ok(first.includes(`${clack.S_BAR}  ...`));
   f.input.write('\x1b[B'.repeat(16));
   await setImmediate();
   assert.match(f.take(), /Target 16/);
@@ -245,8 +273,12 @@ test('Terminal choice lists scroll within the viewport and retain every selectab
 test('Terminal Escape, Ctrl+C, Ctrl+D, EOF and abort cancel prompts and release listeners', async (t) => {
   for (const action of ['escape', 'ctrl-c', 'ctrl-d', 'eof', 'abort'] as const) {
     const f = terminal(t);
-    const result = f.prompts.select('Protocol', choices, 'a', 'en');
-    assert.match(f.take(), /↑↓ move, Enter confirm, Esc cancel/);
+    const prompts = terminalPrompts(f.abort.signal, {
+      input: f.input,
+      output: f.output,
+      backOnEscape: action !== 'escape',
+    });
+    const result = prompts.select('Protocol', choices, 'a', 'en');
     if (action === 'escape') f.input.write('\x1b');
     else if (action === 'ctrl-c') f.input.write('\x03');
     else if (action === 'ctrl-d') f.input.write('\x04');
@@ -260,4 +292,65 @@ test('Terminal Escape, Ctrl+C, Ctrl+D, EOF and abort cancel prompts and release 
     assert.equal(f.input.listenerCount('end'), 0);
     assert.equal(f.output.listenerCount('resize'), 0);
   }
+});
+
+test('Setup Escape returns to the parent menu until it reaches the main menu', async (t) => {
+  const f = terminal(t);
+  const root = temporary(t);
+  const draft = new SetupDraft(
+    { path: join(root, 'config.json'), source: 'default', exists: false, values: {} },
+    context(root),
+    'en',
+  );
+  const prompts = terminalPrompts(f.abort.signal, {
+    input: f.input,
+    output: f.output,
+    backOnEscape: true,
+  });
+  const cancelled = assert.rejects(
+    promptSetup(
+      draft,
+      prompts,
+      setupPreviewLines,
+      () => {},
+      () => {},
+    ),
+    (error: unknown) => error instanceof AppError && error.code === 'CANCELLED',
+  );
+  const escape = async () => {
+    const keypress = once(f.input, 'keypress');
+    f.input.write('\x1b');
+    await keypress;
+    await setImmediate();
+  };
+  const heading = (key: Parameters<typeof text>[1]) => {
+    assert.ok(f.take().includes(`${clack.S_STEP_ACTIVE}  ${text('en', key)}`));
+  };
+
+  heading('setupTitle');
+  f.input.write('\x1b[B\r');
+  await setImmediate();
+  heading('setupSearch');
+  f.input.write('\x1b[B\r');
+  await setImmediate();
+  heading('setupClassifierUrl');
+  const url = 'https://example.org/v1';
+  f.input.write(`${url}\r`);
+  await setImmediate();
+  heading('setupClassifierKey');
+  f.input.write('fixture-unconfirmed-key');
+  await escape();
+  heading('setupSearch');
+  assert.equal(draft.current('search.routing.classifier.base_url').value, url);
+  assert.equal(draft.current('search.routing.classifier.api_key').value, undefined);
+
+  f.input.write('\r');
+  await setImmediate();
+  heading('setupClassifierUrl');
+  await escape();
+  heading('setupSearch');
+  await escape();
+  heading('setupTitle');
+  await escape();
+  await cancelled;
 });

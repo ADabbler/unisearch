@@ -1,4 +1,4 @@
-import { colon } from '../i18n/messages.js';
+import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { JsonObject, Result } from '../result.js';
 import type { SetupData, SetupDraft } from '../setup.js';
@@ -47,7 +47,7 @@ export function renderSetup(result: Result<SetupData>, language: Language): stri
     const installed = targets.every((target) =>
       ['installed', 'updated', 'unchanged'].includes(target.state),
     );
-    if (!cancelled && installed) skills = zh ? 'Skills 安装完成' : 'Skills installed';
+    if (!cancelled && installed) skills = text(language, 'setupSkillsInstalled');
     else skills = renderSkills({ targets }, language, !cancelled);
   }
   const configuration = data ? states[String(data.config.state)] : '';
@@ -67,7 +67,7 @@ export function renderSetup(result: Result<SetupData>, language: Language): stri
     ) + '\n'
   );
 }
-export function renderSetupPreview(draft: SetupDraft): string {
+export function setupPreviewLines(draft: SetupDraft): string[] {
   const zh = draft.language === 'zh';
   const targets = draft.targets();
   const fileAndChanges = [
@@ -80,19 +80,12 @@ export function renderSetupPreview(draft: SetupDraft): string {
   if (targets.length)
     sections.push(
       [
-        zh ? 'Skills 安装位置' : 'Skills installation locations',
+        text(draft.language, 'setupSkillLocations'),
         ...targets.map(
           (target) =>
             `${skillTargets.find((item) => item[0] === target.target)![1]}${colon(draft.language)}${target.path}`,
         ),
       ].join('\n'),
     );
-  return (
-    promptFrame(
-      zh ? '待保存配置预览' : 'Configuration preview',
-      'submit',
-      ['', ...sections.join('\n\n').split('\n')],
-      process.stderr,
-    ) + '\n'
-  );
+  return sections.join('\n\n').split('\n');
 }

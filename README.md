@@ -31,7 +31,7 @@ Ensure `unisearch` is available on the PATH of the process running your agent.
 
 ## Configure
 
-Run the interactive wizard to configure service connections and optionally install the Skill for your agents:
+Open the interactive configuration menu:
 
 ```sh
 unisearch setup

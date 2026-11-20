@@ -44,11 +44,12 @@ function config(enabled = ['exa', 'tavily']): JsonObject {
   };
 }
 
-function classified(scores: number[], model = 'pinned-classifier') {
-  return {
-    model,
-    answers: Object.fromEntries(scores.map((noul, i) => [`source_${i}`, { type: 'noul', noul }])),
-  };
+function classified(scores: readonly number[], countChoice?: string) {
+  const answers: JsonObject = Object.fromEntries(
+    scores.map((noul, index) => [`source_${index}`, { type: 'noul', noul }]),
+  );
+  if (countChoice !== undefined) answers.source_count = { type: 'choice', choice: countChoice };
+  return { model: 'pinned-classifier', answers };
 }
 
 function chosen(choices: Record<string, string>) {
@@ -62,12 +63,13 @@ function chosen(choices: Record<string, string>) {
 
 const signal = () => new AbortController().signal;
 
-test('Auto selection ranks one or multiple sources, respects caps and preserves source order on ties', async () => {
-  for (const [scores, cap, expected] of [
-    [[0.9, 0.8], 3, ['exa', 'tavily']],
-    [[0.7, 0.95], 1, ['tavily']],
-    [[0.9, 0.2], 3, ['exa']],
-    [[0.8, 0.8], 3, ['exa', 'tavily']],
+test('Auto selection uses the recommended count, score threshold and source order on ties', async () => {
+  for (const [scores, cap, countChoice, expected] of [
+    [[0.9, 0.8], 3, '1_source', ['exa']],
+    [[0.8, 0.9], 3, '2_sources', ['tavily', 'exa']],
+    [[0.7, 0.95], 1, undefined, ['tavily']],
+    [[0.9, 0.2], 3, '2_sources', ['exa']],
+    [[0.7, 0.7], 3, '2_sources', ['exa', 'tavily']],
   ] as const) {
     const values = config();
     (values.search as JsonObject).routing = {
@@ -89,7 +91,14 @@ test('Auto selection ranks one or multiple sources, respects caps and preserves 
           ['exa', 'tavily'],
         );
         assert.match(body.state.candidates[0].description, /excerpts/);
-        return Response.json(classified([...scores]));
+        const { source_count: countQuestion, ...sourceQuestions } = body.questions;
+        assert.deepEqual(Object.keys(sourceQuestions), ['source_0', 'source_1']);
+        if (cap === 1) assert.equal(countQuestion, undefined);
+        else {
+          assert.equal(countQuestion.type, 'choice');
+          assert.deepEqual(countQuestion.criteria, { '1_source': null, '2_sources': null });
+        }
+        return Response.json(classified(scores, countChoice));
       }
       if (calls.length === 2) {
         const body = JSON.parse(String(init?.body));
@@ -207,20 +216,30 @@ test('Search rejects unknown settings in the active configuration scope', () => 
 });
 
 test('Invalid or empty classification fails without starting searches', async () => {
-  for (const body of [
-    classified([0.1, 0.2]),
-    classified([0.8]),
-    classified([1.1, 0.9]),
-    classified([0.8, 0.9, 0.7]),
-    { answers: {} },
-    {
-      model: 'm',
-      answers: { source_0: { type: 'noul', noul: '0.9' }, source_1: { type: 'noul', noul: 0.9 } },
-    },
-  ]) {
+  const values = config(['exa', 'tavily', 'firecrawl']);
+  const env = { UNISEARCH_ROUTING_MAX_SOURCES: '2' };
+  const scores = [0.8, 0.9, 0.7];
+  const valid = classified(scores, '1_source');
+  for (const [body, code] of [
+    [classified([0.1, 0.2, 0.3], '1_source'), 'CONTENT_UNAVAILABLE'],
+    [classified(scores), 'INVALID_RESPONSE'],
+    [classified(scores, '3_sources'), 'INVALID_RESPONSE'],
+    [
+      { ...valid, answers: { ...valid.answers, source_count: { type: 'choice', choice: 2 } } },
+      'INVALID_RESPONSE',
+    ],
+    [classified([0.8, 0.9], '1_source'), 'INVALID_RESPONSE'],
+    [classified([1.1, 0.9, 0.8], '1_source'), 'INVALID_RESPONSE'],
+    [classified([0.8, 0.9, 0.7, 0.8], '1_source'), 'INVALID_RESPONSE'],
+    [{ answers: valid.answers }, 'INVALID_RESPONSE'],
+    [
+      { ...valid, answers: { ...valid.answers, source_0: { type: 'noul', noul: '0.9' } } },
+      'INVALID_RESPONSE',
+    ],
+  ] as const) {
     let calls = 0;
     const result = await combinedSearch(
-      prepareCombinedSearch('q', {}, config(), {}, 'en'),
+      prepareCombinedSearch('q', {}, values, env, 'en'),
       signal(),
       'en',
       {},
@@ -233,6 +252,7 @@ test('Invalid or empty classification fails without starting searches', async ()
     );
     assert.equal(calls, 1);
     assert.equal(result.exitCode, 4);
+    assert.equal(result.result.error?.code, code);
     assert.equal(result.result.data, undefined);
   }
 });
@@ -272,7 +292,7 @@ test('Automatically selected model uses saved settings and Exa failures retain t
     {
       transport: async (url, init) => {
         calls.push(String(url));
-        if (calls.length === 1) return Response.json(classified([0.9, 0.8]));
+        if (calls.length === 1) return Response.json(classified([0.9, 0.8], '2_sources'));
         if (calls.length === 2) {
           assert.deepEqual(JSON.parse(String(init?.body)).state.services, [
             { id: 'exa', current: { search_type: 'auto', category: 'none' } },
@@ -329,7 +349,7 @@ test('Cancellation interrupts either classification stage before searches start'
       {
         transport: async (_url, init) => {
           calls++;
-          if (calls < stage) return Response.json(classified([0.9, 0.8]));
+          if (calls < stage) return Response.json(classified([0.9, 0.8], '2_sources'));
           return new Promise((_resolve, reject) => {
             init!.signal!.addEventListener('abort', () => reject(new Error('aborted')), {
               once: true,
@@ -364,7 +384,10 @@ test('One batched parameter classification applies each selected service setting
       transport: async (url, init) => {
         calls++;
         const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-        if (calls === 1) return Response.json(classified(ids.map(() => 0.9)));
+        if (calls === 1) {
+          const scores = ids.map(() => 0.9);
+          return Response.json(classified(scores, '6_sources'));
+        }
         if (calls === 2) {
           assert.deepEqual(body.state.services, [
             { id: 'exa', current: { search_type: 'lite', category: 'none' } },
@@ -492,7 +515,7 @@ test('Zhipu offers only engines compatible with saved count and skips parameter 
     {
       transport: async (_url, init) => {
         calls++;
-        if (calls === 1) return Response.json(classified([0.1, 0.9]));
+        if (calls === 1) return Response.json(classified([0.1, 0.9], '1_source'));
         assert.equal(JSON.parse(String(init?.body)).search_engine, 'search-prime');
         return Response.json({ search_result: [] });
       },
@@ -558,7 +581,7 @@ test('Classification consumes the original deadline and retries reuse the same b
         if (calls === 1) return Response.json({}, { status: 429, headers: { 'retry-after': '1' } });
         if (calls === 2) {
           now += 500;
-          return Response.json(classified([0.9, 0.1]));
+          return Response.json(classified([0.9, 0.1], '1_source'));
         }
         if (calls === 3) {
           now += 200;
@@ -644,7 +667,7 @@ test('CLI respects configured auto, explicit direct sources, no-auto and dedicat
       res.end(
         JSON.stringify(
           body.state.candidates
-            ? classified([0.1, 0.9])
+            ? classified([0.8, 0.9], '1_source')
             : chosen({ tavily_search_depth: 'basic', tavily_topic: 'general' }),
         ),
       );

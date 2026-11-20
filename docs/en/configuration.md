@@ -140,7 +140,9 @@ Other sources require no model configuration. Model-search options such as `--mo
 
 Automatic selection is enabled by default when `search.routing.enabled` is `true`. For the current search, `--auto` enables automatic selection and `--no-auto` disables it.
 
-Automatic selection also chooses search settings for selected sources where supported, for this call only. The classifier is skipped when there is only one eligible source and no settings to choose. No eligible source, failed classification, or no selected source produces an error. Classification time counts toward the search timeout.
+Automatic mode selects sources for the query and may use fewer than `search.routing.max_sources`. For selected sources that support automatic parameter selection, the classifier also chooses settings for the current search.
+
+When only one source is eligible and no search settings need to be chosen, the command skips the classifier. It reports an error if no sources are eligible, classification fails, or automatic selection yields no sources. Classification time counts toward the search timeout.
 
 ### Unified fetch and map
 

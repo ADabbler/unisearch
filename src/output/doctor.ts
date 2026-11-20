@@ -2,8 +2,8 @@ import type { DoctorData, DoctorService } from '../doctor.js';
 import type { Provider } from '../config/fields.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
 import { colon, text } from '../i18n/messages.js';
-import { operationName, providerName } from '../i18n/providers.js';
-import type { JsonObject, JsonValue, PublicError } from '../result.js';
+import { operationName } from '../i18n/providers.js';
+import type { JsonObject, JsonValue } from '../result.js';
 import { renderExecution } from './exa.js';
 import { errorText } from './render.js';
 import { wrapText } from './text.js';
@@ -24,10 +24,16 @@ function stateLabel(state: string, language: Language): string {
   return text(language, labels[state]);
 }
 
-function errorLines(error: PublicError, language: Language, indent: string): string[] {
-  return errorText(error, language)
-    .split('\n')
-    .map((line) => `${indent}${line}`);
+function serviceErrorLines(service: DoctorService, language: Language, indent: string): string[] {
+  const { error, provider } = service;
+  if (!error) return [];
+  const details = { ...error.details };
+  if (details.provider === provider) delete details.provider;
+  // For missing configuration, the heading already conveys the error message.
+  const rendered = errorText({ ...error, details }, language, {
+    includeMessage: service.state !== 'missing',
+  });
+  return rendered ? rendered.split('\n').map((line) => `${indent}${line}`) : [];
 }
 
 function parenthetical(value: string, language: Language): string {
@@ -36,10 +42,6 @@ function parenthetical(value: string, language: Language): string {
 
 function anonymousLabel(language: Language): string {
   return parenthetical(language === 'zh' ? '匿名' : 'anonymous', language);
-}
-
-function serviceTitle(provider: Provider, language: Language): string {
-  return `${providerName(provider, language)} (${provider})`;
 }
 
 function doctorServiceTitle(
@@ -51,7 +53,7 @@ function doctorServiceTitle(
   const model = service.model
     ? `${language === 'zh' ? '，' : ', '}${text(language, 'configuredModelLabel')}${colon(language)}${service.model}`
     : '';
-  return `${serviceTitle(service.provider, language)}${colon(language)}${state}${model}`;
+  return `${service.provider}${colon(language)}${state}${model}`;
 }
 
 function indented(value: string): string {
@@ -114,10 +116,10 @@ export function renderDoctor(
           options.anonymous.has(service.provider) &&
           (service.state === 'passed' || service.state === 'failed');
         if (service.provider === 'jina' && anonymous) {
-          const lines = [`${serviceTitle(service.provider, language)}${colon(language)}`];
+          const lines = [`${service.provider}${colon(language)}`];
           const fetchState = `${stateLabel(service.state, language)}${anonymousLabel(language)}`;
           lines.push(`  ${operationName('fetch', language)}${colon(language)}${fetchState}`);
-          if (service.error) lines.push(...errorLines(service.error, language, '    '));
+          lines.push(...serviceErrorLines(service, language, '    '));
           lines.push(
             `  ${operationName('search', language)}${colon(language)}${text(language, 'doctorMissing')}`,
             `    ${text(language, 'fieldLabel')}${colon(language)}providers.jina.api_key`,
@@ -125,7 +127,7 @@ export function renderDoctor(
           return lines.join('\n');
         }
         const lines = [doctorServiceTitle(service, anonymous, language)];
-        if (service.error) lines.push(...errorLines(service.error, language, '  '));
+        lines.push(...serviceErrorLines(service, language, '  '));
         return lines.join('\n');
       })
       .join('\n'),
@@ -139,11 +141,7 @@ function renderDoctorServiceExecution(
 ): string {
   const check = checkLines(record.check as JsonObject, language).join('\n');
   const execution = renderExecution(record, language);
-  return [
-    provider ? `${serviceTitle(provider, language)}:` : '',
-    check,
-    execution ? indented(execution) : '',
-  ]
+  return [provider ? `${provider}:` : '', check, execution ? indented(execution) : '']
     .filter(Boolean)
     .join('\n');
 }
@@ -153,15 +151,14 @@ export function renderDoctorExecution(
   language: Language,
   provider?: Provider,
 ): string {
+  const details = Array.isArray(record.services)
+    ? (record.services as JsonObject[])
+        .map((service) =>
+          renderDoctorServiceExecution(service, language, service.provider as Provider),
+        )
+        .join('\n')
+    : renderDoctorServiceExecution(record, language, provider);
+  if (!details) return '';
   const separator = language === 'zh' ? '：' : ':';
-  if (!Array.isArray(record.services)) {
-    return `\n${text(language, 'doctorDetails')}${separator}\n\n${wrapText(renderDoctorServiceExecution(record, language, provider), process.stderr.columns ?? 80)}`;
-  }
-  const sections = (record.services as JsonObject[])
-    .map((service) => {
-      const serviceProvider = service.provider as Provider;
-      return renderDoctorServiceExecution(service, language, serviceProvider);
-    })
-    .join('\n');
-  return `\n${text(language, 'doctorDetails')}${separator}\n\n${wrapText(sections, process.stderr.columns ?? 80)}`;
+  return `\n${text(language, 'doctorDetails')}${separator}\n\n${wrapText(details, process.stderr.columns ?? 80)}`;
 }

@@ -91,63 +91,50 @@ test('Bare doctor reports every service and diagnoses ready anonymous and authen
 
   const plain = await f.run(['doctor'], env);
   assert.equal(plain.exit, 6);
-  assert.match(
-    plain.channels.out,
-    /check passed|Missing configuration|Invalid configuration|Disabled/,
-  );
-  assert.match(
-    plain.channels.out,
-    /Model \(model\): check passed, Configured model: fixture-model/,
-  );
+  assert.match(plain.channels.out, /^model: check passed, Configured model: fixture-model$/m);
   assert.doesNotMatch(plain.channels.out, /endpoint|attempts/);
   assert.doesNotMatch(plain.channels.out, /\[MISSING_CONFIG\]|\[INVALID_CONFIG\]|[。.]$/m);
   const plainLines = plain.channels.out.split('\n');
   assert.match(plainLines[0]!, /^Partial completion:/);
-  const firstService = plainLines.findIndex((line) => line.startsWith('Model (model):'));
+  const firstService = plainLines.findIndex((line) => line.startsWith('model:'));
   assert.ok(firstService > 0);
   assert.equal(plainLines[firstService - 1], '');
   assert.equal(plain.channels.err, '');
-  assert.match(
-    plain.channels.out,
-    /Jina \(jina\):\n  fetch: check passed \(anonymous\)\n  search: missing configuration \(not checked\)/,
-  );
+  const anonymousJina =
+    /^jina:\n  fetch: .+ \(anonymous\)\n  search: .+\n    .+providers\.jina\.api_key$/m;
+  assert.match(plain.channels.out, anonymousJina);
   const configured = await f.run(['doctor'], {
     ...env,
     UNISEARCH_CTX7_API_KEY: 'fixture-ctx7-key',
     UNISEARCH_ANYSEARCH_API_KEY: 'fixture-anysearch-key',
     UNISEARCH_JINA_API_KEY: 'fixture-jina-key',
   });
-  assert.match(configured.channels.out, /Context7 \(ctx7\): check passed/);
-  assert.match(configured.channels.out, /AnySearch \(anysearch\): check passed/);
-  const configuredJina = configured.channels.out.slice(
-    configured.channels.out.indexOf('Jina (jina):'),
-    configured.channels.out.indexOf('Zhipu (zhipu):'),
-  );
-  assert.match(configuredJina, /Jina \(jina\): check passed/);
-  assert.doesNotMatch(configuredJina, /anonymous|\n  fetch:|\n  search:/);
+  assert.match(configured.channels.out, /^ctx7: check passed$/m);
+  assert.match(configured.channels.out, /^anysearch: check passed$/m);
+  const configuredLines = configured.channels.out.split('\n');
+  const jinaTitleIndex = configuredLines.findIndex((line) => line.startsWith('jina:'));
+  assert.equal(configuredLines[jinaTitleIndex], 'jina: check passed');
+  assert.ok(!configuredLines[jinaTitleIndex + 1]?.startsWith('  '));
   const namedAnonymous = await f.run(['doctor', 'ctx7'], env);
-  assert.match(namedAnonymous.channels.out, /Context7 \(ctx7\): check passed \(anonymous\)/);
+  assert.match(namedAnonymous.channels.out, /^ctx7: check passed \(anonymous\)$/m);
   const namedJina = await f.run(['doctor', 'jina'], env);
-  assert.match(
-    namedJina.channels.out,
-    /Jina \(jina\):\n  fetch: check passed \(anonymous\)\n  search: missing configuration \(not checked\)/,
-  );
+  assert.match(namedJina.channels.out, anonymousJina);
   for (const state of ['disabled', 'invalid', 'not_started']) {
     const skipped = renderDoctor({ services: [{ provider: 'jina', state }] }, 'en', {
       anonymous: new Set(['jina']),
     });
-    assert.match(skipped, /^Jina \(jina\): \S/);
+    assert.match(skipped, /^jina: \S/);
     assert.doesNotMatch(skipped, /anonymous|\n  fetch:|\n  search:/);
   }
   const verbose = await f.run(['doctor', '--verbose'], env);
   assert.equal(verbose.channels.out, plain.channels.out);
-  assert.match(verbose.channels.err, /^\nDiagnostic details:\n\nModel \(model\):\n  Operation:/);
-  assert.match(verbose.channels.err, /\nContext7 \(ctx7\):\n  Operation:/);
+  assert.match(verbose.channels.err, /^\nDiagnostic details:\n\nmodel:\n  Operation:/);
+  assert.match(verbose.channels.err, /\nctx7:\n  Operation:/);
   assert.doesNotMatch(verbose.channels.err, /^model$/m);
-  assert.doesNotMatch(verbose.channels.err, /\n\nContext7 \(ctx7\):/);
+  assert.doesNotMatch(verbose.channels.err, /\n\nctx7:/);
   assert.doesNotMatch(verbose.channels.out, /endpoint:|Execution time/);
   const namedVerbose = await f.run(['doctor', 'model', '--verbose'], env);
-  assert.match(namedVerbose.channels.err, /^\nDiagnostic details:\n\nModel \(model\):/);
+  assert.match(namedVerbose.channels.err, /^\nDiagnostic details:\n\nmodel:/);
   f.reply({}, 401);
   const namedFailure = await f.run(['doctor', 'ctx7'], env);
   assert.equal(namedFailure.exit, 3);

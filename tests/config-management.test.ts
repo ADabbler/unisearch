@@ -182,6 +182,7 @@ test('Configuration sections and providers share display order without reorderin
         'language',
       ]);
   }
+  const providerHeading = /^([a-z0-9-]+)(?: \([^)]+\)|（[^）]+）)?[:：]/gm;
   for (const command of ['status', 'doctor']) {
     const result = await f.json([command, '--json']);
     assert.equal(result.exit, 0);
@@ -193,12 +194,8 @@ test('Configuration sections and providers share display order without reorderin
       const plain = await f.run([command], { UNISEARCH_LANG: language });
       assert.equal(plain.exit, 0);
       assert.equal(plain.err, '');
-      const pattern =
-        command === 'status'
-          ? /^([a-z0-9-]+)(?: \([^)]+\)|（[^）]+）)?[:：]/gm
-          : /^.*\(([a-z0-9-]+)\)[:：]/gm;
       assert.deepEqual(
-        [...plain.out.matchAll(pattern)].map((match) => match[1]),
+        [...plain.out.matchAll(providerHeading)].map((match) => match[1]),
         order,
       );
     }

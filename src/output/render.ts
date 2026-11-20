@@ -34,8 +34,14 @@ export function line(value: string): string {
   return value.endsWith('\n') ? value : `${value}\n`;
 }
 
-function errorLines(error: PublicError, language: Language, codes = true): string[] {
-  const lines = [`${codes ? `[${error.code}] ` : ''}${error.message}`];
+function errorLines(
+  error: PublicError,
+  language: Language,
+  codes = true,
+  includeMessage = true,
+): string[] {
+  const lines: string[] = [];
+  if (includeMessage) lines.push(`${codes ? `[${error.code}] ` : ''}${error.message}`);
   const details = error.details;
   const labels: Record<string, MessageKey> = {
     path: 'pathLabel',
@@ -111,8 +117,9 @@ function errorLines(error: PublicError, language: Language, codes = true): strin
   }
   // Several services form their own block, separated from the heading and the shared
   // URL above them. A single failure stays attached to the heading.
-  if ((details?.failures ?? []).length > 1) lines.push('');
-  for (const failure of details?.failures ?? []) {
+  const failures = details?.failures ?? [];
+  if (lines.length && failures.length > 1) lines.push('');
+  for (const failure of failures) {
     const target = 'provider' in failure ? failure.provider : failure.url;
     const [first, ...rest] = errorLines(failure, language, codes);
     lines.push(`${codes ? '- ' : ''}${target}${colon(language)}${first}`);
@@ -121,8 +128,12 @@ function errorLines(error: PublicError, language: Language, codes = true): strin
   return lines;
 }
 
-export function errorText(error: PublicError, language: Language): string {
-  return errorLines(error, language, false).join('\n');
+export function errorText(
+  error: PublicError,
+  language: Language,
+  { includeMessage = true }: { includeMessage?: boolean } = {},
+): string {
+  return errorLines(error, language, false, includeMessage).join('\n');
 }
 
 function errorContent(error: PublicError, language: Language, target?: string): string[] {

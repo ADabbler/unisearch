@@ -1,7 +1,7 @@
 import { colon, text } from '../i18n/messages.js';
 import type { Language } from '../i18n/messages.js';
 import type { RetrievalData } from '../retrieval.js';
-import { contentInfo, link, warnings } from './firecrawl.js';
+import { contentInfo, link, renderMapLinks, warnings } from './firecrawl.js';
 import { contentSources, inline } from './exa.js';
 import { renderJina } from './jina.js';
 import { renderZhipu } from './zhipu.js';
@@ -31,19 +31,7 @@ export function renderRetrieval(data: RetrievalData, language: Language): string
   const source = text(language, sourceLabels[data.provider]);
   const sections = [source, ...warnings(data.warnings, language)];
   if ('links' in data) {
-    sections.push(
-      data.links.length
-        ? data.links
-            .map((item, index) => {
-              const description = item.description
-                ?.split(/\r\n|\r|\n/)
-                .map((line) => `${' '.repeat(String(index + 1).length + 2)}${line}`)
-                .join('\n');
-              return `${index + 1}. ${link(item.url, item.title)}${description ? `\n${description}` : ''}`;
-            })
-            .join('\n')
-        : text(language, 'noSiteLinks'),
-    );
+    sections.push(renderMapLinks(data.links, language));
   } else {
     sections.push(...contentSources(data.content_sources, language));
     for (const page of data.results) {

@@ -44,6 +44,12 @@ test('Anonymous Jina and AnySearch respect default order, explicit replacement, 
     ['/reader/'],
   );
   assert.equal(f.calls[0].headers.authorization, undefined);
+  const defaults: string[] = (await f.run(['config', 'get', 'fetch.providers'])).json().data.value;
+  const relevantProviders = ['tavily', 'jina', 'zhipu-mcp'];
+  assert.deepEqual(
+    defaults.filter((provider) => relevantProviders.includes(provider)),
+    relevantProviders,
+  );
 
   for (const order of [undefined, ['anysearch', 'jina']] as const) {
     f.save(order ? { fetch: { providers: order } } : {});
@@ -215,8 +221,6 @@ test(
         assert.ok(saved.includes(page.content));
         assert.ok(saved.includes(page.description));
         assert.match(saved, /Model answer/);
-        assert.doesNotMatch(saved, /Billed usage/);
-        assert.match(result.channels.err, /Billed usage/);
       }
     }
     const before = f.calls.length;

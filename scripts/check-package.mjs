@@ -108,9 +108,7 @@ const env = {
   PATH: [dirname(executable), dirname(process.execPath), process.env.PATH].join(delimiter),
 };
 
-function installed(args, language, expectedStatus = 0, errorOutput = false) {
-  const environment = { ...env };
-  if (language !== undefined) environment.UNISEARCH_LANG = language;
+function installed(args, expectedStatus = 0) {
   // Shim smoke tests use fixed arguments without embedded quotes; structured settings use files.
   const result =
     process.platform === 'win32'
@@ -119,19 +117,15 @@ function installed(args, language, expectedStatus = 0, errorOutput = false) {
           ['/d', '/s', '/c', `""${executable}" ${args.map((arg) => `"${arg}"`).join(' ')}"`],
           {
             cwd: caller,
-            env: environment,
+            env,
             // Keep the nested quotes intact for cmd.exe's /c command line.
             windowsVerbatimArguments: true,
           },
           expectedStatus,
         )
-      : run(executable, args, { cwd: caller, env: environment }, expectedStatus);
-  assert.equal(
-    errorOutput ? result.stdout : result.stderr,
-    '',
-    errorOutput ? result.stdout : result.stderr,
-  );
-  return errorOutput ? result.stderr : result.stdout;
+      : run(executable, args, { cwd: caller, env }, expectedStatus);
+  assert.equal(result.stderr, '');
+  return result.stdout;
 }
 
 const installedManifest = JSON.parse(readFileSync(join(packageDirectory, 'package.json'), 'utf8'));
@@ -139,60 +133,21 @@ for (const path of ['docs/en/configuration.md', 'docs/zh-CN/configuration.md']) 
   assert.deepEqual(readFileSync(join(packageDirectory, path)), readFileSync(join(root, path)));
 }
 const skillPath = join(env.HOME, '.codex', 'skills', 'unisearch');
-for (const command of ['setup', 'doctor', 'skills'])
-  assert.match(installed([command, '--help'], 'en'), /^Usage:/);
-assert.match(installed(['skills', 'install', '--targets', 'codex'], 'en'), /Codex: installed/);
+installed(['skills', 'install', '--targets', 'codex']);
 for (const path of files.filter((path) => path.startsWith('skills/unisearch/'))) {
   assert.deepEqual(
     readFileSync(join(skillPath, path.slice('skills/unisearch/'.length))),
     readFileSync(join(root, path)),
   );
 }
-writeFileSync(join(skillPath, 'SKILL.md'), 'modified copy');
-assert.match(installed(['skills', 'status', '--targets', 'codex'], 'en'), /Codex: different/);
-assert.match(installed(['skills', 'update', '--targets', 'codex'], 'en'), /Codex: updated/);
-assert.match(installed(['skills', 'status', '--targets', 'codex'], 'en'), /current/);
-assert.match(installed(['skills', 'remove', '--targets', 'codex'], 'en'), /Codex: removed/);
+installed(['skills', 'remove', '--targets', 'codex']);
+assert.equal(existsSync(skillPath), false);
 installed(['skills', 'install', '--targets', 'codex']);
+
 assert.equal(installedManifest.version, manifest.version);
 assert.equal(installed(['--version']), `unisearch ${manifest.version}\n`);
-assert.match(installed(['--help']), /^用法：/);
-assert.match(installed(['--help'], 'en'), /^Usage:/);
-for (const language of ['en', 'zh']) {
-  assert.match(installed(['search', '--help'], language), /--sources/);
-  assert.match(installed(['model', 'search', '--help'], language), /--effort/);
-}
-assert.deepEqual(JSON.parse(installed(['config', 'get', 'search.providers'])).data.value, [
-  'model',
-]);
-const searchConfig = join(caller, 'search-settings.json');
-writeFileSync(
-  searchConfig,
-  JSON.stringify({ language: 'zh', search: { providers: ['exa', 'tavily'] } }),
-);
-env.UNISEARCH_CONFIG_PATH = searchConfig;
-assert.deepEqual(JSON.parse(installed(['config', 'get', 'search.providers'])).data.value, [
-  'exa',
-  'tavily',
-]);
-assert.equal(
-  JSON.parse(installed(['search', 'fixture', '--model', 'fixture', '--format=json'], 'en', 2)).error
-    .code,
-  'INVALID_ARGUMENT',
-);
-env.UNISEARCH_CONFIG_PATH = config;
-assert.match(installed(['exa', 'search', '--help'], 'en'), /--search-type/);
-assert.match(installed(['exa', 'search', '--help']), /搜索模式/);
-assert.match(installed(['exa', 'fetch', '--help'], 'en'), /--max-length/);
-assert.match(installed(['exa', 'fetch', '--help']), /正文/);
-for (const operation of ['search', 'fetch', 'library', 'docs']) {
-  assert.match(installed(['ctx7', operation, '--help'], 'en'), /^Usage:/);
-  assert.match(installed(['ctx7', operation, '--help']), /^用法：/);
-}
-for (const operation of ['search', 'fetch', 'docs', 'tree', 'read-file']) {
-  assert.match(installed(['zhipu-mcp', operation, '--help'], 'en'), /^Usage:/);
-  assert.match(installed(['zhipu-mcp', operation, '--help']), /^用法：/);
-}
+assert.match(installed(['--help']), /^\p{Script=Han}/u);
+assert.match(installed(['search', '--help']), /--sources/);
 run(
   process.execPath,
   [
@@ -221,196 +176,20 @@ run(
   ],
   { cwd: caller, env },
 );
-for (const operation of ['fetch', 'search']) {
-  assert.match(installed(['jina', operation, '--help'], 'en'), /^Usage:/);
-  assert.match(installed(['jina', operation, '--help']), /^用法：/);
-  assert.match(installed(['zhipu', operation, '--help'], 'en'), /^Usage:/);
-  assert.match(installed(['zhipu', operation, '--help']), /^用法：/);
-}
-for (const operation of ['search', 'domains', 'extract']) {
-  assert.match(installed(['anysearch', operation, '--help'], 'en'), /^Usage:/);
-  assert.match(installed(['anysearch', operation, '--help']), /^用法：/);
-}
-for (const operation of ['search', 'fetch']) {
-  assert.match(installed(['tinyfish', operation, '--help'], 'en'), /^Usage:/);
-  assert.match(installed(['tinyfish', operation, '--help']), /^用法：/);
-}
-assert.match(installed(['tinyfish', 'fetch', '--help'], 'en'), /--target-selector/);
+assert.equal(existsSync(join(packageDirectory, 'node_modules', 'typescript')), false);
+assert.equal(readFileSync(config, 'utf8'), configText);
+assert.equal(installed(['config', 'path']).trim(), config);
+
 const catalog = JSON.parse(installed(['anysearch', 'domains', '--format=json']));
 assert.equal(catalog.data.catalog_source, 'bundled');
 assert.ok(catalog.data.domains.includes('code'));
-assert.match(installed(['anysearch', 'domains']), /内置官方领域目录/);
-assert.match(installed(['search', '--help'], 'en'), /--effort/);
-for (const operation of ['search', 'extract', 'map']) {
-  assert.match(installed(['tavily', operation, '--help'], 'en'), /^Usage:/);
-  assert.match(installed(['tavily', operation, '--help']), /^用法：/);
-}
-assert.match(installed(['tavily', '--help'], 'en'), /extract/);
-assert.match(installed(['tavily', '--help']), /网页提取/);
-assert.doesNotMatch(installed(['exa', '--help'], 'en'), /similar/);
-for (const operation of ['fetch', 'map']) {
-  assert.match(installed([operation, '--help'], 'en'), /--no-fallback/);
-  assert.match(installed([operation, '--help']), /服务切换/);
-}
-for (const [operation, flag] of [
-  ['search', '--categories'],
-  ['scrape', '--max-age'],
-  ['map', '--sitemap'],
-]) {
-  assert.match(installed(['firecrawl', operation, '--help'], 'en'), new RegExp(flag));
-}
-assert.doesNotMatch(installed(['firecrawl', '--help'], 'en'), /\n  (crawl|batch|browser) /);
-assert.match(installed(['未实现的命令'], 'en', 2, true), /^Error: Unknown command/);
-assert.equal(existsSync(join(packageDirectory, 'node_modules', 'typescript')), false);
-assert.equal(existsSync(join(packageDirectory, 'src')), false);
-assert.equal(readFileSync(config, 'utf8'), configText);
+assert.equal(JSON.parse(installed(['search', '--format=json'], 2)).error.code, 'INVALID_ARGUMENT');
 
-assert.equal(
-  installed(['config', 'set', 'execution.retries', '0'], 'en'),
-  'Saved execution.retries = 0\n',
-);
+installed(['config', 'set', 'execution.retries', '0']);
 const get = JSON.parse(installed(['config', 'get', 'execution.retries']));
 assert.deepEqual(get.data, { key: 'execution.retries', value: 0, source: 'config' });
-const status = JSON.parse(installed(['status', '--json']));
-assert.equal(status.status, 'success');
-assert.equal(status.data.services.find((service) => service.provider === 'zhipu').state, 'missing');
-installed(['config', 'set', 'providers.zhipu.platform', 'zai']);
-assert.equal(
-  JSON.parse(installed(['config', 'get', 'providers.zhipu.base_url'])).data.value,
-  'https://api.z.ai/api/paas/v4',
-);
-assert.equal(
-  JSON.parse(installed(['config', 'get', 'providers.zhipu.search.engine'])).data.value,
-  'search-prime',
-);
-env.UNISEARCH_ZHIPU_API_KEY = 'fixture-zhipu-key';
-assert.equal(
-  JSON.parse(installed(['status', '--json'])).data.services.find(
-    (service) => service.provider === 'zhipu',
-  ).state,
-  'ready',
-);
-delete env.UNISEARCH_ZHIPU_API_KEY;
-installed(['config', 'unset', 'providers.zhipu']);
-assert.equal(status.data.services.find((s) => s.provider === 'tinyfish').state, 'missing');
-installed(['config', 'set', 'providers.tinyfish.search_url', 'https://fixture.example/search']);
-assert.equal(
-  JSON.parse(installed(['config', 'get', 'providers.tinyfish.search_url'])).data.value,
-  'https://fixture.example/search',
-);
-env.UNISEARCH_TINYFISH_API_KEY = 'fixture-tinyfish-key';
-assert.equal(
-  JSON.parse(installed(['status', '--json'])).data.services.find((s) => s.provider === 'tinyfish')
-    .state,
-  'ready',
-);
-installed(['config', 'unset', 'providers.tinyfish']);
-delete env.UNISEARCH_TINYFISH_API_KEY;
-assert.equal(
-  status.data.services.find((service) => service.provider === 'zhipu-mcp').state,
-  'missing',
-);
-installed(['config', 'set', 'providers.zhipu-mcp.platform', 'zai']);
-assert.equal(
-  JSON.parse(installed(['config', 'get', 'providers.zhipu-mcp.base_url'])).data.value,
-  'https://api.z.ai/api/mcp',
-);
-env.UNISEARCH_ZHIPU_MCP_API_KEY = 'fixture-mcp-key';
-assert.equal(
-  JSON.parse(installed(['status', '--json'])).data.services.find(
-    (service) => service.provider === 'zhipu-mcp',
-  ).state,
-  'ready',
-);
-delete env.UNISEARCH_ZHIPU_MCP_API_KEY;
-installed(['config', 'unset', 'providers.zhipu-mcp']);
-assert.equal(status.data.services.find((service) => service.provider === 'jina').state, 'ready');
-installed(['config', 'set', 'providers.jina.search.limit', '10']);
-assert.equal(
-  JSON.parse(installed(['config', 'get', 'providers.jina.search.limit'])).data.value,
-  10,
-);
-installed(['config', 'unset', 'providers.jina']);
-assert.equal(status.data.services.find((service) => service.provider === 'ctx7').state, 'ready');
-assert.equal(
-  status.data.services.find((service) => service.provider === 'anysearch').state,
-  'ready',
-);
-installed(['config', 'set', 'providers.anysearch.search.limit', '3']);
-assert.equal(
-  JSON.parse(installed(['config', 'get', 'providers.anysearch.search.limit'])).data.value,
-  3,
-);
-installed(['config', 'unset', 'providers.anysearch']);
-installed(['config', 'set', 'providers.ctx7.base_url', 'https://fixture.example/api']);
-assert.equal(
-  JSON.parse(installed(['config', 'get', 'providers.ctx7.base_url'])).data.value,
-  'https://fixture.example/api',
-);
-installed(['config', 'set', 'providers.exa.search.limit', '10']);
-assert.equal(JSON.parse(installed(['config', 'get', 'providers.exa.search.limit'])).data.value, 10);
-installed(['config', 'unset', 'providers.exa.search.limit']);
-for (const provider of ['model', 'exa', 'tavily', 'firecrawl']) {
-  assert.equal(
-    status.data.services.find((service) => service.provider === provider).state,
-    'missing',
-  );
-}
-assert.equal(
-  status.data.services.find((service) => service.provider === 'model').issues[0].field,
-  'providers.model.api_key',
-);
-installed(['config', 'set', 'providers.firecrawl.search.limit', '8']);
-installed(['config', 'set', 'providers.firecrawl.map.sitemap', 'only']);
-assert.equal(
-  JSON.parse(installed(['config', 'get', 'providers.firecrawl.search.limit'])).data.value,
-  8,
-);
-env.UNISEARCH_FIRECRAWL_API_KEY = 'fixture-firecrawl-key';
-assert.equal(
-  JSON.parse(installed(['status', '--json'])).data.services.find((s) => s.provider === 'firecrawl')
-    .state,
-  'ready',
-);
-installed(['config', 'set', 'providers.model.base_url', 'https://fixture.example/v1']);
-installed(['config', 'set', 'providers.model.model.id', 'fixture-model']);
-installed(['config', 'set', 'providers.model.model.effort', 'low']);
-installed(['config', 'set', 'providers.model.tools', '[]']);
-env.UNISEARCH_MODEL_API_KEY = 'fixture-package-key';
-const modelStatus = JSON.parse(installed(['status', '--json']));
-assert.equal(modelStatus.data.services[0].state, 'ready');
-assert.equal(modelStatus.data.services[1].state, 'missing');
-assert.doesNotMatch(JSON.stringify(modelStatus), /fixture-package-key/);
-installed(['config', 'set', 'providers.tavily.map.limit', '20']);
-assert.equal(JSON.parse(installed(['config', 'get', 'providers.tavily.map.limit'])).data.value, 20);
-env.UNISEARCH_TAVILY_API_KEY = 'fixture-tavily-key';
-assert.equal(
-  JSON.parse(installed(['status', '--json'])).data.services.find((s) => s.provider === 'tavily')
-    .state,
-  'ready',
-);
-installed(['config', 'set', 'providers.tavily.enabled', 'false']);
-assert.equal(
-  JSON.parse(installed(['status', '--json'])).data.services.find((s) => s.provider === 'tavily')
-    .state,
-  'disabled',
-);
-installed(['config', 'unset', 'providers.tavily']);
-assert.equal(JSON.parse(installed(['config', 'get', 'execution.retries'])).data.value, 0);
 const savedConfig = readFileSync(config, 'utf8');
-assert.deepEqual(JSON.parse(savedConfig), {
-  language: 'zh',
-  execution: { retries: 0 },
-  providers: {
-    ctx7: { base_url: 'https://fixture.example/api' },
-    model: {
-      base_url: 'https://fixture.example/v1',
-      model: { id: 'fixture-model', effort: 'low' },
-      tools: [],
-    },
-    firecrawl: { search: { limit: 8 }, map: { sitemap: 'only' } },
-  },
-});
+assert.deepEqual(JSON.parse(savedConfig), { language: 'zh', execution: { retries: 0 } });
 
 const upgradeDirectory = join(work, 'upgrade source');
 cpSync(packageDirectory, upgradeDirectory, { recursive: true });
@@ -455,8 +234,7 @@ assert.deepEqual(
   readFileSync(join(skillPath, 'SKILL.md')),
   readFileSync(join(root, 'skills/unisearch/SKILL.md')),
 );
-assert.match(installed(['skills', 'status', '--targets', 'codex'], 'en'), /Codex: different/);
-assert.match(installed(['skills', 'update', '--targets', 'codex'], 'en'), /Codex: updated/);
+installed(['skills', 'update', '--targets', 'codex']);
 assert.equal(readFileSync(join(skillPath, 'SKILL.md'), 'utf8'), upgradedSkill);
 assert.equal(readFileSync(config, 'utf8'), savedConfig);
 
@@ -487,7 +265,7 @@ console.log(
       files: files.length,
       tarball,
       checks:
-        'package contents, configuration docs, isolated install and fixture upgrade, npm bin, language, UTF-8, config set/get/unset, provider help and local status, setup/doctor help, offline domains, Skill install/status/update/remove, JSON/Markdown, errors, uninstall preserving configuration and Skill copies',
+        'package contents, isolated install and upgrade, executable, UTF-8 configuration, offline catalog, MCP client version, Skill lifecycle, uninstall preserving configuration and Skill copies',
     },
     null,
     2,

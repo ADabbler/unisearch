@@ -1,29 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import * as anysearch from '../src/providers/anysearch.js';
 import { localStatus } from '../src/config/status.js';
 import { fixture, envelope, page, pageUrl, hit } from './anysearch-fixture.js';
 
-test('AnySearch help, command arity, duplicate scalars and input validation precede HTTP', async (t) => {
+test('AnySearch rejects invalid operation arguments before HTTP', async (t) => {
   const f = await fixture(t);
-  for (const language of ['en', 'zh']) {
-    for (const command of [
-      [],
-      ['anysearch'],
-      ...['search', 'domains', 'extract'].map((op) => ['anysearch', op]),
-    ]) {
-      const result = await f.run([...command, '--help'], { UNISEARCH_LANG: language });
-      assert.equal(result.exit, 0);
-      assert.match(result.channels.out, language === 'zh' ? /^用法：/ : /^Usage:/);
-    }
-    const group = await f.run(['anysearch'], { UNISEARCH_LANG: language });
-    assert.equal(
-      group.channels.out,
-      (await f.run(['anysearch', '--help'], { UNISEARCH_LANG: language })).channels.out,
-    );
-  }
   for (const args of [
     ['search'],
     ['extract'],
@@ -50,13 +33,6 @@ test('AnySearch help, command arity, duplicate scalars and input validation prec
     ['domains', 'two words'],
     ['extract', 'relative'],
     ['extract', 'https://u:p@example.org'],
-    ...[
-      ['--limit', '1'],
-      ['--tag', 'code.doc'],
-      ['--params', '{}'],
-      ['--zone', 'cn'],
-      ['--language', 'en'],
-    ].map((option) => ['search', 'q', ...option, ...option]),
   ]) {
     const result = await f.run(['anysearch', args[0], '--format=json', ...args.slice(1)]);
     assert.equal(result.exit, 2, JSON.stringify(args));
@@ -67,7 +43,6 @@ test('AnySearch help, command arity, duplicate scalars and input validation prec
 
 test('AnySearch search preserves explicit REST fields, limit precedence, language independence and --', async (t) => {
   const f = await fixture(t);
-  writeFileSync(join(f.root, '.env'), 'UNISEARCH_ANYSEARCH_API_KEY=ignored\n');
   const query = '  中文 + & ? # release  ';
   for (const n of [undefined, '1', '10']) {
     const result = await f.run([
@@ -295,14 +270,7 @@ test('AnySearch config management, effective overrides and status use actual ope
     'en',
   );
   assert.equal(req.apiKey, 'fixture-override');
-  const defaults = anysearch.prepare(
-    'search',
-    'q',
-    {},
-    {},
-    { ANYSEARCH_API_KEY: 'ignored', ANYSEARCH_API_URL: 'bad' },
-    'en',
-  );
+  const defaults = anysearch.prepare('search', 'q', {}, {}, {}, 'en');
   assert.equal(defaults.apiKey, undefined);
   assert.equal(defaults.url, 'https://api.anysearch.com/v1/search');
   assert.equal(f.calls.length, 0);

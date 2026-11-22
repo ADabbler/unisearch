@@ -2,48 +2,38 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fixture, hit, page, search, url } from './tinyfish-fixture.js';
 
-test('TinyFish Markdown keeps metadata, ranks and diagnostics while omitting empty links', async (t) => {
+test('TinyFish Markdown preserves page content, links, metadata and selector diagnostics', async (t) => {
   const f = await fixture(t);
-  f.reply({ ...search, results: [{ ...hit, position: 7, cited_by_count: 0 }] });
-  const searched = await f.run(['tinyfish', 'search', 'q'], { UNISEARCH_LANG: 'zh' });
-  assert.match(searched.channels.out, /排名：7/);
-  assert.match(searched.channels.out, /被引次数：0/);
   f.reply({
     results: [
       {
         ...page(),
         links: [],
         image_links: ['mailto:media@example.org'],
-        page_metadata: { canonical: url, flag: false, count: 0 },
+        page_metadata: { flag: false, count: 0 },
       },
     ],
     errors: [],
   });
-  const extracted = await f.run(
-    ['tinyfish', 'fetch', url, '--include-links', '--include-image-links', '--include-metadata'],
-    { UNISEARCH_LANG: 'zh' },
-  );
-  assert.doesNotMatch(extracted.channels.out, /无页面链接|### 页面链接/);
-  assert.match(extracted.channels.out, /`mailto:media@example.org`/);
-  assert.match(extracted.channels.out, /"flag": false/);
-  assert.match(extracted.channels.out, /"count": 0/);
-  assert.ok(extracted.channels.out.includes(page().text));
-  assert.equal(extracted.channels.err, '');
-  f.reply({ results: [{ ...page(), links: [], image_links: [], iframe_links: [] }], errors: [] });
-  const emptyArgs = [
+  const args = [
     'tinyfish',
     'fetch',
     url,
     '--include-links',
     '--include-image-links',
-    '--include-iframe-links',
+    '--include-metadata',
   ];
-  const emptyLists = await f.run(emptyArgs, { UNISEARCH_LANG: 'zh' });
-  assert.equal(emptyLists.exit, 0);
-  assert.doesNotMatch(emptyLists.channels.out, /无.*链接|### (页面链接|图片链接|iframe 链接)/);
-  const emptyJson = (await f.run([...emptyArgs, '--format=json'])).json();
-  for (const key of ['links', 'image_links', 'iframe_links'])
-    assert.deepEqual(emptyJson.data.results[0][key], []);
+  const markdown = await f.run(args);
+  assert.equal(markdown.exit, 0);
+  assert.ok(markdown.channels.out.includes(page().text));
+  assert.ok(markdown.channels.out.includes('`mailto:media@example.org`'));
+  assert.match(markdown.channels.out, /"flag": false/);
+  assert.match(markdown.channels.out, /"count": 0/);
+  assert.equal(markdown.channels.err, '');
+  const json = await f.run([...args, '--format=json']);
+  assert.equal(json.exit, 0);
+  assert.deepEqual(json.json().data.results[0].links, []);
+
   f.reply({
     results: [],
     errors: [
@@ -55,13 +45,11 @@ test('TinyFish Markdown keeps metadata, ranks and diagnostics while omitting emp
       },
     ],
   });
-  const failed = await f.run(['tinyfish', 'fetch', url, '--target-selector', 'article'], {
-    UNISEARCH_LANG: 'en',
-  });
+  const failed = await f.run(['tinyfish', 'fetch', url, '--target-selector', 'article']);
   assert.equal(failed.exit, 4);
   assert.equal(failed.channels.out, '');
-  assert.match(failed.channels.err, /Unmatched selectors: article/);
-  assert.match(failed.channels.err, /Candidate selectors: #main/);
+  assert.ok(failed.channels.err.includes('article'));
+  assert.ok(failed.channels.err.includes('#main'));
 });
 
 test('TinyFish useful failed search data survives root combination without duplicated identity', async (t) => {

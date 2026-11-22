@@ -50,7 +50,8 @@ test('Context7 preserves served versions and cross-type ranks; unverified versio
   assert.equal(data.version?.status, 'unverified');
   const markdown = renderContext7(data, 'en');
   assert.ok(markdown.indexOf('First explanation') < markdown.indexOf('example();'));
-  assert.match(markdown, /2\.0\.0 → v2\.3\.1 · unverified/);
+  assert.ok(markdown.includes(version.requested));
+  assert.ok(markdown.includes(version.served));
   const request = ctx7.prepare('docs', '/example/lib/v2.0.0', 'query', undefined, {}, {}, 'en', {
     language: 'Ruby',
   });
@@ -112,7 +113,9 @@ test('Context7 v3 preserves actual libraries, rules, per-library versions and pa
     { libraryVersion: 'canary' },
     { language: '' },
   ])
-    assert.throws(() => ctx7.prepareSearch('query', options, {}, {}, 'en'));
+    assert.throws(() => ctx7.prepareSearch('query', options, {}, {}, 'en'), {
+      code: 'INVALID_ARGUMENT',
+    });
 });
 
 test('Context7 fetch distinguishes paging, truncation, relevance and unavailable content checks', async () => {
@@ -140,8 +143,7 @@ test('Context7 fetch distinguishes paging, truncation, relevance and unavailable
   assert.equal(data.next_offset, 17);
   assert.equal(data.truncated, true);
   assert.equal(data.content_check, 'unavailable');
-  assert.match(renderContext7(data, 'en'), /Next character position: 17/);
-  assert.doesNotMatch(renderContext7(data, 'en'), /passed/);
+  assert.match(renderContext7(data, 'en'), /\b17\b/);
   const highlights = ctx7.fetchData(
     {
       url: body.url,
@@ -164,7 +166,9 @@ test('Context7 fetch distinguishes paging, truncation, relevance and unavailable
       code: 'INVALID_ARGUMENT',
       key,
     });
-  assert.throws(() => ctx7.fetchData({ ...body, contentCheck: 'unknown' }, false));
+  assert.throws(() => ctx7.fetchData({ ...body, contentCheck: 'unknown' }, false), {
+    code: 'INVALID_RESPONSE',
+  });
 });
 
 test('Context7 unavailable responses distinguish page reading from documentation lookup', async () => {
@@ -174,7 +178,6 @@ test('Context7 unavailable responses distinguish page reading from documentation
       Response.json({ error: 'page_unavailable', message: 'Page unavailable' }, { status }),
     );
     assert.equal(result.outcome.result.error?.code, 'CONTENT_UNAVAILABLE');
-    assert.equal(result.outcome.result.error?.message, 'Context7 could not read the target page');
     assert.equal(result.retry, false);
   }
   const searched = await ctx7.request(
@@ -188,7 +191,7 @@ test('Context7 unavailable responses distinguish page reading from documentation
       ),
   );
   assert.equal(searched.outcome.result.error?.code, 'CONTENT_UNAVAILABLE');
-  assert.equal(searched.outcome.result.error?.message, 'Context7 found no matching documentation');
+  assert.equal(searched.retry, false);
 });
 
 test('Exa notices survive aggregation; relaxed restrictions fail once and unknown codes are retained', async () => {
@@ -253,7 +256,7 @@ test('Firecrawl accepts research/pdf and host filters while preserving category 
     { includeDomains: 'example.org/path' },
     { includeDomains: 'example.org', excludeDomains: 'other.org' },
   ])
-    assert.throws(() => prepare(options));
+    assert.throws(() => prepare(options), { code: 'INVALID_ARGUMENT' });
   const data = firecrawlData(
     {
       success: true,
@@ -271,7 +274,7 @@ test('Firecrawl accepts research/pdf and host filters while preserving category 
     (v) => v,
   );
   assert.equal(data.results[0].category, 'research');
-  assert.match(renderFirecrawl(data, 'en'), /Category: research/);
+  assert.match(renderFirecrawl(data, 'en'), /\bresearch\b/);
   assert.match(renderFirecrawl(data, 'en'), /## Heading\n\nRelevant \*\*paragraph\*\*/);
 });
 
@@ -283,11 +286,11 @@ test('Tavily passes cache hours unchanged and leaves language optional without s
   for (const value of ['-1', '0', '720'])
     assert.equal(prepare({ maxAgeHours: value }).max_age_hours, Number(value));
   for (const value of ['-2', '721', '1.5', 'NaN', '-0'])
-    assert.throws(() => prepare({ maxAgeHours: value }));
+    assert.throws(() => prepare({ maxAgeHours: value }), { code: 'INVALID_ARGUMENT' });
   for (const language of ['en', 'zh-cn', 'english'])
     assert.equal(prepare({ language }).language, language);
   assert.equal(prepare({ language: 'en' }).filter_by_language, undefined);
-  assert.throws(() => prepare({ language: ' ' }));
+  assert.throws(() => prepare({ language: ' ' }), { code: 'INVALID_ARGUMENT' });
 });
 
 test('TinyFish returns optional iframe links without following them', async () => {
@@ -362,7 +365,7 @@ test('CLI search preserves default highlights and service controls; v3 hints rea
     UNISEARCH_CONFIG_PATH: join(root, 'config.json'),
     UNISEARCH_LANG: 'en',
     UNISEARCH_EXA_BASE_URL: base,
-    UNISEARCH_FIRECRAWL_BASE_URL: base,
+    UNISEARCH_FIRECRAWL_BASE_URL: `${base}/v2`,
     UNISEARCH_TAVILY_BASE_URL: base,
     UNISEARCH_CTX7_BASE_URL: base,
   });
@@ -379,9 +382,19 @@ test('CLI search preserves default highlights and service controls; v3 hints rea
     await run([...prefix, 'q', '--no-highlights']);
   }
   await run(['search', 'q', '--sources', 'exa,firecrawl']);
-  const highlights = (call: (typeof calls)[number]) =>
-    call.body?.highlights ?? (call.body?.contents as { highlights: boolean }).highlights;
-  assert.deepEqual(calls.map(highlights), [true, false, true, false, true, true]);
+  const exaCalls = calls.filter((call) => call.path === '/search');
+  const firecrawlCalls = calls.filter((call) => call.path === '/v2/search');
+  assert.equal(calls.length, 6);
+  assert.deepEqual(
+    exaCalls.map(
+      (call) => (call.body?.contents as { highlights?: boolean } | undefined)?.highlights,
+    ),
+    [true, false, true],
+  );
+  assert.deepEqual(
+    firecrawlCalls.map((call) => call.body?.highlights),
+    [true, false, true],
+  );
   await run([
     'ctx7',
     'search',

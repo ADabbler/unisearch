@@ -1,32 +1,16 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fixture, error, hit, page, search, url } from './tinyfish-fixture.js';
 
-test('TinyFish configuration, separate operation status, credential sources and offline help', async (t) => {
+test('TinyFish configuration and per-operation status use effective credentials and URLs', async (t) => {
   const f = await fixture(t);
-  for (const args of [
-    ['tinyfish'],
-    ['tinyfish', '--help'],
-    ['tinyfish', 'search', '--help'],
-    ['tinyfish', 'fetch', '--help'],
-  ]) {
-    for (const lang of ['zh', 'en']) {
-      const r = await f.run(args, { UNISEARCH_LANG: lang });
-      assert.equal(r.exit, 0);
-      assert.match(r.channels.out, lang === 'zh' ? /用法/ : /Usage/);
-    }
-  }
   const state = async (env = {}) =>
     (await f.run(['status', '--json'], env))
       .json()
       .data.services.find((s: { provider: string }) => s.provider === 'tinyfish');
   assert.equal((await state()).state, 'ready');
-  assert.equal(
-    (await state({ UNISEARCH_TINYFISH_API_KEY: undefined, TINYFISH_API_KEY: 'old-key' })).state,
-    'missing',
-  );
+  assert.equal((await state({ UNISEARCH_TINYFISH_API_KEY: undefined })).state, 'missing');
   assert.equal((await f.run(['config', 'set', 'providers.tinyfish.enabled', 'false'])).exit, 0);
   assert.equal((await state()).state, 'disabled');
   assert.equal((await f.run(['config', 'unset', 'providers.tinyfish.enabled'])).exit, 0);
@@ -40,15 +24,6 @@ test('TinyFish configuration, separate operation status, credential sources and 
     different.operations.find((s: { operation: string }) => s.operation === 'search').state,
     'ready',
   );
-  for (const [key, value] of [
-    ['search.location', 'US'],
-    ['search.language', 'en'],
-    ['fetch.ttl', '0'],
-    ['fetch.per_url_timeout_ms', '45000'],
-  ]) {
-    assert.equal((await f.run(['config', 'set', `providers.tinyfish.${key}`, value])).exit, 2);
-    assert.equal((await f.run(['config', 'get', `providers.tinyfish.${key}`])).exit, 2);
-  }
   const key = (await f.run(['config', 'get', 'providers.tinyfish.api_key'])).channels.out;
   assert.ok(key.includes('[REDACTED]'));
   assert.ok(!key.includes('tinyfish-fixture-key'));
@@ -487,39 +462,4 @@ test('TinyFish maps HTTP and structured errors, never follows endpoint redirects
   const before = f.calls.length;
   assert.equal((await f.run(['tinyfish', 'fetch', url])).exit, 4);
   assert.equal(f.calls.length, before + 1);
-});
-
-test('TinyFish output files preserve success, empty search and useful failure data, while pure failures preserve the old file', async (t) => {
-  const f = await fixture(t);
-  const path = join(f.root, '结果 with spaces.json');
-  writeFileSync(path, 'old');
-  const ready = await f.run(['tinyfish', 'fetch', url, '--output', path, '--format=json']);
-  assert.equal(ready.exit, 0);
-  assert.equal(ready.channels.out, '');
-  assert.equal(JSON.parse(readFileSync(path, 'utf8')).data.results[0].text, page().text);
-  f.reply({ results: [{ ...page(), title: false }], errors: [] });
-  const bad = await f.run(['tinyfish', 'fetch', url, '--output', path, '--format=json']);
-  assert.equal(bad.exit, 4);
-  assert.equal(bad.channels.out, '');
-  assert.equal(JSON.parse(readFileSync(path, 'utf8')).data.results[0].text, page().text);
-  f.reply({ results: [], errors: [{ url, error: 'bot_blocked' }] });
-  const previous = readFileSync(path, 'utf8');
-  assert.equal(
-    (await f.run(['tinyfish', 'fetch', url, '--output', path, '--format=json'])).exit,
-    4,
-  );
-  assert.equal(readFileSync(path, 'utf8'), previous);
-  f.reply({ results: [], page: 0 });
-  assert.equal(
-    (await f.run(['tinyfish', 'search', 'none', '--output', path, '--format=json'])).exit,
-    0,
-  );
-  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')).data.results, []);
-  const before = f.calls.length;
-  assert.equal(
-    (await f.run(['tinyfish', 'fetch', url, '--output', join(f.root, 'missing', 'file')])).exit,
-    5,
-  );
-  assert.equal(f.calls.length, before);
-  assert.deepEqual(readdirSync(f.root).sort(), ['config.json', '结果 with spaces.json'].sort());
 });

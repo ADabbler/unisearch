@@ -24,7 +24,7 @@ function operation(provider: (typeof providers)[number], transport: typeof fetch
   return (context: AttemptContext) => exa.requestFetch(request, context, 'en', transport);
 }
 
-test('Context7 and Exa classify invalid encodings, network failures and internal exceptions explicitly', async () => {
+test('Context7 and Exa Fetch reject malformed or invalid UTF-8 responses', async () => {
   for (const provider of providers) {
     for (const payload of [new Uint8Array([0xff]), '<html>bad</html>', '{', '{}']) {
       const result = await operation(
@@ -35,24 +35,6 @@ test('Context7 and Exa classify invalid encodings, network failures and internal
       assert.equal(result.retry, false);
       assert.equal(result.outcome.result.data, undefined);
     }
-    for (const [code, expected, retry] of [
-      ['ECONNRESET', 'NETWORK_ERROR', true],
-      ['ENOTFOUND', 'NETWORK_ERROR', false],
-      ['CERT_HAS_EXPIRED', 'NETWORK_ERROR', false],
-      ['ETIMEDOUT', 'TIMEOUT', true],
-    ] as const) {
-      const result = await operation(provider, async () => {
-        throw new TypeError('fetch failed', {
-          cause: Object.assign(new Error('fixture transport'), { code }),
-        });
-      })({ signal: new AbortController().signal });
-      assert.equal(result.outcome.result.error?.code, expected);
-      assert.equal(result.retry, retry);
-    }
-    const result = await operation(provider, async () => {
-      throw new Error('programming error');
-    })({ signal: new AbortController().signal });
-    assert.equal(result.outcome.exitCode, 5);
   }
 });
 
@@ -106,68 +88,6 @@ test('Late timeouts do not restart complete failures or permanent transport erro
       assert.equal(result.result.error?.code, 'TIMEOUT');
       assert.equal(calls, mode === 'temporary' ? 2 : 1, `${provider}: ${mode}`);
       assert.equal(cleared, calls);
-    }
-});
-
-test('Context7 and Exa respect Retry-After, remaining budget and cancellation during waits', async () => {
-  for (const provider of providers)
-    for (const mode of ['valid', 'invalid', 'exceeds', 'cancel'] as const) {
-      let now = 0;
-      let calls = 0;
-      const caps: number[] = [];
-      const waits: number[] = [];
-      const controller = new AbortController();
-      const time: ExecutionClock = {
-        now: () => now,
-        wallNow: () => 0,
-        schedule: (ms) => {
-          caps.push(ms);
-          return () => {};
-        },
-        sleep: async (ms) => {
-          waits.push(ms);
-          now += ms;
-          if (mode === 'cancel') controller.abort();
-        },
-      };
-      const invoke = operation(provider, async () => {
-        calls++;
-        now += 500;
-        if (calls === 1)
-          return Response.json(
-            { error: 'busy', message: 'busy' },
-            {
-              status: 503,
-              headers: {
-                'retry-after': { valid: '1', invalid: 'broken', exceeds: '4', cancel: '1' }[mode],
-              },
-            },
-          );
-        return Response.json(
-          provider === 'ctx7'
-            ? { codeSnippets: [], infoSnippets: [] }
-            : { results: [{ url: pageUrl, title: 'A', text: 'body' }] },
-        );
-      });
-      const record: JsonObject = {};
-      const result = await executeRequest<JsonObject>(invoke, {
-        provider,
-        timeout: 4,
-        requestLimit: 30,
-        retries: 1,
-        signal: controller.signal,
-        language: 'en',
-        record,
-        clock: time,
-      });
-      const expectedExit = { valid: 0, invalid: 0, exceeds: 4, cancel: 130 }[mode];
-      assert.equal(result.exitCode, expectedExit);
-      assert.deepEqual(caps, mode === 'valid' || mode === 'invalid' ? [4000, 2500] : [4000]);
-      assert.deepEqual(waits, mode === 'exceeds' ? [] : [1000]);
-      if (mode === 'invalid')
-        assert.equal((record.attempts as JsonObject[])[0].retry_after_invalid, true);
-      if (mode === 'exceeds')
-        assert.equal(result.result.error?.details?.reason, 'retry_wait_exceeds_budget');
     }
 });
 

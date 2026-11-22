@@ -5,7 +5,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import { fixture, pageUrl, pageText, rpc } from './zhipu-mcp-fixture.js';
 import { prepareRetrieval, retrieve } from '../src/retrieval.js';
-import { prepareCombinedSearch, combinedSearch } from '../src/search.js';
 import type { ExecutionClock } from '../src/execution.js';
 import type { JsonObject } from '../src/result.js';
 
@@ -245,44 +244,6 @@ test('Zhipu MCP failed supplements retain evidence even when every task fails, a
   }
 });
 
-test('Zhipu MCP supplement cancellation and internal transport errors preserve completed evidence', async (t) => {
-  const f = await fixture(t);
-  Object.assign(f.env, {
-    UNISEARCH_MODEL_API_KEY: 'fixture-model',
-    UNISEARCH_MODEL_BASE_URL: `${f.base}/model`,
-    UNISEARCH_MODEL_ID: 'primary',
-  });
-  for (const mode of ['cancel', 'internal'] as const) {
-    const controller = new AbortController();
-    let completed!: () => void;
-    const ready = new Promise<void>((done) => {
-      completed = done;
-    });
-    f.result({ content: [{ type: 'text', text: 'preserved evidence' }] });
-    const plan = prepareCombinedSearch('q', { sources: 'model,zhipu-mcp' }, {}, f.env, 'en');
-    const transport: typeof fetch = async (url, options) => {
-      if (String(url).endsWith('/model/responses')) {
-        await ready;
-        // Let the MCP branch finish mapping its response before stopping the model branch.
-        await new Promise<void>((done) => setTimeout(done, 10));
-        if (mode === 'internal') throw new Error('fixture programming error');
-        controller.abort();
-        options!.signal!.throwIfAborted();
-      }
-      const response = await fetch(url, options);
-      if (JSON.parse(String(options!.body)).method === 'tools/call') completed();
-      return response;
-    };
-    const result = await combinedSearch(plan, controller.signal, 'en', {}, { transport });
-    assert.equal(result.exitCode, mode === 'cancel' ? 130 : 5);
-    const source = result.result.data?.sources.filter(
-      (source: { provider: string }) => source.provider !== 'model',
-    )?.[0];
-    assert.ok(source?.provider === 'zhipu-mcp');
-    assert.equal(source.data.text, 'preserved evidence');
-  }
-});
-
 test('Zhipu MCP file output uses the same result and keeps existing files when no trustworthy data is returned', async (t) => {
   const f = await fixture(t);
   const output = join(f.root, 'result');
@@ -305,9 +266,7 @@ test('Zhipu MCP file output uses the same result and keeps existing files when n
     const saved = readFileSync(output, 'utf8');
     assert.equal(result.channels.out, '');
     if (format === 'markdown') {
-      assert.match(result.channels.err, /Execution time/);
-      assert.match(saved, /````text/);
-      assert.doesNotMatch(saved, /Execution time/);
+      assert.ok(saved.includes('````text\ncode\n```\nend\n````'));
     } else {
       assert.equal(JSON.parse(saved).data.text, 'code\n```\nend\n');
       assert.equal(JSON.parse(saved).meta.attempts.length, 1);

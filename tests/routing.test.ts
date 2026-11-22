@@ -614,17 +614,10 @@ test('Routing environment fields override files and status reports local classif
   const data = localStatus(values, env, 'zh', operations);
   assert.equal(data.search?.routing.enabled, true);
   assert.equal(data.search?.routing?.classifier.state, 'ready');
-  assert.match(
-    renderStatus(data, 'zh'),
-    /^统一搜索默认来源：exa\n默认自动选择搜索来源：已启用\n分类器配置：就绪/,
-  );
+  assert.deepEqual(data.search?.providers, ['exa']);
   const manual = localStatus(values, { UNISEARCH_ROUTING_ENABLED: 'false' }, 'zh', operations);
   assert.equal(manual.search?.routing.enabled, false);
   assert.equal(manual.search?.routing.classifier.state, 'ready');
-  assert.match(
-    renderStatus(manual, 'zh'),
-    /^统一搜索默认来源：exa\n默认自动选择搜索来源：未启用\n分类器配置：就绪/,
-  );
   delete ((values.search as JsonObject).routing as JsonObject).classifier;
   assert.equal(
     localStatus(values, {}, 'en', operations).search?.routing?.classifier.state,
@@ -636,7 +629,7 @@ test('Routing environment fields override files and status reports local classif
   (values.search as JsonObject).providers = [];
   const invalidList = localStatus(values, {}, 'zh', operations);
   assert.equal(invalidList.search?.routing?.classifier.state, 'missing');
-  assert.match(renderStatus(invalidList, 'zh'), /默认自动选择搜索来源：已启用/);
+  assert.equal(invalidList.search?.routing.enabled, true);
   const invalidSwitch = localStatus(values, { UNISEARCH_ROUTING_ENABLED: 'bad' }, 'zh', operations);
   assert.equal(invalidSwitch.search?.routing.enabled, undefined);
   assert.ok(

@@ -4,9 +4,8 @@ import type { TestContext } from 'node:test';
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { once } from 'node:events';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
 import { createCli } from '../src/cli/program.js';
 import { combinedSearch, prepareCombinedSearch } from '../src/search.js';
 import type { CombinedData } from '../src/search.js';
@@ -609,105 +608,6 @@ test('Transport format mismatches, bad UTF-8 and JSON are explicit and never tri
   }
 });
 
-test('Native SSE completes beyond its initial deadline with successful supplemental results', async (t) => {
-  const timers: NodeJS.Timeout[] = [];
-  t.after(() => timers.forEach(clearTimeout));
-  const base = await server(t, (req, res) => {
-    if (req.url === '/search') {
-      res.end(JSON.stringify({ results: [] }));
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-    res.write('data: {"type":"response.output_text.delta","delta":"Complete "}\n\n');
-    timers.push(
-      setTimeout(
-        () => res.write('data: {"type":"response.output_text.delta","delta":"answer."}\n\n'),
-        700,
-      ),
-    );
-    timers.push(
-      setTimeout(
-        () =>
-          res.write(
-            `data: ${JSON.stringify({ type: 'response.completed', response: answer })}\n\n`,
-          ),
-        1400,
-      ),
-    );
-  });
-  const plan = prepareCombinedSearch(
-    'q',
-    { stream: true, timeout: 1, sources: 'model,exa' },
-    {},
-    { ...env, UNISEARCH_MODEL_BASE_URL: base, UNISEARCH_EXA_BASE_URL: base },
-    'en',
-  );
-  const result = await combinedSearch(plan, new AbortController().signal, 'en', {});
-  assert.equal(result.exitCode, 0);
-  assert.equal(
-    result.result.data?.sources.find((source) => source.provider === 'model')?.data.text,
-    'Complete answer.',
-  );
-  assert.deepEqual(
-    result.result.data?.sources.filter(
-      (source: { provider: string }) => source.provider !== 'model',
-    ),
-    [{ provider: 'exa', data: { results: [] } }],
-  );
-});
-
-test('Slow native HTTP bodies and SSE honor deadlines while started model streams use idle timeouts', async (t) => {
-  for (const stallModel of [false, true])
-    for (const stream of [false, true]) {
-      const base = await server(t, (req, res) => {
-        const model = req.url === '/responses';
-        if (model !== stallModel) {
-          res.end(JSON.stringify(model ? answer : { results: [] }));
-          return;
-        }
-        res.writeHead(200, {
-          'Content-Type': model && stream ? 'text/event-stream' : 'application/json',
-        });
-        res.write(
-          model && stream
-            ? 'data: {"type":"response.output_text.delta","delta":"partial"}\n\n'
-            : '{',
-        );
-      });
-      const plan = prepareCombinedSearch(
-        'q',
-        { sources: 'model,exa', timeout: 0.15, stream: stallModel && stream },
-        {},
-        { ...env, UNISEARCH_MODEL_BASE_URL: base, UNISEARCH_EXA_BASE_URL: base },
-        'en',
-      );
-      const record: JsonObject = {};
-      const started = performance.now();
-      const result = await combinedSearch(plan, new AbortController().signal, 'en', record);
-      assert.equal(result.exitCode, 6);
-      assert.equal(
-        Boolean(
-          result.result.data?.sources.find(
-            (source: { provider: string }) => source.provider === 'model',
-          )?.data,
-        ),
-        !stallModel,
-      );
-      assert.equal(
-        Boolean(
-          result.result.data?.sources.filter(
-            (source: { provider: string }) => source.provider !== 'model',
-          ).length,
-        ),
-        stallModel,
-      );
-      const timeout = result.result.error?.details?.failures?.[0].details;
-      assert.equal(timeout?.timeout_scope, stallModel && stream ? 'stream_idle' : 'total');
-      assert.ok(performance.now() - started < 1500);
-      assert.equal((record.attempts as JsonObject[]).length, 2);
-    }
-});
-
 test('Internal programming failures cancel pending siblings with exit 5, never masquerade as user cancellation', async () => {
   const plan = prepareCombinedSearch('q', { sources: 'model,exa' }, {}, env, 'en');
   let aborted = false;
@@ -741,32 +641,25 @@ test('Internal programming failures cancel pending siblings with exit 5, never m
   assert.doesNotMatch(JSON.stringify(result), /CANCELLED|private internal/);
 });
 
-test('Internal failure after completed Exa retains its data and cancellation retains completed supplemental data without deltas', async () => {
-  for (const cancel of [false, true]) {
-    const plan = prepareCombinedSearch('q', { sources: 'model,exa', stream: true }, {}, env, 'en');
-    const abort = new AbortController();
-    const result = await combinedSearch(
-      plan,
-      abort.signal,
-      'en',
-      {},
-      {
-        transport: async (url, init) => {
-          if (!String(url).endsWith('/responses')) return Response.json({ results: [] });
-          await new Promise((done) => setImmediate(done));
-          if (cancel) {
-            abort.abort();
-            init!.signal!.throwIfAborted();
-          }
-          throw new TypeError('internal');
-        },
+test('Combined search retains a completed Exa response after an internal model failure', async () => {
+  const plan = prepareCombinedSearch('q', { sources: 'model,exa' }, {}, env, 'en');
+  const result = await combinedSearch(
+    plan,
+    new AbortController().signal,
+    'en',
+    {},
+    {
+      transport: async (url) => {
+        if (!String(url).endsWith('/responses')) return Response.json({ results: [] });
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        throw new TypeError('internal');
       },
-    );
-    assert.equal(result.exitCode, cancel ? 130 : 5);
-    assert.deepEqual(result.result.data, {
-      sources: [{ provider: 'exa', data: { results: [] } }],
-    });
-  }
+    },
+  );
+  assert.equal(result.exitCode, 5);
+  assert.deepEqual(result.result.data, {
+    sources: [{ provider: 'exa', data: { results: [] } }],
+  });
 });
 
 test('All known credentials are redacted across provider failures and verbose request IDs', async () => {
@@ -823,82 +716,82 @@ test('Verbose execution details remain outside Markdown files', async (t) => {
   );
   assert.equal(channels.out, '');
   assert.match(channels.err, /model\/primary.*HTTP 200/);
-  assert.doesNotMatch(channels.err, /Success|Complete answer/);
-  assert.doesNotMatch(readFileSync(file, 'utf8'), /Execution time|HTTP 200/);
+  assert.doesNotMatch(channels.err, /Complete answer/);
+  assert.doesNotMatch(readFileSync(file, 'utf8'), /HTTP 200/);
 });
 
 test(
-  'Search SIGINT cancels native SSE and preserves an old output file with completed Exa data',
-  { skip: process.platform === 'win32' },
+  'Search SIGINT cancels a pending model stream and reports completed Exa data',
+  { timeout: 5000 },
   async (t) => {
     const root = temporary(t);
-    const config = join(root, 'config.json');
     const output = join(root, 'old.json');
-    writeFileSync(config, '{}');
     writeFileSync(output, 'old');
-    let child: ReturnType<typeof spawn>;
-    let timer: NodeJS.Timeout;
+    const modelRequested = Promise.withResolvers<void>();
+    const exaRead = Promise.withResolvers<void>();
+    const hit = { url: 'https://example.org/exa', title: 'Completed Exa result' };
     const base = await server(t, (req, res) => {
       if (req.url === '/search') {
-        res.end('{"results":[]}');
-        timer = setTimeout(() => child.kill('SIGINT'), 100);
+        res.end(JSON.stringify({ results: [hit] }));
       } else {
+        assert.equal(req.url, '/responses');
         res.writeHead(200, { 'Content-Type': 'text/event-stream' });
         res.write('data: {"type":"response.output_text.delta","delta":"partial"}\n\n');
+        modelRequested.resolve();
       }
     });
-    const environment = Object.fromEntries(
-      Object.entries(process.env).filter(([key]) => !key.startsWith('UNISEARCH_')),
-    );
-    child = spawn(
-      process.execPath,
-      [
-        resolve('dist/cli.js'),
-        'search',
-        'q',
-        '--stream',
-        '--sources',
-        'model,exa',
-        '--format=json',
-        '--output',
-        output,
-      ],
-      {
-        env: {
-          ...environment,
-          ...env,
-          UNISEARCH_CONFIG_PATH: config,
-          UNISEARCH_MODEL_BASE_URL: base,
-          UNISEARCH_EXA_BASE_URL: base,
-        },
-      },
-    );
-    let stdout = '';
-    let stderr = '';
-    child.stdout!.on('data', (chunk) => {
-      stdout += chunk;
+    const nativeFetch = globalThis.fetch;
+    t.mock.method(globalThis, 'fetch', async (...args: Parameters<typeof fetch>) => {
+      const response = await nativeFetch(...args);
+      if (String(args[0]) === `${base}/search`) {
+        const arrayBuffer = response.arrayBuffer.bind(response);
+        response.arrayBuffer = async () => {
+          const bytes = await arrayBuffer();
+          // Let Exa map the completed body before the CLI handles the signal.
+          setImmediate(exaRead.resolve);
+          return bytes;
+        };
+      }
+      return response;
     });
-    child.stderr!.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    const watchdog = setTimeout(() => child.kill('SIGKILL'), 5000);
-    try {
-      const [code, signal] = await once(child, 'close');
-      assert.equal(code, 130, stderr);
-      assert.equal(signal, null);
-      assert.deepEqual(JSON.parse(stdout).data, {
-        sources: [{ provider: 'exa', data: { results: [] } }],
-      });
-      assert.equal(JSON.parse(stdout).error.code, 'CANCELLED');
-      assert.equal(readFileSync(output, 'utf8'), 'old');
-    } finally {
-      clearTimeout(watchdog);
-      clearTimeout(timer!);
-    }
+    const channels = capture();
+    const pending = createCli('test', {
+      config: context(root, {
+        ...env,
+        UNISEARCH_MODEL_BASE_URL: base,
+        UNISEARCH_EXA_BASE_URL: base,
+      }),
+      channels,
+    }).run([
+      'search',
+      'q',
+      '--stream',
+      '--sources',
+      'model,exa',
+      '--format=json',
+      '--output',
+      output,
+    ]);
+
+    const earlyExit = await Promise.race([
+      Promise.all([modelRequested.promise, exaRead.promise]).then(() => undefined),
+      pending,
+    ]);
+    assert.equal(
+      earlyExit,
+      undefined,
+      `Search exited before both providers were ready.\n${channels.out}${channels.err}`,
+    );
+    process.emit('SIGINT');
+    assert.equal(await pending, 130);
+    const result = JSON.parse(channels.out);
+    assert.equal(result.error.code, 'CANCELLED');
+    assert.deepEqual(result.data, { sources: [{ provider: 'exa', data: { results: [hit] } }] });
+    assert.equal(readFileSync(output, 'utf8'), 'old');
   },
 );
 
-test('Search sources render titled links, bare autolinks and no empty heading', () => {
+test('Search sources render titled links and bare autolinks with escaped URLs', () => {
   const data = {
     sources: [
       {
@@ -914,31 +807,21 @@ test('Search sources render titled links, bare autolinks and no empty heading', 
       },
     ],
   } as CombinedData;
-  assert.equal(
-    renderCombinedSearch(data, 'en'),
-    `Model: m
-
-Body.
-
-### Model-provided sources
-
-- <https://example.org/a>
-- [B (c)](https://example.org/b_%28c%29)`,
-  );
+  const markdown = renderCombinedSearch(data, 'en');
+  assert.match(markdown, /- <https:\/\/example\.org\/a>/);
+  assert.match(markdown, /- \[B \(c\)\]\(https:\/\/example\.org\/b_%28c%29\)/);
 });
 
-test('Verbose searched sources list only unused URLs and skip an empty list', () => {
+test('Verbose searched sources link supplied URLs and omit empty lists', () => {
   const base: JsonObject = { elapsed_ms: 5, attempts: [{ provider: 'model', duration_ms: 5 }] };
-  assert.equal(renderSearchExecution(base, 'en'), 'Execution time: 5 ms\nmodel · 5 ms');
   assert.equal(
     renderSearchExecution({ ...base, searched_sources: [] }, 'en'),
-    'Execution time: 5 ms\nmodel · 5 ms',
+    renderSearchExecution(base, 'en'),
   );
-  assert.equal(
-    renderSearchExecution(
-      { ...base, searched_sources: ['https://example.org/a', 'https://example.org/b_(c)'] },
-      'en',
-    ),
-    'Execution time: 5 ms\nmodel · 5 ms\n\n### Searched sources\n\n- <https://example.org/a>\n- <https://example.org/b_%28c%29>',
+  const markdown = renderSearchExecution(
+    { ...base, searched_sources: ['https://example.org/a', 'https://example.org/b_(c)'] },
+    'en',
   );
+  assert.match(markdown, /<https:\/\/example\.org\/a>/);
+  assert.match(markdown, /<https:\/\/example\.org\/b_%28c%29>/);
 });

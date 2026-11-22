@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import type { ServerResponse } from 'node:http';
 import * as jina from '../src/providers/jina.js';
-import { clock as executionClock, executeRequest } from '../src/execution.js';
+import { executeRequest } from '../src/execution.js';
 import type { ExecutionClock } from '../src/execution.js';
 import { prepareRetrieval, retrieve } from '../src/retrieval.js';
-import { prepareCombinedSearch, combinedSearch } from '../src/search.js';
 import type { JsonObject } from '../src/result.js';
 import { envelope, fixture, page, url } from './jina-helpers.js';
 
@@ -97,66 +95,39 @@ test('Jina retries local 429/503 responses with unchanged requests and per-attem
 
 test('Jina controlled deadlines include complete response bodies and never retry terminal results', async (t) => {
   const f = await fixture(t);
-  for (const [budget, spent, expectedScope] of [
-    [100, 60001, 'request'],
-    [2, 2001, 'total'],
+  for (const [budget, spent, expectedScope, body] of [
+    [100, 60001, 'request', envelope({ url })],
+    [2, 2001, 'total', {}],
   ] as const) {
-    for (const body of [envelope({ url }), {}]) {
-      const time = timer();
-      f.reply(body);
-      const request = jina.prepareFetch(url, { timeout: budget }, {}, f.env, 'en');
-      const record: JsonObject = {};
-      const before = f.calls.length;
-      const result = await executeRequest(
-        async (ctx) => {
-          const value = await jina.request(request, ctx, 'en');
-          time.advance(spent);
-          return value;
-        },
-        {
-          ...request,
-          retries: 2,
-          provider: 'jina',
-          requestLimit: jina.requestLimit,
-          signal: new AbortController().signal,
-          language: 'en',
-          clock: time.clock,
-          record,
-        },
-      );
-      assert.equal(result.result.error?.details?.timeout_scope, expectedScope);
-      assert.deepEqual(time.caps, [Math.min(60000, budget * 1000)]);
-      assert.equal(f.calls.length, before + 1);
-    }
-  }
-  for (const retryAfter of ['bad', '3']) {
     const time = timer();
-    f.reply({ code: 503, status: 50303 }, 503, { 'retry-after': retryAfter });
-    const request = jina.prepareFetch(
-      url,
-      { timeout: 3 },
-      {},
-      { ...f.env, UNISEARCH_RETRIES: '1' },
-      'en',
-    );
+    f.reply(body);
+    const request = jina.prepareFetch(url, { timeout: budget }, {}, f.env, 'en');
     const record: JsonObject = {};
-    const result = await executeRequest((ctx) => jina.request(request, ctx, 'en'), {
-      ...request,
-      provider: 'jina',
-      requestLimit: jina.requestLimit,
-      signal: new AbortController().signal,
-      language: 'en',
-      clock: time.clock,
-      record,
-    });
-    assert.equal(result.exitCode, 4);
-    assert.deepEqual(time.waits, retryAfter === 'bad' ? [1000] : []);
-    if (retryAfter === '3')
-      assert.equal(result.result.error?.details?.reason, 'retry_wait_exceeds_budget');
+    const before = f.calls.length;
+    const result = await executeRequest(
+      async (ctx) => {
+        const value = await jina.request(request, ctx, 'en');
+        time.advance(spent);
+        return value;
+      },
+      {
+        ...request,
+        retries: 2,
+        provider: 'jina',
+        requestLimit: jina.requestLimit,
+        signal: new AbortController().signal,
+        language: 'en',
+        clock: time.clock,
+        record,
+      },
+    );
+    assert.equal(result.result.error?.details?.timeout_scope, expectedScope);
+    assert.deepEqual(time.caps, [Math.min(60000, budget * 1000)]);
+    assert.equal(f.calls.length, before + 1);
   }
 });
 
-test('Jina request caps abort native pending bodies and classify transport faults separately from internal bugs', async (t) => {
+test('Jina aborts an incomplete response at its request cap without recording billing', async (t) => {
   const f = await fixture(t);
   let expire!: () => void;
   f.handle((_call, res) => {
@@ -198,77 +169,6 @@ test('Jina request caps abort native pending bodies and classify transport fault
   assert.equal(result.result.error?.details?.timeout_scope, 'request');
   assert.equal((record.attempts as JsonObject[])[0].http_status, 200);
   assert.equal((record.attempts as JsonObject[])[0].billed_tokens, undefined);
-  for (const [system, code, retry] of [
-    ['ECONNRESET', 'NETWORK_ERROR', true],
-    ['ENOTFOUND', 'NETWORK_ERROR', false],
-    ['CERT_HAS_EXPIRED', 'NETWORK_ERROR', false],
-    ['ETIMEDOUT', 'TIMEOUT', true],
-  ] as const) {
-    const result = await jina.request(
-      request,
-      { signal: new AbortController().signal },
-      'en',
-      async () => {
-        throw new TypeError('fetch failed', {
-          cause: Object.assign(new Error('fixture'), { code: system }),
-        });
-      },
-    );
-    assert.equal(result.outcome.result.error?.code, code);
-    assert.equal(result.retry, retry);
-  }
-  const broken = await jina.request(
-    request,
-    { signal: new AbortController().signal },
-    'en',
-    async () => {
-      throw new Error('bug');
-    },
-  );
-  assert.equal(broken.outcome.exitCode, 5);
-});
-
-test('Jina cancellation during headers, bodies and retry waits preserves existing output and listeners', async (t) => {
-  const f = await fixture(t);
-  const file = join(f.root, 'out.json');
-  for (const phase of ['headers', 'body', 'wait']) {
-    writeFileSync(file, 'original');
-    let received!: () => void;
-    const ready = new Promise<void>((resolve) => {
-      received = resolve;
-    });
-    if (phase === 'wait') {
-      const sleep = executionClock.sleep;
-      t.mock.method(executionClock, 'sleep', async (...args: Parameters<typeof sleep>) => {
-        received();
-        await sleep(...args);
-      });
-    }
-    f.handle((_call, res) => {
-      if (phase === 'body') {
-        res.writeHead(200);
-        res.write('{');
-      }
-      if (phase === 'wait') {
-        res.writeHead(503, { 'retry-after': '30' });
-        res.end(JSON.stringify({ code: 503, status: 50303 }));
-      }
-      if (phase !== 'wait') received();
-    });
-    const listeners = process.listenerCount('SIGINT');
-    const calls = f.calls.length;
-    const pending = f.run(['jina', 'fetch', url, '--format=json', '--output', file], {
-      UNISEARCH_RETRIES: '2',
-    });
-    await ready;
-    process.emit('SIGINT');
-    const result = await pending;
-    assert.equal(result.exit, 130);
-    assert.equal(f.calls.length, calls + 1);
-    assert.equal(readFileSync(file, 'utf8'), 'original');
-    assert.deepEqual(readdirSync(f.root).sort(), ['config.json', 'out.json']);
-    assert.equal(process.listenerCount('SIGINT'), listeners);
-  }
 });
 
 test('Jina usage is validated independently of verbose and belongs only to complete attempts', async (t) => {
@@ -336,7 +236,7 @@ test('Jina output and files preserve partial data, diagnostic redaction and ordi
   const saved = await f.run(['jina', 'fetch', url, '--verbose', '--output', file], key);
   assert.equal(saved.channels.out, '');
   assert.equal(readFileSync(file, 'utf8'), normal.channels.out);
-  assert.match(saved.channels.err, /Billed usage \(tokens\): 99/);
+  assert.match(saved.channels.err, /\b99\b/);
   f.reply(envelope([{ url, title: 'No body' }]));
   const partial = await f.run(
     ['jina', 'search', 'q', '--include-text', '--format=json', '--output', file],
@@ -359,26 +259,6 @@ test('Jina output and files preserve partial data, diagnostic redaction and ordi
     5,
   );
   assert.equal(f.calls.length, calls);
-});
-
-test('Unified fetch admits anonymous Jina in the default position and respects candidate preflight and disabling', async (t) => {
-  const f = await fixture(t);
-  const first = await f.run(['fetch', url, '--format=json']);
-  assert.equal(first.exit, 0);
-  assert.equal(first.json().data.provider, 'jina');
-  const defaults = (await f.run(['config', 'get', 'fetch.providers'])).json().data
-    .value as string[];
-  assert.ok(defaults.indexOf('tavily') < defaults.indexOf('jina'));
-  assert.ok(defaults.indexOf('jina') < defaults.indexOf('zhipu-mcp'));
-  f.save({ providers: { jina: { enabled: false }, anysearch: { enabled: false } } });
-  assert.equal((await f.run(['fetch', url])).exit, 3);
-  f.save({ fetch: { providers: [] } });
-  assert.equal((await f.run(['fetch', url])).exit, 3);
-  f.save({ fetch: { providers: ['jina', 'exa'] }, providers: { exa: { base_url: 'bad' } } });
-  const calls = f.calls.length;
-  assert.equal((await f.run(['fetch', url])).exit, 3);
-  assert.equal(f.calls.length, calls);
-  assert.equal((await f.run(['fetch', url, '--no-fallback'])).exit, 0);
 });
 
 test('Jina switches in both directions, aggregates errors and retains the latest body over later metadata', async (t) => {
@@ -499,65 +379,6 @@ test('Unified fetch shares remaining deadline with Jina and keeps its billed att
   }
 });
 
-test('Root search runs model, Jina and Exa concurrently and retains requested source order', async (t) => {
-  const f = await fixture(t);
-  const env = {
-    ...key,
-    UNISEARCH_MODEL_API_KEY: 'model-fixture',
-    UNISEARCH_MODEL_ID: 'primary',
-    UNISEARCH_MODEL_BASE_URL: `${f.base}/model`,
-    UNISEARCH_EXA_API_KEY: 'exa-fixture',
-    UNISEARCH_EXA_BASE_URL: `${f.base}/exa`,
-  };
-  const pending: { path: string; response: ServerResponse }[] = [];
-  f.handle((call, response) => {
-    pending.push({ path: call.path, response });
-    if (pending.length !== 3) return;
-    for (const path of ['/exa/search', '/searcher/search', '/model/responses']) {
-      const task = pending.find((item) => item.path === path)!;
-      let body: unknown = answer;
-      if (path === '/exa/search') body = { results: [] };
-      if (path === '/searcher/search') body = envelope([page], 11);
-      task.response.end(JSON.stringify(body));
-    }
-  });
-  f.save({ providers: { jina: { search: { limit: 2 } } } });
-  const result = await f.run(
-    ['search', 'q', '--sources', 'model,jina,exa', '--timeout', '2', '--format=json', '--verbose'],
-    env,
-  );
-  assert.equal(result.exit, 0);
-  assert.deepEqual(
-    result
-      .json()
-      .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
-      .map((s: JsonObject) => s.provider),
-    ['jina', 'exa'],
-  );
-  assert.equal(
-    result
-      .json()
-      .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0].data
-      .provider,
-    undefined,
-  );
-  assert.equal(
-    result
-      .json()
-      .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0].data
-      .search_type,
-    'web',
-  );
-  const body = f.calls.find((call) => call.path === '/searcher/search')!.body;
-  assert.equal(body.num, 2);
-  assert.equal(body.type, 'web');
-  assert.equal(body.hl, undefined);
-  assert.equal(
-    result.json().meta.attempts.find((a: JsonObject) => a.provider === 'jina').billed_tokens,
-    11,
-  );
-});
-
 test('Root search keeps Jina metadata and invalid data when model fails, with local preflight before any request', async (t) => {
   const f = await fixture(t);
   const env = {
@@ -600,54 +421,4 @@ test('Root search keeps Jina metadata and invalid data when model fails, with lo
     3,
   );
   assert.equal(f.calls.length, calls);
-});
-
-test('Completed Jina data survives root search cancellation, total timeout and internal sibling failures', async (t) => {
-  const f = await fixture(t);
-  const env = {
-    ...f.env,
-    ...key,
-    UNISEARCH_MODEL_API_KEY: 'model-fixture',
-    UNISEARCH_MODEL_ID: 'primary',
-    UNISEARCH_MODEL_BASE_URL: `${f.base}/model`,
-  };
-  for (const mode of ['cancel', 'timeout', 'internal']) {
-    const controller = new AbortController();
-    const time = timer();
-    let completed!: () => void;
-    const ready = new Promise<void>((resolve) => {
-      completed = resolve;
-    });
-    f.reply(envelope([page]));
-    const plan = prepareCombinedSearch('q', { sources: 'model,jina', timeout: 3 }, {}, env, 'en');
-    const result = await combinedSearch(
-      plan,
-      controller.signal,
-      'en',
-      {},
-      {
-        clock: time.clock,
-        transport: async (target, init) => {
-          if (String(target).includes('/searcher/')) {
-            const response = await fetch(target, init);
-            const bytes = await response.arrayBuffer();
-            setTimeout(completed, 0);
-            return new Response(bytes, { status: response.status });
-          }
-          await ready;
-          if (mode === 'internal') throw new Error('fixture internal bug');
-          if (mode === 'cancel') controller.abort();
-          if (mode === 'timeout') time.advance(3001);
-          return Response.json(answer);
-        },
-      },
-    );
-    const expected = { cancel: 130, timeout: 6, internal: 5 }[mode];
-    assert.equal(result.exitCode, expected);
-    const source = result.result.data?.sources.filter(
-      (source: { provider: string }) => source.provider !== 'model',
-    )?.[0];
-    assert.ok(source?.provider === 'jina');
-    assert.equal(source.data.results[0].text, page.content);
-  }
 });

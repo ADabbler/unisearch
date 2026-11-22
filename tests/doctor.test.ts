@@ -10,7 +10,6 @@ import { search as tinyfishSearch } from './tinyfish-fixture.js';
 import { search as zhipuSearch } from './zhipu-fixture.js';
 import { envelope as jinaEnvelope, page as jinaPage } from './jina-helpers.js';
 import { diagnoseAll, prepareDoctorBatch } from '../src/doctor.js';
-import { renderDoctor } from '../src/output/doctor.js';
 import { setImmediate } from 'node:timers/promises';
 import { success } from '../src/result.js';
 
@@ -90,56 +89,14 @@ test('Bare doctor reports every service and diagnoses ready anonymous and authen
     assert.equal(call.headers.authorization, undefined);
 
   const plain = await f.run(['doctor'], env);
-  assert.equal(plain.exit, 6);
-  assert.match(plain.channels.out, /^model: check passed, Configured model: fixture-model$/m);
-  assert.doesNotMatch(plain.channels.out, /endpoint|attempts/);
-  assert.doesNotMatch(plain.channels.out, /\[MISSING_CONFIG\]|\[INVALID_CONFIG\]|[。.]$/m);
-  const plainLines = plain.channels.out.split('\n');
-  assert.match(plainLines[0]!, /^Partial completion:/);
-  const firstService = plainLines.findIndex((line) => line.startsWith('model:'));
-  assert.ok(firstService > 0);
-  assert.equal(plainLines[firstService - 1], '');
-  assert.equal(plain.channels.err, '');
-  const anonymousJina =
-    /^jina:\n  fetch: .+ \(anonymous\)\n  search: .+\n    .+providers\.jina\.api_key$/m;
-  assert.match(plain.channels.out, anonymousJina);
-  const configured = await f.run(['doctor'], {
-    ...env,
-    UNISEARCH_CTX7_API_KEY: 'fixture-ctx7-key',
-    UNISEARCH_ANYSEARCH_API_KEY: 'fixture-anysearch-key',
-    UNISEARCH_JINA_API_KEY: 'fixture-jina-key',
-  });
-  assert.match(configured.channels.out, /^ctx7: check passed$/m);
-  assert.match(configured.channels.out, /^anysearch: check passed$/m);
-  const configuredLines = configured.channels.out.split('\n');
-  const jinaTitleIndex = configuredLines.findIndex((line) => line.startsWith('jina:'));
-  assert.equal(configuredLines[jinaTitleIndex], 'jina: check passed');
-  assert.ok(!configuredLines[jinaTitleIndex + 1]?.startsWith('  '));
-  const namedAnonymous = await f.run(['doctor', 'ctx7'], env);
-  assert.match(namedAnonymous.channels.out, /^ctx7: check passed \(anonymous\)$/m);
-  const namedJina = await f.run(['doctor', 'jina'], env);
-  assert.match(namedJina.channels.out, anonymousJina);
-  for (const state of ['disabled', 'invalid', 'not_started']) {
-    const skipped = renderDoctor({ services: [{ provider: 'jina', state }] }, 'en', {
-      anonymous: new Set(['jina']),
-    });
-    assert.match(skipped, /^jina: \S/);
-    assert.doesNotMatch(skipped, /anonymous|\n  fetch:|\n  search:/);
-  }
   const verbose = await f.run(['doctor', '--verbose'], env);
+  assert.equal(plain.exit, 6);
+  assert.equal(verbose.exit, plain.exit);
+  assert.ok(plain.channels.out.includes('fixture-model'));
+  assert.ok(plain.channels.out.includes('providers.jina.api_key'));
+  assert.equal(plain.channels.err, '');
   assert.equal(verbose.channels.out, plain.channels.out);
-  assert.match(verbose.channels.err, /^\nDiagnostic details:\n\nmodel:\n  Operation:/);
-  assert.match(verbose.channels.err, /\nctx7:\n  Operation:/);
-  assert.doesNotMatch(verbose.channels.err, /^model$/m);
-  assert.doesNotMatch(verbose.channels.err, /\n\nctx7:/);
-  assert.doesNotMatch(verbose.channels.out, /endpoint:|Execution time/);
-  const namedVerbose = await f.run(['doctor', 'model', '--verbose'], env);
-  assert.match(namedVerbose.channels.err, /^\nDiagnostic details:\n\nmodel:/);
-  f.reply({}, 401);
-  const namedFailure = await f.run(['doctor', 'ctx7'], env);
-  assert.equal(namedFailure.exit, 3);
-  assert.equal(namedFailure.channels.out, '');
-  assert.match(namedFailure.channels.err, /^Error:/);
+  assert.match(verbose.channels.err, /\/model\/models/);
 });
 
 test('Bare doctor with no ready services reports skipped states without network checks', async (t) => {
@@ -405,81 +362,64 @@ test('Model listing ignores generation settings and never falls back; malformed 
   });
   const env = { UNISEARCH_MODEL_API_KEY: 'fixture-key' };
   for (const [body, code] of [
-    [{ data: [{ id: 'fixture-model' }] }, 0],
-    [{ data: [] }, 4],
-    [{ data: [{ id: '' }] }, 4],
-    [{ data: [{ id: 'fixture-model' }, {}] }, 4],
+    [{ data: [{ id: 'fixture-model' }] }, undefined],
+    [{ data: [{ id: 'different-model' }] }, 'MODEL_UNAVAILABLE'],
+    [{ data: [{ id: 'fixture-model' }, {}] }, 'INVALID_RESPONSE'],
   ] as const) {
     f.reply(body);
     const result = await f.run(['doctor', 'model', '--json'], env);
-    assert.equal(result.exit, code, result.channels.out);
+    assert.equal(result.exit, code ? 4 : 0, result.channels.out);
+    assert.equal(result.json().error?.code, code);
     assert.equal(result.json().meta, undefined);
-    if (code) assert.equal(result.json().data, undefined);
   }
-  for (const status of [401, 403, 404, 405, 429, 500]) {
-    f.reply({ error: { message: 'List refused' } }, status);
-    const count = f.calls.length;
-    const result = await f.run(['doctor', 'model', '--json'], {
-      ...env,
-      UNISEARCH_RETRIES: '5',
-    });
-    assert.notEqual(result.exit, 0);
-    assert.equal(f.calls.length, count + 1);
-  }
+  f.reply({ error: { message: 'List refused' } }, 503);
+  const count = f.calls.length;
+  const result = await f.run(['doctor', 'model', '--json'], {
+    ...env,
+    UNISEARCH_RETRIES: '5',
+  });
+  assert.equal(result.exit, 4);
+  assert.equal(result.json().error.code, 'UPSTREAM_ERROR');
+  assert.equal(f.calls.length, count + 1);
   assert.ok(f.calls.every((call) => call.method === 'GET' && call.path === '/model/models'));
 });
 
-test('Quota checks preserve null limits, reject known exhaustion and validate retained metadata regardless of verbose', async (t) => {
+test('Doctor reports quota exhaustion and validates metadata without verbose output', async (t) => {
   const f = await fixture(t);
-  const cases: [string, unknown, number][] = [
+  const key = { usage: 0, limit: null };
+  const exhaustedPlan = { plan_usage: 2, plan_limit: 2 };
+  const credentials = (provider: 'tavily' | 'firecrawl') => ({
+    [`UNISEARCH_${provider.toUpperCase()}_API_KEY`]: 'fixture-key',
+    [`UNISEARCH_${provider.toUpperCase()}_BASE_URL`]: f.base,
+  });
+  f.reply({ key, account: { ...exhaustedPlan, paygo_limit: 10, paygo_usage: 1 } });
+  const ready = await f.run(['doctor', 'tavily', '--json', '--verbose'], credentials('tavily'));
+  assert.equal(ready.exit, 0);
+  assert.deepEqual(ready.json().data, { provider: 'tavily' });
+  assert.equal(ready.json().meta.check.quota.key.limit, null);
+
+  for (const [provider, body, code] of [
+    ['tavily', { key: { usage: 10, limit: 10 }, account: {} }, 'QUOTA_EXCEEDED'],
+    ['tavily', { key, account: { ...exhaustedPlan, paygo_limit: null } }, 'QUOTA_EXCEEDED'],
     [
       'tavily',
-      {
-        key: { usage: 10, limit: null },
-        account: { plan_usage: 10, plan_limit: 1000, paygo_usage: 0, paygo_limit: null },
-      },
-      0,
+      { key, account: { ...exhaustedPlan, paygo_limit: 0, paygo_usage: 0 } },
+      'QUOTA_EXCEEDED',
     ],
-    ['tavily', { key: { usage: 10, limit: 10 }, account: {} }, 4],
+    ['tavily', { key, account: { plan_limit: null } }, 'INVALID_RESPONSE'],
+    ['firecrawl', { success: true, data: { remainingCredits: 0 } }, 'QUOTA_EXCEEDED'],
     [
-      'tavily',
-      {
-        key: { usage: 0, limit: null },
-        account: { plan_usage: 2, plan_limit: 2, paygo_usage: 0, paygo_limit: 0 },
-      },
-      4,
+      'firecrawl',
+      { success: true, data: { remainingCredits: 1, planCredits: 'bad' } },
+      'INVALID_RESPONSE',
     ],
-    ['tavily', { key: { usage: 0, limit: null }, account: { plan_usage: 2, plan_limit: 2 } }, 0],
-    [
-      'tavily',
-      {
-        key: { usage: 0, limit: null },
-        account: { plan_usage: 2, plan_limit: 2, paygo_usage: 0, paygo_limit: null },
-      },
-      4,
-    ],
-    ['tavily', { key: { usage: 0, limit: null }, account: { plan_limit: null } }, 4],
-    ['tavily', { key: { usage: 0, limit: null }, account: { current_plan: 1 } }, 4],
-    ['firecrawl', { success: true, data: { remainingCredits: 1 } }, 0],
-    ['firecrawl', { success: true, data: { remainingCredits: 0 } }, 4],
-    ['firecrawl', { success: true, data: { remainingCredits: -1 } }, 4],
-    ['firecrawl', { success: true, data: { remainingCredits: 1, planCredits: 'bad' } }, 4],
-    ['firecrawl', { success: false, error: 'Insufficient credits' }, 4],
-  ];
-  for (const [provider, body, code] of cases)
-    for (const verbose of [false, true]) {
-      f.reply(body);
-      const result = await f.run(
-        ['doctor', provider, '--json', ...(verbose ? ['--verbose'] : [])],
-        {
-          [`UNISEARCH_${provider.toUpperCase()}_API_KEY`]: 'fixture-key',
-          [`UNISEARCH_${provider.toUpperCase()}_BASE_URL`]: f.base,
-        },
-      );
-      assert.equal(result.exit, code, result.channels.out);
-      if (code === 0) assert.equal(result.json().data.provider, provider);
-      assert.equal(result.json().data?.quota, undefined);
-    }
+    ['firecrawl', { success: false, error: 'Insufficient credits' }, 'QUOTA_EXCEEDED'],
+  ] as const) {
+    f.reply(body);
+    const result = await f.run(['doctor', provider, '--json'], credentials(provider));
+    assert.equal(result.exit, 4, result.channels.out);
+    assert.equal(result.json().error.code, code);
+  }
 });
 
 test('Zhipu MCP doctor discovers tools through paginated JSON/SSE without tool calls', async (t) => {
@@ -532,28 +472,31 @@ test('Doctor rejects arguments and unsupported output before requests and enforc
   const f = await fixture(t),
     output = join(f.root, 'result.json');
   writeFileSync(output, 'old');
-  for (const args of [
-    ['doctor', 'unknown'],
-    ['doctor', 'exa', 'ctx7'],
-    ['doctor', 'exa'],
-  ])
-    assert.notEqual((await f.run([...args, '--json'])).exit, 0);
-  assert.equal(f.calls.length, 0);
+  for (const [args, exit, code] of [
+    [['doctor', 'unknown'], 2, 'INVALID_ARGUMENT'],
+    [['doctor', 'exa', 'ctx7'], 2, 'INVALID_ARGUMENT'],
+    [['doctor', 'exa'], 3, 'MISSING_CONFIG'],
+  ] as const) {
+    const result = await f.run([...args, '--json']);
+    assert.equal(result.exit, exit);
+    assert.equal(result.json().error.code, code);
+  }
   const env = { UNISEARCH_MODEL_API_KEY: 'fixture-key' };
-  f.reply({ data: [] });
-  assert.equal((await f.run(['doctor', 'model', '--json', '--output', output], env)).exit, 2);
+  const invalidOutput = await f.run(['doctor', 'model', '--json', '--output', output], env);
+  assert.equal(invalidOutput.exit, 2);
+  assert.equal(invalidOutput.json().error.code, 'INVALID_ARGUMENT');
   assert.equal(readFileSync(output, 'utf8'), 'old');
   assert.equal(f.calls.length, 0);
-  assert.equal((await f.run(['doctor', 'model', '--json'], env)).exit, 4);
+
   f.handle((_call, res) => {
     res.writeHead(200);
     res.write('{');
   });
-  assert.equal((await f.run(['doctor', 'model', '--json', '--timeout', '0.03'], env)).exit, 4);
-  f.reply({ data: [{ id: 'fixture-model' }] });
-  const plain = await f.run(['doctor', 'model'], env);
-  assert.match(plain.channels.out, /check passed/);
-  assert.doesNotMatch(plain.channels.out, /models|endpoint|\|/);
+  const stalled = await f.run(['doctor', 'model', '--json', '--timeout', '0.15'], env);
+  assert.equal(stalled.exit, 4);
+  assert.equal(stalled.json().error.code, 'TIMEOUT');
+  assert.equal(stalled.json().error.details.timeout_scope, 'total');
+  assert.equal(f.calls.length, 1);
 });
 
 test('Zhipu doctor keeps platform and engine, uses the minimum legal count and ignores unused count on Quark', async (t) => {

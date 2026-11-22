@@ -6,15 +6,9 @@ import { once } from 'node:events';
 import { join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createCli } from '../src/cli/program.js';
-import {
-  prepareFetch,
-  requestFetch,
-  exaOperations,
-  exaRequestLimit,
-} from '../src/providers/exa.js';
+import { prepareFetch, requestFetch, exaRequestLimit } from '../src/providers/exa.js';
 import type { FetchOptions } from '../src/providers/exa.js';
 import { contentsData } from '../src/providers/exa-contents.js';
-import { localStatus } from '../src/config/status.js';
 import { executeRequest } from '../src/execution.js';
 import type { ExecutionClock } from '../src/execution.js';
 import { prepareRetrieval, retrieve } from '../src/retrieval.js';
@@ -140,15 +134,10 @@ test('Exa contents preparation sends one native batch with per-URL options and p
     ['https://u:p@example.org'],
     ['https://example.org/a b'],
   ])
-    assert.throws(() => prepare(urls));
+    assert.throws(() => prepare(urls), { code: 'INVALID_ARGUMENT' });
   for (const maxLength of ['0', '1000001', '1.5', '', 'Infinity'])
-    assert.throws(() => prepare([a], { maxLength }));
-  assert.throws(() => prepare([a], { highlightsQuery: ' ' }));
-  const values = {
-    providers: { exa: { fetch: { max_length: 'bad' }, search: { limit: 'also bad' } } },
-  };
-  assert.throws(() => prepare([a], { maxLength: '1' }, values));
-  assert.throws(() => prepare([a], {}, values));
+    assert.throws(() => prepare([a], { maxLength }), { code: 'INVALID_ARGUMENT' });
+  assert.throws(() => prepare([a], { highlightsQuery: ' ' }), { code: 'INVALID_ARGUMENT' });
 });
 
 test('Exa contents independently retains text, highlights, dates, authors and acquisition sources', () => {
@@ -392,13 +381,6 @@ test('Exa contents CLI config, status, batch request and file outputs use public
   );
   assert.equal(f.calls.length, before);
   assert.equal(prepare().body.text, true);
-  const statuses = localStatus(
-    { providers: { exa: { fetch: { max_length: 'bad' } } } },
-    env,
-    'en',
-    exaOperations,
-  );
-  assert.equal(statuses.services[0].state, 'invalid');
 });
 
 test('Exa complete URL failures never retry; HTTP failures use the common retry policy', async (t) => {
@@ -492,12 +474,15 @@ test('Unified fetch omits Exa length limits, respects default order and only che
     fetch: { providers: ['firecrawl', 'exa', 'tavily'] },
   });
   assert.equal((await f.run(['fetch', a, '--format=json'])).json().data.provider, 'tavily');
-  f.save({ providers: { exa: { fetch: { max_length: 'bad' } } } });
+  f.save({});
+  const invalidExa = { UNISEARCH_EXA_BASE_URL: 'bad' };
   const before = f.calls.length;
-  assert.equal((await f.run(['fetch', a])).exit, 3);
+  const invalid = await f.run(['fetch', a, '--format=json'], invalidExa);
+  assert.equal(invalid.exit, 3);
+  assert.equal(invalid.json().error.code, 'INVALID_CONFIG');
   assert.equal(f.calls.length, before);
   delete f.replies['/firecrawl/scrape'];
-  assert.equal((await f.run(['fetch', a, '--no-fallback'])).exit, 0);
+  assert.equal((await f.run(['fetch', a, '--no-fallback'], invalidExa)).exit, 0);
   f.save({ fetch: { providers: ['firecrawl', 'exa', 'tavily'] } });
   const long = a + 'x'.repeat(2048);
   assert.equal((await f.run(['fetch', long])).exit, 2);

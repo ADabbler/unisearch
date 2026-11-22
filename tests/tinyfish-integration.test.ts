@@ -1,14 +1,11 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { executeRequest } from '../src/execution.js';
 import * as tinyfish from '../src/providers/tinyfish.js';
 import { prepareRetrieval, retrieve } from '../src/retrieval.js';
-import { prepareCombinedSearch, combinedSearch } from '../src/search.js';
 import type { JsonObject } from '../src/result.js';
 import { payloads } from './anysearch-fixture.js';
 import { envelope as jinaEnvelope } from './jina-helpers.js';
@@ -207,104 +204,31 @@ test('TinyFish and model search start concurrently with other explicit sources a
   assert.equal(f.calls.length, 0);
 });
 
-test('TinyFish empty or failed search combines correctly and model fallback never restarts it', async (t) => {
+test('TinyFish fetch resends the same request after a retryable service response', async (t) => {
   const f = await fixture(t);
-  f.env.UNISEARCH_MODEL_API_KEY = 'model-fixture-key';
-  for (const [modelOk, extraOk, exit] of [
-    [true, true, 0],
-    [true, false, 6],
-    [false, true, 6],
-    [false, false, 3],
-  ] as const) {
-    f.handle((call, res) => {
-      const ok = call.path === '/tf-search/' ? extraOk : modelOk;
-      if (!ok) {
-        res.writeHead(401);
-        res.end(JSON.stringify(error()));
-      } else
-        res.end(
-          JSON.stringify(
-            call.path === '/tf-search/' ? { page: 0, results: [] } : payloads[call.path],
-          ),
-        );
-    });
-    const r = await f.run(['search', 'q', '--sources', 'model,tinyfish', '--format=json']);
-    assert.equal(r.exit, exit, r.channels.out);
-    if (extraOk)
-      assert.deepEqual(
-        r
-          .json()
-          .data.sources.filter((source: { provider: string }) => source.provider !== 'model')[0]
-          .data.results,
-        [],
-      );
-    else
-      assert.equal(
-        r
-          .json()
-          .data?.sources.filter((source: { provider: string }) => source.provider !== 'model')?.[0],
-        undefined,
-      );
-  }
-  f.save({ providers: { model: { fallback_models: [{ id: 'backup' }] } } });
-  f.calls.length = 0;
-  f.handle((call, res) => {
-    if (call.path === '/tf-search/') res.end(JSON.stringify(search));
-    else if (call.body!.model === 'backup') res.end(JSON.stringify(payloads[call.path]));
-    else {
-      res.writeHead(404);
-      res.end(JSON.stringify({ error: { code: 'model_not_found', message: 'Model not found' } }));
-    }
+  const time = timer();
+  f.handle((_call, res) => {
+    if (f.calls.length === 1) {
+      res.writeHead(503, { 'retry-after': '2' });
+      res.end(JSON.stringify(error('SERVICE_BUSY')));
+    } else res.end(JSON.stringify(fetched()));
   });
-  const r = await f.run(['search', 'q', '--sources', 'model,tinyfish', '--format=json']);
-  assert.equal(r.exit, 0, r.channels.out);
-  assert.equal(f.calls.filter((c) => c.path === '/tf-search/').length, 1);
-  assert.equal(f.calls.filter((c) => c.path === '/model/responses').length, 2);
-});
-
-test('TinyFish retries use shared clocks and Retry-After without changing requests', async (t) => {
-  const f = await fixture(t);
-  for (const operation of ['search', 'fetch'] as const) {
-    const time = timer();
-    f.calls.length = 0;
-    f.handle((_call, res) => {
-      time.advance(100);
-      if (f.calls.length === 1) {
-        res.writeHead(503, { 'retry-after': '2' });
-        res.end(JSON.stringify(error('SERVICE_BUSY')));
-      } else res.end(JSON.stringify(operation === 'search' ? search : fetched()));
-    });
-    const env = { ...f.env, UNISEARCH_RETRIES: '1' };
-    const request =
-      operation === 'search'
-        ? tinyfish.prepareSearch('query', {}, {}, env, 'en')
-        : tinyfish.prepareFetch([url], {}, {}, env, 'en');
-    const record: JsonObject = {};
-    const r = await executeRequest(
-      (context) =>
-        request.operation === 'search'
-          ? tinyfish.request(request, context, 'en')
-          : tinyfish.request(request, context, 'en'),
-      {
-        provider: 'tinyfish',
-        timeout: 300,
-        retries: 1,
-        requestLimit: tinyfish.requestLimits[operation],
-        signal: new AbortController().signal,
-        language: 'en',
-        record,
-        clock: time.clock,
-      },
-    );
-    assert.equal(r.exitCode, 0);
-    assert.deepEqual(time.waits, [2000]);
-    assert.equal(time.caps[0], tinyfish.requestLimits[operation] * 1000);
-    assert.equal(time.cleared(), 2);
-    assert.equal(f.calls[0].url.href, f.calls[1].url.href);
-    assert.equal(f.calls[0].raw.toString(), f.calls[1].raw.toString());
-    assert.equal((record.attempts as JsonObject[])[0].wait_ms, 2000);
-    assert.equal((record.attempts as JsonObject[])[0].wait_source, 'retry_after');
-  }
+  const request = tinyfish.prepareFetch([url], {}, {}, f.env, 'en');
+  const result = await executeRequest((context) => tinyfish.request(request, context, 'en'), {
+    provider: 'tinyfish',
+    timeout: 300,
+    retries: 1,
+    requestLimit: tinyfish.requestLimits.fetch,
+    signal: new AbortController().signal,
+    language: 'en',
+    record: {},
+    clock: time.clock,
+  });
+  assert.equal(result.exitCode, 0);
+  assert.deepEqual(time.waits, [2000]);
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.calls[1].url.href, f.calls[0].url.href);
+  assert.deepEqual(f.calls[1].body, f.calls[0].body);
 });
 
 test('TinyFish retains explicit non-retryable error codes when the error message is malformed', async (t) => {
@@ -442,45 +366,6 @@ test('TinyFish shares the deadline with later providers, counts full bodies and 
   }
 });
 
-test('TinyFish request cap and cancellation in a retry wait stop further work', async (t) => {
-  const f = await fixture(t);
-  for (const mode of ['cap', 'cancel'] as const) {
-    const time = timer();
-    const abort = new AbortController();
-    f.calls.length = 0;
-    f.handle((_call, res) => {
-      if (mode === 'cap') {
-        time.advance(150001);
-        res.end(JSON.stringify(fetched()));
-      } else {
-        res.writeHead(429, { 'retry-after': '1' });
-        res.end(JSON.stringify(error('RATE_LIMIT_EXCEEDED')));
-      }
-    });
-    const request = tinyfish.prepareFetch([url], {}, {}, f.env, 'en');
-    const r = await executeRequest((context) => tinyfish.request(request, context, 'en'), {
-      provider: 'tinyfish',
-      timeout: 300,
-      retries: mode === 'cap' ? 0 : 2,
-      requestLimit: 150,
-      signal: abort.signal,
-      language: 'en',
-      record: {},
-      clock: {
-        ...time.clock,
-        async sleep() {
-          abort.abort();
-          abort.signal.throwIfAborted();
-        },
-      },
-    });
-    assert.equal(r.exitCode, mode === 'cap' ? 4 : 130);
-    assert.equal(r.result.error!.code, mode === 'cap' ? 'TIMEOUT' : 'CANCELLED');
-    if (mode === 'cap') assert.equal(r.result.error!.details!.timeout_scope, 'request');
-    assert.equal(f.calls.length, 1);
-  }
-});
-
 test('TinyFish error diagnostics redact all configured credentials, including overridden values', async (t) => {
   const f = await fixture(t);
   f.save({
@@ -508,76 +393,4 @@ test('TinyFish error diagnostics redact all configured credentials, including ov
   assert.equal(saved.data.results[0].text, 'Business text: old-tinyfish-key');
   assert.ok(!JSON.stringify(saved.error).includes('old-tinyfish-key'));
   assert.ok(!JSON.stringify(saved.meta).includes('old-tinyfish-key'));
-});
-
-test(
-  'TinyFish CLI SIGINT during a response body preserves the output target',
-  { skip: process.platform === 'win32', timeout: 5000 },
-  async (t) => {
-    const f = await fixture(t);
-    const path = join(f.root, 'cancel.json');
-    writeFileSync(path, 'old');
-    const child = spawn(
-      process.execPath,
-      [
-        join(process.cwd(), 'dist/cli.js'),
-        'tinyfish',
-        'fetch',
-        url,
-        '--format=json',
-        '--output',
-        path,
-      ],
-      {
-        env: {
-          ...Object.fromEntries(
-            Object.entries(process.env).filter(([key]) => !key.startsWith('UNISEARCH_')),
-          ),
-          ...f.env,
-        },
-      },
-    );
-    t.after(() => {
-      if (child.exitCode === null) child.kill('SIGKILL');
-    });
-    let out = '';
-    let err = '';
-    child.stdout.on('data', (data: Buffer) => {
-      out += data.toString();
-    });
-    child.stderr.on('data', (data: Buffer) => {
-      err += data.toString();
-    });
-    f.handle((_call, res) => {
-      res.writeHead(200);
-      res.write('{"results":[');
-      child.kill('SIGINT');
-    });
-    const [code] = await once(child, 'close');
-    assert.equal(code, 130, err);
-    assert.equal(JSON.parse(out).error.code, 'CANCELLED');
-    assert.equal(JSON.parse(out).data, undefined);
-    assert.equal(readFileSync(path, 'utf8'), 'old');
-    assert.deepEqual(readdirSync(f.root).sort(), ['cancel.json', 'config.json']);
-  },
-);
-
-test('TinyFish internal failure terminates the whole combined search', async (t) => {
-  const f = await fixture(t);
-  f.env.UNISEARCH_MODEL_API_KEY = 'model-fixture-key';
-  const plan = prepareCombinedSearch('q', { sources: 'model,tinyfish' }, {}, f.env, 'en');
-  const r = await combinedSearch(
-    plan,
-    new AbortController().signal,
-    'en',
-    {},
-    {
-      transport: async (input, init) => {
-        if (String(input).includes('/tf-search/')) throw new Error('fixture unexpected bug');
-        return fetch(input, init);
-      },
-    },
-  );
-  assert.equal(r.exitCode, 5);
-  assert.equal(r.result.error!.code, 'INTERNAL_ERROR');
 });

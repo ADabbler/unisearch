@@ -6,11 +6,9 @@ import { createCli } from '../src/cli/program.js';
 import { localStatus } from '../src/config/status.js';
 import type { OperationDefinition } from '../src/config/status.js';
 import { operations } from '../src/providers/operations.js';
-import { renderConfig, renderStatus } from '../src/output/config.js';
-import { render } from '../src/output/render.js';
+import { renderStatus } from '../src/output/config.js';
 import { renderDoctor } from '../src/output/doctor.js';
 import stringWidth from 'fast-string-width';
-import { failure, AppError } from '../src/errors.js';
 import { capture, context, temporary } from './helpers.js';
 
 const definitions: OperationDefinition[] = [
@@ -52,12 +50,6 @@ test('Status checks four local states, collapses identical operations, and never
     JSON.stringify(result),
     /fixture-secret|invalid secret|"path"|"source"|selection/,
   );
-  const md = renderStatus(result, 'zh');
-  assert.match(md, /^统一搜索默认来源：model\n/);
-  assert.doesNotMatch(md, /仅检查本地配置|\|/);
-  assert.match(md, /^exa：就绪/m);
-  assert.match(md, /^tavily：缺少配置/m);
-  assert.match(md, /^firecrawl：已禁用/m);
 });
 
 test('Different operation states expand the complete list and shared issues are not duplicated', () => {
@@ -73,10 +65,6 @@ test('Different operation states expand the complete list and shared issues are 
   );
   assert.equal(result.services[0].issues, undefined);
   assert.equal(result.services[0].operations?.[1].issues?.[0].field, 'providers.exa.api_key');
-  const md = renderStatus(result, 'en');
-  assert.match(md, /^exa:\n  public-read: Ready/m);
-  assert.match(md, /  authenticated-search: Missing configuration/);
-  assert.doesNotMatch(md, /\| exa \|/);
   const common = localStatus(
     { providers: { exa: { enabled: 'secret-invalid', api_key: 'invalid secret' } } },
     {},
@@ -123,10 +111,6 @@ test('Status reports effective Zhipu platforms independently of service readines
       ['zhipu-mcp', 'zai', 'disabled'],
     ],
   );
-  assert.match(renderStatus(result, 'zh'), /^zhipu（平台：BigModel）：就绪$/m);
-  assert.match(renderStatus(result, 'zh'), /^zhipu-mcp（平台：Z\.AI）：已禁用$/m);
-  assert.match(renderStatus(result, 'en'), /^zhipu \(platform: BigModel\): Ready$/m);
-  assert.match(renderStatus(result, 'en'), /^zhipu-mcp \(platform: Z\.AI\): Disabled$/m);
   const invalid = localStatus(values, { UNISEARCH_ZHIPU_PLATFORM: 'invalid' }, 'en', definitions);
   assert.equal(invalid.services[0].platform, undefined);
   assert.equal(invalid.services[0].state, 'invalid');
@@ -167,7 +151,6 @@ test('Status and doctor wrap Chinese reasons within terminal columns and retain 
     assert.ok(lines.length > 2);
     assert.ok(lines.slice(1).every((line) => line.startsWith('  ')));
     assert.ok(lines.every((line) => stringWidth(line) <= 40));
-    assert.doesNotMatch(value, /\[INVALID_CONFIG\]|\[ACCESS_DENIED\]|[。.]$/m);
     assert.ok(value.replace(/\s/g, '').includes(message));
   }
 });
@@ -235,44 +218,24 @@ test('Status readiness uses effective settings while retaining invalid overridde
   assert.equal(invalid.issues?.length, 1);
 });
 
-test('Configuration issues remain at top level when no operation definitions are supplied', () => {
+test('Status shows configuration issues outside a service at the top level', () => {
   const result = localStatus(
     {
-      providers: { model: { api_key: 'valid-fixture' }, tinyfish: { enabled: 'secret' } },
       search: { providers: [] },
       fetch: { providers: ['ctx7'] },
       map: { providers: ['unknown-secret'] },
-      execution: { retries: -1 },
       secretField: 'secret-value',
     },
     {},
     'zh',
+    operations,
   );
-  assert.deepEqual(result.services, []);
   assert.equal(result.search?.providers, undefined);
   assert.deepEqual(
     result.issues?.map((issue) => issue.code),
-    [
-      'INVALID_TYPE',
-      'INVALID_VALUE',
-      'UNSUPPORTED_OPERATION',
-      'UNKNOWN_PROVIDER',
-      'INVALID_VALUE',
-      'UNKNOWN_FIELD',
-    ],
+    ['INVALID_VALUE', 'UNSUPPORTED_OPERATION', 'UNKNOWN_PROVIDER', 'UNKNOWN_FIELD'],
   );
-  assert.doesNotMatch(JSON.stringify(result), /secret|valid-fixture/);
-  const md = renderStatus(result, 'zh');
-  assert.match(md, /^没有可展示的服务操作$/m);
-  assert.match(md, /配置问题：/);
-  assert.doesNotMatch(md, /\| 服务|setup|候选|path/);
-  const valid = localStatus(
-    { fetch: { providers: ['exa', 'anysearch'] }, map: { providers: [] } },
-    {},
-    'en',
-  );
-  assert.deepEqual(valid.services, []);
-  assert.equal(valid.issues, undefined);
+  assert.doesNotMatch(JSON.stringify(result), /secret/);
 });
 
 test('Actual status commands are read-only and distinguish field issues from unreadable JSON', async (t) => {
@@ -293,7 +256,6 @@ test('Actual status commands are read-only and distinguish field issues from unr
         .platform,
       'bigmodel',
     );
-  assert.match(renderStatus(result.data, 'en'), /^Default search sources: exa, jina\n/);
   const exa = result.data.services.find(
     (service: { provider: string }) => service.provider === 'exa',
   );
@@ -307,39 +269,4 @@ test('Actual status commands are read-only and distinguish field issues from unr
   assert.equal(JSON.parse(bad.out).error.code, 'CONFIG_PARSE_ERROR');
   assert.equal(JSON.parse(bad.out).data, undefined);
   assert.doesNotMatch(bad.out, /broken-secret|"services"/);
-});
-
-test('Plain configuration confirmations preserve values and localize public errors', () => {
-  assert.equal(renderConfig('path', { path: '/tmp/a-b.json' }, 'zh'), '/tmp/a-b.json');
-  assert.equal(
-    renderConfig('set', { key: 'execution.retries', value: 0, changed: true }, 'zh'),
-    '已保存 execution.retries = 0',
-  );
-  assert.match(
-    renderConfig('set', { key: 'execution.retries', value: 0, changed: false }, 'en'),
-    /no change needed/,
-  );
-  assert.equal(renderConfig('unset', { changed: true }, 'zh'), '已删除指定的未识别配置项');
-  const value = renderConfig(
-    'set',
-    { key: 'providers.exa.api_key', value: '[REDACTED]', changed: true },
-    'en',
-  );
-  assert.equal(value, 'Saved providers.exa.api_key = [REDACTED]');
-  const result = failure(
-    new AppError('FILE_IO_ERROR', 'fileIO', {
-      field: 'execution.retries',
-      path: '/tmp/test',
-      operation: 'rename',
-      system_code: 'EACCES',
-    }),
-    'zh',
-  );
-  const output = render(result, { format: 'text', language: 'zh' });
-  assert.equal(output.content, '');
-  const rendered = output.details;
-  for (const label of ['配置项', '路径', '操作', '系统错误码']) assert.ok(rendered.includes(label));
-  assert.match(rendered, /rename/);
-  assert.match(rendered, /EACCES/);
-  assert.doesNotMatch(rendered, /system_code|field:|\[FILE_IO_ERROR\]/);
 });

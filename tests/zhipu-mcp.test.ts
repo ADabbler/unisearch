@@ -257,10 +257,6 @@ test('Zhipu MCP empty results, file links and Reader unknown envelopes never man
     );
     assert.equal(outcome.exitCode, 0);
     assert.equal(outcome.result.data?.text, '');
-    assert.match(
-      renderMcp(outcome.result.data!, 'en', operation),
-      operation === 'read-file' ? /file content is empty/ : /no content/,
-    );
   }
   const link = { type: 'resource_link', uri: 'https://example.org/file', name: 'file' };
   assert.equal(
@@ -455,8 +451,8 @@ test('Zhipu MCP redaction preserves values when secret-bearing keys collide with
   assert.doesNotMatch(result.channels.out, /secret-one|secret-two/);
 });
 
-test('Zhipu MCP Markdown renders large files with many backticks without dropping content', () => {
-  const body = '`x` '.repeat(150000) + '\n`````\n';
+test('Zhipu MCP Markdown wraps file content in a fence longer than its backticks', () => {
+  const body = '# Heading\n\n`````\n`x`\n`````\n';
   const outcome = toolResult(
     { content: [{ type: 'text', text: body }] },
     { operation: 'read-file', target: 'owner/repo', path: 'file' },

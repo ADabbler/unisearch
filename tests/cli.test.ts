@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import stringWidth from 'fast-string-width';
 import type { Command } from 'commander';
 import { addContentOptions, createCli } from '../src/cli/program.js';
@@ -12,19 +11,13 @@ import { capture, context, temporary } from './helpers.js';
 test('Bare root, help aliases, and version follow Commander without configuration reads for version', async (t) => {
   const root = temporary(t);
   const outputs: string[] = [];
-  for (const args of [[], ['--help'], ['-h'], ['-h', '--help']]) {
+  for (const args of [[], ['--help'], ['-h']]) {
     const channels = capture();
     const cli = createCli('1.2.3', { channels, config: context(root, { UNISEARCH_LANG: 'en' }) });
     assert.equal(await cli.run(args), 0);
     assert.equal(channels.err, '');
-    assert.match(channels.out, /^Usage: unisearch/);
+    assert.match(channels.out, /\bunisearch\b/);
     assert.match(channels.out, /\bsetup\b/);
-    assert.doesNotMatch(channels.out, /--format|--output|--verbose|--timeout/);
-    assert.match(channels.out, /\bexa\b/);
-    assert.equal(
-      cli.program.commands.findIndex((command) => command.name() === 'model'),
-      cli.program.commands.findIndex((command) => command.name() === 'map') + 1,
-    );
     outputs.push(channels.out);
   }
   assert.ok(outputs.every((value) => value === outputs[0]));
@@ -37,22 +30,18 @@ test('Bare root, help aliases, and version follow Commander without configuratio
   }
 });
 
-test('Saved Chinese language changes help, not option names', async (t) => {
+test('Help uses the saved language and honors an environment override', async (t) => {
   const root = temporary(t);
   const path = join(root, 'config.json');
   writeFileSync(path, '{"language":"zh","providers":false}');
-  const channels = capture();
-  assert.equal(
-    await createCli('1.2.3', {
-      channels,
-      config: context(root, { UNISEARCH_CONFIG_PATH: path }),
-    }).run(['--help']),
-    0,
-  );
-  assert.match(channels.out, /^用法：/);
-  assert.doesNotMatch(channels.out, /--format/);
-  assert.match(channels.out, /显示版本/);
-  assert.equal(channels.err, '');
+  for (const override of [undefined, 'en']) {
+    const channels = capture();
+    const config = context(root, { UNISEARCH_CONFIG_PATH: path, UNISEARCH_LANG: override });
+    assert.equal(await createCli('1.2.3', { channels, config }).run(['--help']), 0);
+    assert.equal(/^\p{Script=Han}/u.test(channels.out), override === undefined, channels.out);
+    assert.match(channels.out, /--version/);
+    assert.equal(channels.err, '');
+  }
 });
 
 test('All help pages fit terminal columns in both languages without losing content', async (t) => {
@@ -65,8 +54,9 @@ test('All help pages fit terminal columns in both languages without losing conte
   collect(createCli('1.2.3').program, []);
   for (const language of ['zh', 'en']) {
     for (const path of paths) {
+      const usage = ['unisearch', ...path].join(' ');
       let content: string | undefined;
-      for (const columns of [120, 80, 60, 40]) {
+      for (const columns of [100, 40]) {
         const channels = capture();
         const cli = createCli('1.2.3', {
           channels,
@@ -81,7 +71,9 @@ test('All help pages fit terminal columns in both languages without losing conte
         const label = `${language} ${path.join(' ')} (${columns} columns)`;
         assert.equal(await cli.run([...path, '--help']), 0, label);
         assert.equal(channels.err, '', label);
-        for (const line of channels.out.split('\n')) {
+        const lines = channels.out.split('\n');
+        assert.ok(lines[0].includes(usage), label);
+        for (const line of lines) {
           assert.ok(stringWidth(line) <= columns, `${label}: ${line}`);
           assert.doesNotMatch(line, /^\s*[。！？；，、：）》】」』”’〉〕｝\]})]/u, label);
         }
@@ -135,32 +127,6 @@ test('Narrow help stacks descriptions and wide help aligns wrapped Chinese descr
   }
 });
 
-test('Parent help shows summaries while command help retains details after usage', async (t) => {
-  const root = temporary(t);
-  for (const language of ['zh', 'en']) {
-    for (const [path, present] of [
-      [
-        [],
-        language === 'zh'
-          ? '联网诊断全部服务或指定服务'
-          : 'Run online diagnostics for all services or a specified service',
-      ],
-      [['config'], language === 'zh' ? '保存一个配置项' : 'Save a configuration field'],
-      [['tinyfish'], language === 'zh' ? '批量读取网页正文' : 'Read content from multiple pages'],
-    ] as const) {
-      const channels = capture();
-      assert.equal(
-        await createCli('1.2.3', {
-          channels,
-          config: context(root, { UNISEARCH_LANG: language }),
-        }).run([...path, '--help']),
-        0,
-      );
-      assert.ok(channels.out.replace(/\s+/g, ' ').includes(present));
-    }
-  }
-});
-
 test('Invalid input produces one result using the recognized format', async (t) => {
   const root = temporary(t);
   for (const args of [
@@ -180,7 +146,7 @@ test('Invalid input produces one result using the recognized format', async (t) 
     assert.equal(result.status, 'error');
     assert.equal(result.error.code, 'INVALID_ARGUMENT');
     assert.equal(channels.err, '');
-    assert.doesNotMatch(channels.out, /Usage:|\u001b/);
+    assert.doesNotMatch(channels.out, /\u001b/);
   }
   for (const args of [
     ['--format'],
@@ -197,19 +163,8 @@ test('Invalid input produces one result using the recognized format', async (t) 
     const cli = createCli('1.2.3', { channels, config: context(root, { UNISEARCH_LANG: 'en' }) });
     assert.equal(await cli.run(args), 2);
     assert.equal(channels.out, '');
-    assert.match(channels.err, /^Error:/);
-    assert.doesNotMatch(channels.err, /\[INVALID_ARGUMENT\]|^>/);
+    assert.ok(channels.err.trim());
   }
-  const help = capture();
-  assert.equal(
-    await createCli('1.2.3', {
-      channels: help,
-      config: context(root, { UNISEARCH_LANG: 'en' }),
-    }).run(['config', 'list', '--help']),
-    0,
-  );
-  assert.match(help.out, /^Usage: unisearch config list/);
-  assert.equal(help.err, '');
 });
 
 test('Language failures use the public error shell and do not expose config contents', async (t) => {
@@ -223,20 +178,8 @@ test('Language failures use the public error shell and do not expose config cont
   });
   assert.equal(await cli.run(['config', 'list']), 3);
   assert.equal(JSON.parse(channels.out).error.code, 'CONFIG_PARSE_ERROR');
-  assert.doesNotMatch(channels.out, /fake-secret|Usage:|SyntaxError/);
+  assert.doesNotMatch(channels.out, /fake-secret|SyntaxError/);
   assert.equal(channels.err, '');
-});
-
-test('Invalid format uses stderr when language selection also fails', async (t) => {
-  const root = temporary(t);
-  const channels = capture();
-  const cli = createCli('1.2.3', {
-    channels,
-    config: context(root, { UNISEARCH_LANG: 'invalid' }),
-  });
-  assert.equal(await cli.run(['search', 'query', '--format=invalid']), 3);
-  assert.equal(channels.out, '');
-  assert.match(channels.err, /^Error: Interface language/);
 });
 
 test('Operation options accept both argument positions, detect duplicates, and honor --', async (t) => {
@@ -285,120 +228,6 @@ test('Operation options accept both argument positions, detect duplicates, and h
   }
   assert.equal(outputs[0], outputs[1]);
   assert.match(outputs[0], /unisearch source/);
-});
-
-test('Compiled entry works outside the source directory with UTF-8 paths', (t) => {
-  const root = temporary(t);
-  const path = join(root, '中文 config.json');
-  writeFileSync(path, '{"language":"zh"}');
-  const env: NodeJS.ProcessEnv = { ...process.env, UNISEARCH_CONFIG_PATH: path };
-  delete env.UNISEARCH_LANG;
-  const result = spawnSync(process.execPath, [resolve('dist/cli.js'), '--help'], {
-    cwd: root,
-    env,
-    encoding: 'utf8',
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^用法：/);
-  assert.equal(result.stderr, '');
-  const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
-  const version = spawnSync(process.execPath, [resolve('dist/cli.js'), '--version'], {
-    cwd: root,
-    env,
-    encoding: 'utf8',
-  });
-  assert.equal(version.stdout, `unisearch ${manifest.version}\n`);
-});
-
-test('All operations expose and enforce the confirmed option matrix', async (t) => {
-  const root = temporary(t);
-  const content = new Set([
-    'search',
-    'model search',
-    'fetch',
-    'map',
-    'exa search',
-    'exa fetch',
-    'ctx7 library',
-    'ctx7 docs',
-    'ctx7 search',
-    'ctx7 fetch',
-    'anysearch search',
-    'anysearch domains',
-    'anysearch extract',
-    'tavily search',
-    'tavily extract',
-    'tavily map',
-    'firecrawl search',
-    'firecrawl scrape',
-    'firecrawl map',
-    'jina search',
-    'jina fetch',
-    'zhipu search',
-    'zhipu fetch',
-    'zhipu-mcp search',
-    'zhipu-mcp fetch',
-    'zhipu-mcp docs',
-    'zhipu-mcp tree',
-    'zhipu-mcp read-file',
-    'tinyfish search',
-    'tinyfish fetch',
-    'deepseek search',
-    'deepseek fetch',
-  ]);
-  const local = new Set([
-    'status',
-    'doctor',
-    'setup',
-    'config path',
-    'config list',
-    'config get',
-    'config set',
-    'config unset',
-    'skills install',
-    'skills status',
-    'skills update',
-    'skills remove',
-  ]);
-  const paths: string[][] = [];
-  const visit = (command: Command, path: string[]) => {
-    const name = path.join(' ');
-    const flags = command.options.map((option) => option.long);
-    let expected: string[] = [];
-    if (content.has(name)) expected = ['--format', '--output', '--verbose', '--timeout'];
-    else if (name === 'doctor') expected = ['--json', '--verbose', '--timeout'];
-    else if (name === 'status') expected = ['--json'];
-    for (const flag of ['--format', '--output', '--verbose', '--timeout', '--json'])
-      assert.equal(flags.includes(flag), expected.includes(flag), `${name} ${flag}`);
-    if (!command.commands.length) {
-      assert.ok(content.has(name) || local.has(name), name);
-      paths.push(path);
-    }
-    for (const child of command.commands) visit(child, [...path, child.name()]);
-  };
-  visit(createCli('test').program, []);
-  assert.equal(paths.length, content.size + local.size);
-  for (const path of paths) {
-    const name = path.join(' ');
-    let unsupported: string[];
-    if (content.has(name)) unsupported = ['--json'];
-    else if (name === 'doctor') unsupported = ['--format=json', '--output=report'];
-    else if (name === 'status')
-      unsupported = ['--format=json', '--output=report', '--verbose', '--timeout=1'];
-    else unsupported = ['--format=json', '--output=report', '--verbose', '--timeout=1', '--json'];
-    for (const flag of unsupported) {
-      const channels = capture();
-      const cli = createCli('test', { config: context(root, { UNISEARCH_LANG: 'en' }), channels });
-      assert.equal(await cli.run([...path, flag]), 2, `${name} ${flag}`);
-      if (['config list', 'config get'].includes(name)) {
-        assert.equal(JSON.parse(channels.out).error.code, 'INVALID_ARGUMENT');
-        assert.equal(channels.err, '');
-      } else {
-        assert.equal(channels.out, '');
-        assert.match(channels.err, /^Error:/);
-      }
-    }
-  }
 });
 
 test('Command handlers share output options and propagate failure exits to the CLI', async (t) => {

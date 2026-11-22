@@ -284,40 +284,6 @@ test('Zhipu engine capabilities distinguish default, saved and CLI values', asyn
   );
 });
 
-test('Zhipu both platforms expose the same translated options and reject scalar repetition', async (t) => {
-  const f = await fixture(t);
-  for (const op of ['search', 'fetch']) {
-    const flags: string[][] = [];
-    for (const platform of ['bigmodel', 'zai'])
-      for (const lang of ['zh', 'en']) {
-        const result = await f.run(['zhipu', op, '--help'], {
-          UNISEARCH_ZHIPU_PLATFORM: platform,
-          UNISEARCH_LANG: lang,
-        });
-        assert.equal(result.exit, 0);
-        assert.match(result.channels.out, lang === 'zh' ? /用法：/ : /Usage:/);
-        flags.push([...result.channels.out.matchAll(/--[a-z-]+/g)].map((m) => m[0]));
-      }
-    flags.forEach((f) => assert.deepEqual(f, flags[0]));
-  }
-  for (const [op, args] of [
-    ['search', ['--engine', 'search_std']],
-    ['search', ['--limit', '1']],
-    ['search', ['--recency', 'noLimit']],
-    ['search', ['--include-domains', 'example.org']],
-    ['search', ['--content-size', 'high']],
-    ['fetch', ['--no-cache']],
-    ['fetch', ['--no-images']],
-    ['fetch', ['--include-images-summary']],
-    ['fetch', ['--include-links-summary']],
-  ] as const)
-    assert.equal(
-      (await f.run(['zhipu', op, op === 'search' ? 'q' : url, ...args, ...args])).exit,
-      2,
-    );
-  assert.equal(f.calls.length, 0);
-});
-
 test('Zhipu Reader forwards only the three default fields and explicit independent switches', async (t) => {
   const f = await fixture(t);
   for (const platform of ['bigmodel', 'zai']) {

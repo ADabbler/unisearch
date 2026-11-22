@@ -28,8 +28,9 @@ Use Node.js 24 or newer and npm. Install locked dependencies with `npm ci --igno
 
 ## Verification
 
-- Run only checks needed to verify the changed behavior and risk; do not expand verification without a concrete reason. Cover normal flows, confirmed boundaries, and reproducible defects; update affected output fixtures when behavior changes.
-- Keep tests focused on current behavior. Remove dedicated tests and fixtures with deleted features instead of testing rejection or absence of obsolete interfaces. Cover shared parser behavior centrally; keep service tests for service-specific validation and effects.
+- Run checks that cover the changed behavior and risk. Test supported flows, reachable failures, and reproducible defects. Remove tests and fixtures dedicated to retired behavior, including tests that check for the absence of retired interfaces.
+- Cover shared behavior centrally and exercise representative flows through the CLI. Keep provider tests focused on each provider's requests, responses, and policies. Combine cases that exercise the same behavior and can share setup and assertions.
+- Assert exit codes, output channels, structured fields, and filesystem effects where they define the contract. For human-readable output, check required information, preserved source content, and meaningful syntax. Match exact wording only when callers rely on it. Use a full-output fixture only when the contract covers the complete output and focused assertions cannot express it clearly.
 - Use temporary configuration and local fixtures for automated tests. Real provider calls require explicit authorization; never use personal credentials or configuration implicitly.
 - Report only checks actually run and any remaining gaps. Repeat passing checks only when subsequent changes or unresolved concerns warrant it.
 

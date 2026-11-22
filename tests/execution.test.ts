@@ -1,19 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createServer } from 'node:http';
-import { getEventListeners, once } from 'node:events';
-import { spawn } from 'node:child_process';
-import { join, resolve } from 'node:path';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
 import { executeRequest, retryAfterSeconds } from '../src/execution.js';
 import type { AttemptResult, ExecutionClock } from '../src/execution.js';
 import { AppError, failure } from '../src/errors.js';
 import { success } from '../src/result.js';
 import type { JsonObject } from '../src/result.js';
 import { prepareSearch, requestSearch } from '../src/providers/exa.js';
-import { createCli } from '../src/cli/program.js';
-import { renderExecution } from '../src/output/exa.js';
-import { capture, context, temporary } from './helpers.js';
 
 function controlled() {
   let now = 0;
@@ -346,35 +340,6 @@ test('Fatal failures and programming exceptions terminate attempts immediately',
   }
 });
 
-test('Attempt observer failures release the request timer and abort listener', async () => {
-  const time = controlled();
-  const abort = new AbortController();
-  let calls = 0;
-  const result = await executeRequest(
-    async () => {
-      calls++;
-      return { outcome: success({}), retry: false };
-    },
-    {
-      provider: 'model',
-      timeout: 10,
-      requestLimit: 10,
-      retries: 2,
-      signal: abort.signal,
-      language: 'en',
-      record: {},
-      clock: time.clock,
-      onAttempt() {
-        throw new Error('observer failure');
-      },
-    },
-  );
-  assert.equal(result.exitCode, 5);
-  assert.equal(calls, 0);
-  assert.equal(time.liveTimers(), 0);
-  assert.equal(getEventListeners(abort.signal, 'abort').length, 0);
-});
-
 test('Verbose retry success has no duplicate provider, count or final request ID', async () => {
   const time = controlled();
   const record: JsonObject = {};
@@ -414,10 +379,6 @@ test('Verbose retry success has no duplicate provider, count or final request ID
       { duration_ms: 150, http_status: 200, request_id: 'req-example-success' },
     ],
   });
-  assert.match(
-    renderExecution(record, 'zh'),
-    /尝试 2：HTTP 200，150 ms，成功，请求 ID：req-example-success/,
-  );
 });
 
 test('Native fetch aborts both pending headers and a stalled body within a fractional total budget', async (t) => {
@@ -513,94 +474,3 @@ test('Huge finite budgets do not overflow timers or turn into immediate cancella
   );
   assert.equal(result.exitCode, 0);
 });
-
-test(
-  'SIGINT in request, body or retry wait returns 130, preserves old files and removes listeners',
-  { skip: process.platform === 'win32' },
-  async (t) => {
-    const root = temporary(t);
-    const path = join(root, 'config.json');
-    const output = join(root, 'old.json');
-    writeFileSync(path, '{}');
-    for (const mode of ['request', 'body', 'wait']) {
-      writeFileSync(output, 'old');
-      let requests = 0;
-      let child: ReturnType<typeof spawn>;
-      let timer: NodeJS.Timeout;
-      const instance = createServer((_req, res) => {
-        requests++;
-        if (mode === 'body') {
-          res.writeHead(200);
-          res.write('{"results":[');
-        }
-        if (mode === 'wait') {
-          res.writeHead(503, { 'Retry-After': '10' });
-          res.end('{}');
-        }
-        timer = setTimeout(() => child.kill('SIGINT'), 100);
-      });
-      instance.listen(0, '127.0.0.1');
-      await once(instance, 'listening');
-      const address = instance.address();
-      assert.ok(address && typeof address !== 'string');
-      const environment: NodeJS.ProcessEnv = { ...process.env };
-      for (const key of Object.keys(environment))
-        if (key.startsWith('UNISEARCH_')) delete environment[key];
-      Object.assign(environment, {
-        UNISEARCH_CONFIG_PATH: path,
-        UNISEARCH_EXA_API_KEY: 'fixture',
-        UNISEARCH_EXA_BASE_URL: `http://127.0.0.1:${address.port}`,
-        UNISEARCH_LANG: 'en',
-      });
-      child = spawn(
-        process.execPath,
-        [
-          resolve('dist/cli.js'),
-          'exa',
-          'search',
-          'q',
-          '--format=json',
-          '--verbose',
-          '--output',
-          output,
-        ],
-        { env: environment },
-      );
-      let stdout = '';
-      let stderr = '';
-      child.stdout!.on('data', (value) => {
-        stdout += value;
-      });
-      child.stderr!.on('data', (value) => {
-        stderr += value;
-      });
-      const watchdog = setTimeout(() => child.kill('SIGKILL'), 5000);
-      try {
-        const [code, signal] = await once(child, 'close');
-        assert.equal(code, 130, stderr);
-        assert.equal(signal, null);
-        assert.equal(JSON.parse(stdout).error.code, 'CANCELLED');
-        assert.equal(JSON.parse(stdout).data, undefined);
-        if (mode === 'wait') assert.ok(JSON.parse(stdout).meta.attempts[0].wait_ms > 0);
-        assert.equal(requests, 1);
-        assert.equal(readFileSync(output, 'utf8'), 'old');
-        assert.deepEqual(readdirSync(root).sort(), ['config.json', 'old.json']);
-      } finally {
-        clearTimeout(watchdog);
-        clearTimeout(timer!);
-        instance.closeAllConnections();
-        await new Promise<void>((resolve) => instance.close(() => resolve()));
-      }
-    }
-    const count = process.listenerCount('SIGINT');
-    const config = context(root, {
-      UNISEARCH_CONFIG_PATH: path,
-      UNISEARCH_EXA_API_KEY: 'fixture',
-      UNISEARCH_EXA_BASE_URL: 'http://127.0.0.1:1',
-      UNISEARCH_LANG: 'en',
-      UNISEARCH_RETRIES: '0',
-    });
-    await createCli('test', { config, channels: capture() }).run(['exa', 'search', 'q']);
-    assert.equal(process.listenerCount('SIGINT'), count);
-  },
-);

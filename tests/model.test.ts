@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFileSync } from 'node:fs';
 import { getEventListeners } from 'node:events';
 import { AppError } from '../src/errors.js';
 import { fieldAt, parseInput } from '../src/config/fields.js';
@@ -390,36 +389,31 @@ test('Model status validates all candidates and optional effort, exposing four l
   }
 });
 
-test('Request bodies match protocol fixtures and the exact search prompt', () => {
-  const instructions = readFileSync('tests/fixtures/contracts/model-prompt.txt', 'utf8').trimEnd();
-  assert.equal(searchInstructions, instructions);
-  const prompt = `${instructions}\n\nCurrent UTC time: 2026-09-30T00:00:00.000Z`;
-  const examples = JSON.parse(readFileSync('tests/fixtures/contracts/model-requests.json', 'utf8'));
-  assert.equal(examples.length, 3);
-  for (const example of examples) {
-    const protocol = example.messages ? 'chat-completions' : 'responses';
-    const candidate = {
-      id: example.model,
-      ...(example.reasoning ? { effort: example.reasoning.effort } : {}),
-    };
-    const request = {
-      ...prepare(),
-      protocol: protocol as 'responses' | 'chat-completions',
-      tools: example.tools ?? [],
-      query: 'UniSearch documentation',
-    };
-    assert.deepEqual(modelBody(request, candidate, prompt), example);
-  }
-  for (const protocol of ['responses', 'chat-completions'] as const) {
-    const request = { ...prepare(), protocol, stream: true };
-    const body = modelBody(request, { id: 'primary(high)', effort: 'none' }, prompt);
-    assert.equal(body.model, 'primary(high)');
-    assert.equal(body.stream, true);
-    assert.deepEqual(
-      protocol === 'responses' ? body.reasoning : body.reasoning_effort,
-      protocol === 'responses' ? { effort: 'none' } : 'none',
-    );
-  }
+test('Model requests map instructions, query and options to each protocol', () => {
+  const query = ' q ';
+  const instructions = 'Test search instructions.';
+  const candidate = { id: 'primary(high)', effort: 'none' };
+  const request = { ...prepare(), query, stream: true, tools: [{ type: 'web_search' }] };
+  const common = { model: candidate.id, stream: true, tools: request.tools };
+
+  assert.deepEqual(modelBody({ ...request, protocol: 'responses' }, candidate, instructions), {
+    ...common,
+    store: false,
+    instructions,
+    input: [{ role: 'user', content: query }],
+    reasoning: { effort: 'none' },
+  });
+  assert.deepEqual(
+    modelBody({ ...request, protocol: 'chat-completions' }, candidate, instructions),
+    {
+      ...common,
+      messages: [
+        { role: 'system', content: instructions },
+        { role: 'user', content: query },
+      ],
+      reasoning_effort: 'none',
+    },
+  );
 });
 
 test('Both response protocols preserve complete text, actual model and structured citations only', () => {

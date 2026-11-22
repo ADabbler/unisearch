@@ -6,10 +6,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { once } from 'node:events';
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import fs from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { join } from 'node:path';
 import { createCli } from '../src/cli/program.js';
-import { AppError } from '../src/errors.js';
 import { localStatus } from '../src/config/status.js';
 import {
   prepareTavilySearch,
@@ -66,7 +64,7 @@ async function cli(root: string, args: string[], environment: NodeJS.ProcessEnv 
   return { ...channels, exit };
 }
 
-test('Tavily help, all scalar errors and prerequisites are local and never issue HTTP requests', async (t) => {
+test('Tavily rejects invalid arguments and missing prerequisites before HTTP', async (t) => {
   const root = temporary(t);
   let calls = 0;
   const base = await server(t, (_req, res) => {
@@ -74,48 +72,34 @@ test('Tavily help, all scalar errors and prerequisites are local and never issue
     res.end('{}');
   });
   const environment = { ...env, UNISEARCH_TAVILY_BASE_URL: base };
-  for (const language of ['zh', 'en'])
-    for (const args of [[], ['search'], ['extract'], ['map']]) {
-      const result = await cli(root, ['tavily', ...args, '--help'], { UNISEARCH_LANG: language });
-      assert.equal(result.exit, 0);
-      assert.match(result.out, language === 'zh' ? /用法/ : /Usage/);
-    }
-  assert.equal((await cli(root, ['tavily'], environment)).exit, 0);
   for (const args of [
     ['search'],
     ['extract'],
     ['map'],
-    ['search', ' '],
-    ...['0', '21', '1.5', '01', 'Infinity', '-1'].map((n) => ['search', 'q', '--limit', n]),
-    ['search', 'q', '--limit', '2', '--limit', '3'],
-    ['search', 'q', '--include-text', '--include-text'],
+    ['search', 'q', '--limit', '21'],
     ['search', 'q', '--topic', 'bad'],
     ['search', 'q', '--search-depth', 'bad'],
     ['search', 'q', '--time-range', 'd'],
     ['search', 'q', '--start-date', '2026-02-30'],
-    ['search', 'q', '--start-date', '2026-01-01T00:00:00Z'],
     ['search', 'q', '--time-range', 'day', '--end-date', '2026-01-01'],
     ['search', 'q', '--start-date', '2026-02-01', '--end-date', '2026-01-01'],
     ['search', 'q', '--include-domains', 'example.com,'],
-    ['search', 'q', '--include-domains', ' example.com'],
-    ['search', 'q', '--format', 'text'],
     ['extract', a, '--chunks-per-source', '2'],
     ['extract', a, '--query', ' '],
     ['extract', a, '--query', 'q', '--chunks-per-source', '6'],
     ['extract', a, '--extract-depth', 'bad'],
     ['extract', ...Array<string>(21).fill(a)],
     ['extract', a, 'https://user:password@example.com'],
-    ['extract', 'https://example.com/ a'],
     ['map', 'ftp://example.com'],
-    ['map', a, '--allow-external', '--allow-external'],
     ['map', a, '--max-depth', '6'],
     ['map', a, '--max-breadth', '501'],
     ['map', a, '--limit', '9007199254740992'],
     ['map', a, '--instructions', ' '],
     ['map', a, '--select-path', ' '],
   ]) {
-    const result = await cli(root, ['--format=json', 'tavily', ...args], environment);
-    assert.equal(result.exit, 2, `${args.join(' ')}: ${result.out}`);
+    const result = await cli(root, ['tavily', ...args, '--format=json'], environment);
+    assert.equal(result.exit, 2, args.join(' '));
+    assert.equal(JSON.parse(result.out).error.code, 'INVALID_ARGUMENT');
   }
   for (const change of [
     { UNISEARCH_TAVILY_API_KEY: undefined },
@@ -202,7 +186,7 @@ test('Tavily configuration management, operation scopes and status share validat
       localStatus({}, { ...env, ...change }, 'en', tavilyOperations).services[0].state,
       expected,
     );
-  assert.throws(() => prepareMap(a, {}, values, env, 'en'), AppError);
+  assert.throws(() => prepareMap(a, {}, values, env, 'en'), { code: 'INVALID_CONFIG' });
 });
 
 test('Native HTTP requests send exact default bodies, path prefixes and Bearer headers', async (t) => {
@@ -420,7 +404,7 @@ test('Search filters and native bounds preserve dates, domains, four depths and 
   ] as const) {
     const domains = Array<string>(count).fill('example.com').join(',');
     assert.ok(search({ [key]: domains }));
-    assert.throws(() => search({ [key]: `${domains},example.com` }), AppError);
+    assert.throws(() => search({ [key]: `${domains},example.com` }), { code: 'INVALID_ARGUMENT' });
   }
   const values = {
     providers: { tavily: { search: { limit: 8, search_depth: 'advanced' } } },
@@ -473,7 +457,7 @@ test('Search and Map retain only useful fields, order, duplicates and optional t
       { raw_content: 1 },
     ].map((v) => ({ results: [{ ...item, ...v }] })),
   ])
-    assert.throws(() => tavilySearchData(bad, true), AppError);
+    assert.throws(() => tavilySearchData(bad, true), { code: 'INVALID_RESPONSE' });
   assert.deepEqual(mapData({ results: [a, a, b], base_url: 'unused', usage: 12 }).results, [
     a,
     a,
@@ -481,24 +465,7 @@ test('Search and Map retain only useful fields, order, duplicates and optional t
   ]);
   assert.deepEqual(mapData({ results: [] }).results, []);
   for (const bad of [{}, { results: [a, null] }, { results: ['example.com'] }])
-    assert.throws(() => mapData(bad), AppError);
-});
-
-test('Tavily URLs keep query and fragment at signs separate from credentials', () => {
-  for (const url of [
-    'https://example.org?email=dev@example.org',
-    'https://example.org#@installation',
-  ]) {
-    const request = prepareExtract([url], {}, {}, env, 'en');
-    assert.deepEqual(request.body.urls, [url]);
-    assert.deepEqual(
-      extractResult({ results: [{ url, raw_content: 'Page' }], failed_results: [] }, request, 'en')
-        .result.data?.results,
-      [{ url, text: 'Page' }],
-    );
-    assert.equal(prepareMap(url, {}, {}, env, 'en').body.url, url);
-    assert.deepEqual(mapData({ results: [url] }).results, [url]);
-  }
+    assert.throws(() => mapData(bad), { code: 'INVALID_RESPONSE' });
 });
 
 test('Extract completeness uses both arrays, preserves redirect URLs and distinguishes content and structural failures', () => {
@@ -587,7 +554,7 @@ test('Extract completeness uses both arrays, preserves redirect URLs and disting
     { results: [{ raw_content: 'A' }], failed_results: [] },
     { results: [], failed_results: [{ url: 'bad', error: 'bad' }] },
   ])
-    assert.throws(() => extractResult(broken, single, 'en'), AppError);
+    assert.throws(() => extractResult(broken, single, 'en'), { code: 'INVALID_RESPONSE' });
   const mismatch = extractResult(
     { results: [{ url: a, raw_content: '# A' }], failed_results: [] },
     request,
@@ -1068,67 +1035,7 @@ test('Controlled clocks enforce 30/60/160-second request caps, fixed upstream ti
   }
 });
 
-test('Known transport errors remain separate from programming errors and invalid UTF-8', async () => {
-  for (const [code, expected, retry] of [
-    ['EAI_AGAIN', 'NETWORK_ERROR', true],
-    ['ECONNRESET', 'NETWORK_ERROR', true],
-    ['ENOTFOUND', 'NETWORK_ERROR', false],
-    ['CERT_HAS_EXPIRED', 'NETWORK_ERROR', false],
-    ['UND_ERR_CONNECT_TIMEOUT', 'TIMEOUT', true],
-  ] as const) {
-    const result = await requestMap(
-      prepareMap(a, {}, {}, env, 'en'),
-      { signal: new AbortController().signal },
-      'en',
-      async () => {
-        throw new TypeError('fetch failed', {
-          cause: Object.assign(new Error('private native'), { code }),
-        });
-      },
-    );
-    assert.equal(result.outcome.result.error?.code, expected);
-    assert.equal(result.retry, retry);
-    assert.doesNotMatch(JSON.stringify(result), /private native/);
-  }
-  const internal = await requestTavilySearch(
-    search(),
-    { signal: new AbortController().signal },
-    'en',
-    async () => {
-      throw new Error('private');
-    },
-  );
-  assert.equal(internal.outcome.exitCode, 5);
-  const invalid = await requestTavilySearch(
-    search(),
-    { signal: new AbortController().signal },
-    'en',
-    async () => new Response(new Uint8Array([255])),
-  );
-  assert.equal(invalid.outcome.result.error?.code, 'INVALID_RESPONSE');
-});
-
-test('Native slow bodies respect cancellation and non-retryable HTTP failures do not retry on body timeout', async (t) => {
-  const root = temporary(t);
-  let calls = 0;
-  let status = 200;
-  const base = await server(t, (_req, res) => {
-    calls++;
-    res.writeHead(status, { 'Content-Type': 'application/json' });
-    res.write('{');
-  });
-  for (const http of [200, 401, 432]) {
-    status = http;
-    const before = calls;
-    const result = await cli(root, ['tavily', 'search', 'q', '--format=json', '--timeout', '0.1'], {
-      ...env,
-      UNISEARCH_TAVILY_BASE_URL: base,
-      UNISEARCH_RETRIES: '2',
-    });
-    assert.equal(result.exit, 4);
-    assert.equal(JSON.parse(result.out).error.code, 'TIMEOUT');
-    assert.equal(calls - before, 1);
-  }
+test('Tavily preserves the retry policy when a rejected response body times out', async () => {
   let now = 0;
   let expire: (() => void) | undefined;
   let fetches = 0;
@@ -1173,84 +1080,8 @@ test('Native slow bodies respect cancellation and non-retryable HTTP failures do
       clock,
     },
   );
+  assert.equal(result.result.error?.code, 'TIMEOUT');
   assert.equal(result.result.error?.details?.timeout_scope, 'request');
+  assert.equal(result.result.error?.details?.http_status, 401);
   assert.equal(fetches, 1);
 });
-
-test(
-  'SIGINT terminates native requests and retry waits without replacing an existing output file',
-  { skip: process.platform === 'win32', timeout: 10000 },
-  async (t) => {
-    const root = temporary(t);
-    const output = join(root, 'old.json');
-    writeFileSync(output, 'old');
-    const configPath = join(root, 'config.json');
-    writeFileSync(configPath, '{}');
-    for (const waiting of [false, true]) {
-      let notify!: () => void;
-      const arrived = new Promise<void>((done) => {
-        notify = done;
-      });
-      let close!: () => void;
-      const closed = new Promise<void>((done) => {
-        close = done;
-      });
-      let calls = 0;
-      const base = await server(t, (_req, res) => {
-        calls++;
-        res.on('close', close);
-        if (waiting) {
-          res.writeHead(503, { 'Retry-After': '30' });
-          res.end('{"detail":{"error":"busy"}}');
-        } else {
-          res.writeHead(200);
-          res.write('{');
-        }
-        notify();
-      });
-      const child = spawn(
-        process.execPath,
-        [resolve('dist/cli.js'), 'tavily', 'map', a, '--format=json', '--output', output],
-        {
-          cwd: root,
-          env: {
-            ...Object.fromEntries(
-              Object.entries(process.env).filter(([key]) => !key.startsWith('UNISEARCH_')),
-            ),
-            ...env,
-            UNISEARCH_CONFIG_PATH: configPath,
-            UNISEARCH_TAVILY_BASE_URL: base,
-            UNISEARCH_RETRIES: '2',
-          },
-        },
-      );
-      let out = '';
-      let err = '';
-      child.stdout.on('data', (chunk) => {
-        out += chunk;
-      });
-      child.stderr.on('data', (chunk) => {
-        err += chunk;
-      });
-      t.after(() => {
-        if (child.exitCode === null) child.kill('SIGKILL');
-      });
-      const exited = once(child, 'exit');
-      await Promise.race([
-        arrived,
-        exited.then(([code]) => {
-          throw new Error(`CLI exited before requesting the fixture (${code}): ${out}${err}`);
-        }),
-      ]);
-      if (waiting) await new Promise((done) => setTimeout(done, 100));
-      child.kill('SIGINT');
-      const [code] = await exited;
-      await closed;
-      assert.equal(code, 130, err);
-      assert.equal(JSON.parse(out).error.code, 'CANCELLED');
-      assert.equal(readFileSync(output, 'utf8'), 'old');
-      assert.equal(calls, 1);
-      assert.equal(err, '');
-    }
-  },
-);

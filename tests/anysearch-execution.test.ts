@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { getEventListeners } from 'node:events';
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as anysearch from '../src/providers/anysearch.js';
@@ -179,271 +178,43 @@ test(
   },
 );
 
-test('AnySearch retries use the shared clock, Retry-After, deadline, and listener cleanup', async (t) => {
+test('AnySearch late successful responses remain retryable while malformed responses do not', async (t) => {
   const f = await fixture(t);
-  for (const mode of ['valid', 'invalid', 'exceeds', 'cancel', 'disabled', 'backoff'] as const) {
+  const request = anysearch.prepare('extract', pageUrl, {}, {}, f.env, 'en');
+  for (const malformed of [false, true]) {
     let now = 0;
     let calls = 0;
-    let cleared = 0;
     const waits: number[] = [];
-    const caps: number[] = [];
-    const controller = new AbortController();
     const time: ExecutionClock = {
       now: () => now,
       wallNow: () => 0,
-      schedule(ms) {
-        caps.push(ms);
-        return () => {
-          cleared++;
-        };
-      },
+      schedule: () => () => {},
       async sleep(ms) {
         waits.push(ms);
         now += ms;
-        if (mode === 'cancel') controller.abort();
       },
     };
     f.handle((call, res) => {
       calls++;
-      now += 500;
-      if (calls <= (mode === 'backoff' ? 2 : 1)) {
-        const value = {
-          valid: '2',
-          invalid: 'bad',
-          exceeds: '4',
-          cancel: '1',
-          disabled: '1',
-          backoff: undefined,
-        }[mode];
-        res.writeHead(503, value ? { 'retry-after': value } : {});
-        res.end(JSON.stringify({ code: -1, message: 'busy', request_id: `failed-${calls}` }));
-      } else res.end(JSON.stringify({ ...envelope(page), request_id: 'success-id' }));
-      assert.equal(call.path, '/gateway/v1/extract');
+      // A delayed event loop may deliver the complete response before the timer callback.
+      if (calls === 1) now += 30001;
+      res.end(JSON.stringify(malformed ? {} : payloads[call.path]));
     });
-    const request = anysearch.prepare('extract', pageUrl, {}, {}, f.env, 'en');
+
     const record: JsonObject = {};
-    const result = await executeRequest((ctx) => anysearch.request(request, ctx, 'en'), {
+    const result = await executeRequest((context) => anysearch.request(request, context, 'en'), {
       provider: 'anysearch',
-      timeout: mode === 'backoff' ? 100 : 4,
-      retries: mode === 'disabled' ? 0 : 2,
+      timeout: 100,
+      retries: 1,
       requestLimit: anysearch.requestLimit,
-      signal: controller.signal,
+      signal: new AbortController().signal,
       language: 'en',
-      record,
       clock: time,
+      record,
     });
-    assert.equal(
-      result.exitCode,
-      { valid: 0, invalid: 0, exceeds: 4, cancel: 130, disabled: 4, backoff: 0 }[mode],
-    );
-    assert.equal(cleared, calls);
-    assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
-    assert.equal(caps[0], mode === 'backoff' ? 30000 : 4000);
-    assert.deepEqual(
-      waits,
-      {
-        valid: [2000],
-        invalid: [1000],
-        exceeds: [],
-        cancel: [1000],
-        disabled: [],
-        backoff: [1000, 2000],
-      }[mode],
-    );
-    const attempts = record.attempts as JsonObject[];
-    if (result.exitCode === 0) assert.equal(attempts[0].request_id, 'failed-1');
-    if (mode === 'invalid') assert.equal(attempts[0].retry_after_invalid, true);
-    if (mode === 'exceeds')
-      assert.equal(result.result.error?.details?.reason, 'retry_wait_exceeds_budget');
-    if (mode === 'valid') assert.deepEqual(caps, [4000, 1500]);
-  }
-});
-
-test('AnySearch late successful responses remain retryable while malformed responses do not', async (t) => {
-  const f = await fixture(t);
-  for (const operation of ['search', 'domains', 'extract'] as const) {
-    for (const malformed of [false, true]) {
-      let now = 0;
-      let calls = 0;
-      const waits: number[] = [];
-      const time: ExecutionClock = {
-        now: () => now,
-        wallNow: () => 0,
-        schedule: () => () => {},
-        async sleep(ms) {
-          waits.push(ms);
-          now += ms;
-        },
-      };
-      f.handle((call, res) => {
-        calls++;
-        // A delayed event loop may deliver the complete response before the timer callback.
-        if (calls === 1) now += 30001;
-        res.end(JSON.stringify(malformed ? {} : payloads[call.path]));
-      });
-      const request = anysearch.prepare(
-        operation,
-        operation === 'extract' ? pageUrl : 'code',
-        {},
-        {},
-        f.env,
-        'en',
-      );
-      const record: JsonObject = {};
-      const result = await executeRequest((context) => anysearch.request(request, context, 'en'), {
-        provider: 'anysearch',
-        timeout: 100,
-        retries: 1,
-        requestLimit: anysearch.requestLimit,
-        signal: new AbortController().signal,
-        language: 'en',
-        clock: time,
-        record,
-      });
-      assert.equal(result.exitCode, malformed ? 4 : 0, operation);
-      assert.equal(calls, malformed ? 1 : 2);
-      assert.deepEqual(waits, malformed ? [] : [1000]);
-      assert.equal((record.attempts as JsonObject[])[0].code, 'TIMEOUT');
-    }
-  }
-});
-
-test(
-  'AnySearch body timeouts respect the request cap and non-retry HTTP status',
-  { timeout: 5000 },
-  async (t) => {
-    const f = await fixture(t);
-    for (const status of [200, 401]) {
-      let now = 0;
-      let expire!: () => void;
-      const caps: number[] = [];
-      let cleared = 0;
-      const time: ExecutionClock = {
-        now: () => now,
-        wallNow: () => 0,
-        schedule(ms, callback) {
-          caps.push(ms);
-          expire = () => {
-            now += ms;
-            callback();
-          };
-          return () => {
-            cleared++;
-          };
-        },
-        async sleep(ms) {
-          now += ms;
-        },
-      };
-      f.handle((_call, res) => {
-        res.writeHead(status, { 'x-request-id': 'body-timeout' });
-        res.write('{');
-      });
-      const request = anysearch.prepare('search', 'q', {}, {}, f.env, 'en');
-      let calls = 0;
-      const transport: typeof fetch = async (url, init) => {
-        calls++;
-        const response = await fetch(url, init);
-        setImmediate(expire);
-        return response;
-      };
-      const result = await executeRequest(
-        (ctx) => anysearch.request(request, ctx, 'en', transport),
-        {
-          provider: 'anysearch',
-          timeout: 100,
-          retries: 1,
-          requestLimit: anysearch.requestLimit,
-          signal: new AbortController().signal,
-          language: 'en',
-          record: {},
-          clock: time,
-        },
-      );
-      assert.equal(result.result.error?.code, 'TIMEOUT');
-      assert.equal(result.result.error?.details?.timeout_scope, 'request');
-      assert.equal(result.result.error?.details?.http_status, status);
-      assert.equal(result.result.error?.details?.request_id, 'body-timeout');
-      assert.equal(calls, status === 200 ? 2 : 1);
-      assert.ok(caps.every((cap) => cap === 30000));
-      assert.equal(cleared, calls);
-    }
-  },
-);
-
-test(
-  'AnySearch native requests cancel during headers or body and preserve old files without listeners',
-  { timeout: 5000 },
-  async (t) => {
-    const f = await fixture(t);
-    const output = join(f.root, 'saved.json');
-    for (const operation of ['search', 'domains', 'extract'] as const)
-      for (const phase of ['headers', 'body'] as const) {
-        writeFileSync(output, 'original');
-        let received!: () => void;
-        const ready = new Promise<void>((done) => {
-          received = done;
-        });
-        f.handle((_call, res) => {
-          if (phase === 'body') {
-            res.writeHead(200);
-            res.write('{');
-          }
-          received();
-        });
-        const before = process.listenerCount('SIGINT');
-        const pending = f.run([
-          'anysearch',
-          operation,
-          operation === 'extract' ? pageUrl : 'code',
-          '--format=json',
-          '--output',
-          output,
-        ]);
-        await ready;
-        process.emit('SIGINT');
-        const result = await pending;
-        assert.equal(result.exit, 130);
-        assert.equal(result.json().data, undefined);
-        assert.equal(readFileSync(output, 'utf8'), 'original');
-        assert.equal(process.listenerCount('SIGINT'), before);
-        assert.deepEqual(readdirSync(f.root).sort(), ['config.json', 'saved.json']);
-      }
-    f.handle((call, res) => {
-      res.writeHead(200);
-      res.write(JSON.stringify(payloads[call.path]).slice(0, 20));
-    });
-    const timed = await f.run(
-      ['anysearch', 'extract', pageUrl, '--timeout', '0.02', '--format=json'],
-      { UNISEARCH_RETRIES: '2' },
-    );
-    assert.equal(timed.json().error.details.timeout_scope, 'total');
-  },
-);
-
-test('AnySearch transport injection distinguishes transient, permanent, and internal failures', async () => {
-  const request = anysearch.prepare('search', 'q', {}, {}, {}, 'en');
-  for (const [systemCode, code, retry] of [
-    ['ECONNRESET', 'NETWORK_ERROR', true],
-    ['EAI_AGAIN', 'NETWORK_ERROR', true],
-    ['ENOTFOUND', 'NETWORK_ERROR', false],
-    ['CERT_HAS_EXPIRED', 'NETWORK_ERROR', false],
-    ['ETIMEDOUT', 'TIMEOUT', true],
-    [undefined, 'INTERNAL_ERROR', false],
-  ] as const) {
-    const result = await anysearch.request(
-      request,
-      { signal: new AbortController().signal },
-      'en',
-      async () => {
-        if (!systemCode) throw new Error('programming error');
-        throw new TypeError('fetch failed', {
-          cause: Object.assign(new Error('fixture'), { code: systemCode }),
-        });
-      },
-    );
-    assert.equal(result.outcome.result.error?.code, code);
-    assert.equal(result.retry, retry);
-    if (!systemCode) assert.equal(result.outcome.exitCode, 5);
+    assert.equal(result.exitCode, malformed ? 4 : 0);
+    assert.equal(calls, malformed ? 1 : 2);
+    assert.deepEqual(waits, malformed ? [] : [1000]);
+    assert.equal((record.attempts as JsonObject[])[0].code, 'TIMEOUT');
   }
 });

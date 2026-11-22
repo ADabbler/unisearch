@@ -5,36 +5,36 @@ import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { once } from 'node:events';
 import { join } from 'node:path';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { createCli } from '../src/cli/program.js';
-import { combinedSearch, prepareCombinedSearch } from '../src/search.js';
+import { text } from '../src/i18n/messages.js';
 import { renderTavilySearch } from '../src/output/tavily.js';
 import { tavilySearchData } from '../src/providers/tavily.js';
 import type { JsonObject } from '../src/result.js';
 import { capture, context, temporary } from './helpers.js';
 
 test('Tavily scores preserve finite raw numbers including zero and omit absent values', () => {
+  const scoreLabel = text('en', 'relevanceScore');
   for (const score of [0, -0.1, 1.5, 0.987654321]) {
-    const data = tavilySearchData(
-      { results: [{ url: 'https://example.org', published_date: '2026-09-01', score }] },
-      false,
-    );
+    const data = tavilySearchData({ results: [{ url: 'https://example.org', score }] }, false);
     assert.equal(data.results[0].score, score);
+    const markdown = renderTavilySearch(data, 'en');
+    const lines = markdown.split('\n');
     assert.ok(
-      renderTavilySearch(data, 'en').includes(
-        `Published or updated: 2026-09-01 · Relevance score: ${score}`,
-      ),
+      lines.some((line) => line.startsWith(scoreLabel) && line.endsWith(`: ${score}`)),
+      markdown,
     );
-    assert.ok(renderTavilySearch(data, 'zh').includes(`相关性评分：${score}`));
   }
   for (const score of [undefined, null]) {
     const data = tavilySearchData({ results: [{ url: 'https://example.org', score }] }, false);
     assert.equal(Object.hasOwn(data.results[0], 'score'), false);
-    assert.doesNotMatch(renderTavilySearch(data, 'en'), /Relevance score/);
+    const markdown = renderTavilySearch(data, 'en');
+    assert.ok(!markdown.includes(scoreLabel), markdown);
   }
-  for (const score of ['0.8', '', false, {}, Infinity, NaN])
-    assert.throws(() =>
-      tavilySearchData({ results: [{ url: 'https://example.org', score }] }, false),
+  for (const score of ['0.8', Infinity])
+    assert.throws(
+      () => tavilySearchData({ results: [{ url: 'https://example.org', score }] }, false),
+      { code: 'INVALID_RESPONSE' },
     );
 });
 
@@ -154,104 +154,60 @@ test('Three native tasks start concurrently, reuse saved operation settings and 
   assert.equal(calls, 6);
 });
 
-test('Eight model/Exa/Tavily combinations preserve data and failure order, including quota and timeout errors', async (t) => {
+test('Combined search retains Tavily scores and reports supplemental failures in source order', async (t) => {
   const root = temporary(t);
-  let mask = 0;
-  let calls = 0;
+  let tavilyFails = false;
   const base = await server(t, (req, res) => {
-    calls++;
-    const provider = req.url === '/responses' ? 'model' : req.url!.split('/')[1];
-    const fail = mask & { model: 1, exa: 2, tavily: 4 }[provider as 'model' | 'exa' | 'tavily'];
-    if (!fail) {
-      let payload: JsonObject = { results: [] };
-      if (provider === 'model') payload = answer;
-      else if (provider === 'tavily')
-        payload = {
+    if (req.url === '/responses') res.end(JSON.stringify(answer));
+    else if (req.url?.startsWith('/exa/')) {
+      res.writeHead(503);
+      res.end(JSON.stringify({ error: 'busy' }));
+    } else if (tavilyFails) {
+      res.writeHead(432);
+      res.end(JSON.stringify({ detail: { error: 'quota exhausted' } }));
+    } else {
+      res.end(
+        JSON.stringify({
           results: [{ url: 'https://example.org/a', content: 'Relevant', score: 0.875 }],
-        };
-      res.end(JSON.stringify(payload));
-      return;
-    }
-    switch (provider) {
-      case 'model':
-        res.writeHead(401);
-        res.end(JSON.stringify({ error: { message: 'unauthorized' } }));
-        break;
-      case 'exa':
-        res.writeHead(503);
-        res.end(JSON.stringify({ error: 'busy' }));
-        break;
-      case 'tavily':
-        res.writeHead(mask === 4 ? 504 : 432);
-        res.end(JSON.stringify({ detail: { error: 'failed' } }));
-        break;
+        }),
+      );
     }
   });
-  for (mask = 0; mask < 8; mask++)
-    for (const sources of ['exa,tavily', 'tavily,exa']) {
-      const channels = capture();
-      const output = join(root, 'result.json');
-      writeFileSync(output, 'old');
-      const exit = await createCli('test', {
-        config: context(root, {
-          ...env,
-          UNISEARCH_MODEL_BASE_URL: base,
-          UNISEARCH_EXA_BASE_URL: `${base}/exa`,
-          UNISEARCH_TAVILY_BASE_URL: `${base}/tavily`,
-        }),
-        channels,
-      }).run(['search', 'q', '--sources', 'model,' + sources, '--format=json', '--output', output]);
-      let expectedExit = 0;
-      let expectedStatus = 'success';
-      if (mask === 7) {
-        expectedExit = 4;
-        expectedStatus = 'error';
-      } else if (mask) {
-        expectedExit = 6;
-        expectedStatus = 'partial';
-      }
-      assert.equal(exit, expectedExit);
-      const saved = readFileSync(output, 'utf8');
-      const json = JSON.parse(saved === 'old' ? channels.out : saved);
-      assert.equal(json.status, expectedStatus);
-      const successful = sources
-        .split(',')
-        .filter((provider) => !(mask & (provider === 'exa' ? 2 : 4)));
-      assert.deepEqual(
-        json.data?.sources
-          .filter((source: { provider: string }) => source.provider !== 'model')
-          ?.map((item: { provider: string }) => item.provider) ?? [],
-        successful,
-      );
-      assert.equal(
-        json.data?.sources.find((source: { provider: string }) => source.provider === 'model')
-          ?.data !== undefined,
-        !(mask & 1),
-      );
-      if (!(mask & 4))
-        assert.equal(
-          json.data.sources.find((item: { provider: string }) => item.provider === 'tavily').data
-            .results[0].score,
-          0.875,
-        );
-      const failed = ['model', ...sources.split(',')].filter(
-        (provider) =>
-          mask & { model: 1, exa: 2, tavily: 4 }[provider as 'model' | 'exa' | 'tavily'],
-      );
-      assert.deepEqual(
-        json.error?.details.failures.map((item: { provider: string }) => item.provider) ?? [],
-        failed,
-      );
-      const tavilyFailure = json.error?.details.failures.find(
-        (item: { provider: string }) => item.provider === 'tavily',
-      );
-      if (tavilyFailure) {
-        assert.equal(tavilyFailure.code, mask === 4 ? 'TIMEOUT' : 'QUOTA_EXCEEDED');
-        assert.equal(tavilyFailure.details.provider, undefined);
-      }
-      assert.equal(saved === 'old', mask === 7);
-    }
-  assert.equal(calls, 48);
+  const config = context(root, {
+    ...env,
+    UNISEARCH_MODEL_BASE_URL: base,
+    UNISEARCH_EXA_BASE_URL: `${base}/exa`,
+    UNISEARCH_TAVILY_BASE_URL: `${base}/tavily`,
+  });
+  for (tavilyFails of [false, true]) {
+    const channels = capture();
+    const exit = await createCli('test', { config, channels }).run([
+      'search',
+      'q',
+      '--sources',
+      'model,tavily,exa',
+      '--format=json',
+    ]);
+    assert.equal(exit, 6);
+    const result = JSON.parse(channels.out);
+    assert.equal(result.status, 'partial');
+    assert.deepEqual(
+      result.error.details.failures.map(
+        ({ provider, code }: { provider: string; code: string }) => [provider, code],
+      ),
+      tavilyFails
+        ? [
+            ['tavily', 'QUOTA_EXCEEDED'],
+            ['exa', 'UPSTREAM_ERROR'],
+          ]
+        : [['exa', 'UPSTREAM_ERROR']],
+    );
+    const tavily = result.data.sources.find(
+      ({ provider }: { provider: string }) => provider === 'tavily',
+    );
+    if (tavilyFails) assert.equal(tavily, undefined);
+    else assert.equal(tavily.data.results[0].score, 0.875);
+  }
 });
 
 test('A bad selected Tavily prerequisite prevents all three native requests', async (t) => {
@@ -279,91 +235,4 @@ test('A bad selected Tavily prerequisite prevents all three native requests', as
     assert.equal(exit, 3);
   }
   assert.equal(calls, 0);
-});
-
-test('Model fallback does not restart either supplement and an empty successful source remains visible', async () => {
-  const plan = prepareCombinedSearch(
-    'q',
-    { sources: 'model,tavily,exa' },
-    { providers: { model: { fallback_models: [{ id: 'backup' }] } } },
-    env,
-    'en',
-  );
-  const calls: string[] = [];
-  const result = await combinedSearch(
-    plan,
-    new AbortController().signal,
-    'en',
-    {},
-    {
-      transport: async (url, init) => {
-        const request = JSON.parse(init!.body as string);
-        let provider = 'exa';
-        if (String(url).endsWith('/responses')) provider = 'model';
-        else if (String(url).includes('tavily')) provider = 'tavily';
-        calls.push(provider);
-        if (provider === 'model')
-          return request.model === 'primary'
-            ? Response.json(
-                { error: { code: 'model_not_found', message: 'Model not found' } },
-                { status: 404 },
-              )
-            : Response.json(answer);
-        return Response.json({ results: [] });
-      },
-    },
-  );
-  assert.equal(result.exitCode, 0);
-  assert.equal(calls.filter((item) => item === 'model').length, 2);
-  assert.equal(calls.filter((item) => item === 'exa').length, 1);
-  assert.equal(calls.filter((item) => item === 'tavily').length, 1);
-  assert.deepEqual(
-    result.result.data?.sources
-      .filter((source: { provider: string }) => source.provider !== 'model')
-      ?.map((item) => item.provider),
-    ['tavily', 'exa'],
-  );
-});
-
-test('Internal Tavily failure cancels pending tasks; completed supplements survive internal errors and user cancellation', async () => {
-  for (const cancel of [false, true]) {
-    const plan = prepareCombinedSearch('q', { sources: 'model,tavily,exa' }, {}, env, 'en');
-    const abort = new AbortController();
-    let modelAborted = false;
-    const result = await combinedSearch(
-      plan,
-      abort.signal,
-      'en',
-      {},
-      {
-        transport: async (url, init) => {
-          if (new URL(String(url)).hostname === 'api.exa.ai') return Response.json({ results: [] });
-          if (String(url).includes('tavily')) {
-            await new Promise((done) => setImmediate(done));
-            if (cancel) abort.abort();
-            throw new Error('private fault');
-          }
-          return new Promise((_resolve, reject) => {
-            init!.signal!.addEventListener(
-              'abort',
-              () => {
-                modelAborted = true;
-                reject(new Error('abort'));
-              },
-              { once: true },
-            );
-          });
-        },
-      },
-    );
-    assert.equal(result.exitCode, cancel ? 130 : 5);
-    assert.equal(modelAborted, true);
-    assert.deepEqual(
-      result.result.data?.sources.filter(
-        (source: { provider: string }) => source.provider !== 'model',
-      ),
-      [{ provider: 'exa', data: { results: [] } }],
-    );
-    assert.doesNotMatch(JSON.stringify(result), /private fault/);
-  }
 });

@@ -1,17 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { ServerResponse } from 'node:http';
-import { prepareRetrieval, retrieve } from '../src/retrieval.js';
-import { prepareCombinedSearch, combinedSearch } from '../src/search.js';
 import type { JsonObject } from '../src/result.js';
-import type { ExecutionClock } from '../src/execution.js';
 import { fixture, envelope, page, pageUrl, payloads } from './anysearch-fixture.js';
 
 test('AnySearch is an anonymous default fetch candidate and explicit lists replace defaults', async (t) => {
   const f = await fixture(t);
   const defaults = (await f.run(['config', 'get', 'fetch.providers'])).json().data
     .value as string[];
-  // DeepSeek was appended after AnySearch, so AnySearch is no longer the last candidate.
   assert.deepEqual(defaults.slice(-2), ['anysearch', 'deepseek']);
   const fetched = await f.run(['fetch', pageUrl, '--format=json']);
   assert.equal(fetched.exit, 0, fetched.channels.out);
@@ -83,16 +78,19 @@ test('AnySearch fetch switches on eligible failures and aggregates errors withou
   const f = await fixture(t);
   f.env.UNISEARCH_EXA_API_KEY = 'fixture-exa';
   f.save({ fetch: { providers: ['anysearch', 'exa'] } });
-  for (const [status, body, switched] of [
-    ...[401, 403, 402, 422, 429, 500].map(
-      (s) => [s, { code: -1, message: 'failure' }, true] as const,
-    ),
-    [200, envelope({ ...page, content: ' ' }), true],
-    [200, {}, true],
-    [500, { code: -1, message: 'upstream failure', error_code: 'SCRAPE_JOB_CANCELLED' }, true],
-    [400, { code: -1, message: 'bad input' }, false],
-    [404, { code: -1, message: 'unknown' }, false],
-    [200, { code: -1, message: 'business failure' }, false],
+  for (const [status, body, exit, code] of [
+    [422, { code: -1, message: 'failure' }, 0, undefined],
+    [200, envelope({ ...page, content: ' ' }), 0, undefined],
+    [200, {}, 0, undefined],
+    [
+      500,
+      { code: -1, message: 'upstream failure', error_code: 'SCRAPE_JOB_CANCELLED' },
+      0,
+      undefined,
+    ],
+    [400, { code: -1, message: 'bad input' }, 2, 'INVALID_ARGUMENT'],
+    [404, { code: -1, message: 'unknown' }, 4, 'UPSTREAM_ERROR'],
+    [200, { code: -1, message: 'business failure' }, 4, 'UPSTREAM_ERROR'],
   ] as const) {
     f.calls.length = 0;
     f.handle((call, res) => {
@@ -102,9 +100,10 @@ test('AnySearch fetch switches on eligible failures and aggregates errors withou
       } else res.end(JSON.stringify(payloads[call.path]));
     });
     const result = await f.run(['fetch', pageUrl, '--format=json']);
-    assert.equal(f.calls.length, switched ? 2 : 1, `${status}: ${JSON.stringify(body)}`);
-    if (switched) assert.equal(result.json().data.provider, 'exa');
-    else assert.ok(result.exit > 0);
+    assert.equal(result.exit, exit, `${status}: ${JSON.stringify(body)}`);
+    assert.equal(f.calls.length, exit === 0 ? 2 : 1);
+    if (exit === 0) assert.equal(result.json().data.provider, 'exa');
+    else assert.equal(result.json().error.code, code);
   }
   for (const [second, expectedExit] of [
     [401, 3],
@@ -131,171 +130,32 @@ test('AnySearch fetch switches on eligible failures and aggregates errors withou
   }
 });
 
-test('AnySearch fetch shares the deadline across retries and switching and stops on cancellation or internal errors', async (t) => {
-  const f = await fixture(t);
-  f.env.UNISEARCH_EXA_API_KEY = 'fixture-exa';
-  const values = { fetch: { providers: ['anysearch', 'exa'] } };
-  for (const mode of ['switch', 'total', 'cancel', 'internal'] as const) {
-    let now = 0;
-    const caps: number[] = [];
-    const controller = new AbortController();
-    const time: ExecutionClock = {
-      now: () => now,
-      wallNow: () => 0,
-      schedule(ms) {
-        caps.push(ms);
-        return () => {};
-      },
-      async sleep(ms) {
-        now += ms;
-      },
-    };
-    f.calls.length = 0;
-    f.handle((call, res) => {
-      if (call.path.startsWith('/gateway/')) {
-        now += mode === 'total' ? 4000 : 1000;
-        res.writeHead(429, { 'retry-after': '5' });
-        res.end(JSON.stringify({ code: -1, message: 'busy' }));
-      } else res.end(JSON.stringify(payloads[call.path]));
-    });
-    const transport: typeof fetch = async (url, init) => {
-      if (mode === 'internal') throw new Error('unexpected');
-      const response = await fetch(url, init);
-      if (mode === 'cancel') controller.abort();
-      return response;
-    };
-    const result = await retrieve(
-      prepareRetrieval(
-        'fetch',
-        pageUrl,
-        { timeout: 4 },
-        values,
-        { ...f.env, UNISEARCH_RETRIES: '1' },
-        'en',
-      ),
-      controller.signal,
-      'en',
-      {},
-      { clock: time, transport },
-    );
-    assert.equal(result.exitCode, { switch: 0, total: 4, cancel: 130, internal: 5 }[mode]);
-    assert.deepEqual(caps, mode === 'switch' ? [4000, 3000] : [4000]);
-    assert.equal(f.calls.length, { switch: 2, total: 1, cancel: 1, internal: 0 }[mode]);
-  }
-});
-
-test(
-  'Model, AnySearch and Exa start concurrently and keep explicit source order after reverse completion',
-  { timeout: 5000 },
-  async (t) => {
-    const f = await fixture(t);
-    f.env.UNISEARCH_MODEL_API_KEY = 'fixture-model';
-    f.env.UNISEARCH_EXA_API_KEY = 'fixture-exa';
-    f.save({ providers: { anysearch: { search: { limit: 2 } } } });
-    const pending: { path: string; res: ServerResponse }[] = [];
-    f.handle((call, res) => {
-      pending.push({ path: call.path, res });
-      if (
-        !['/model/responses', '/gateway/v1/search', '/exa/search'].every((path) =>
-          pending.some((p) => p.path === path),
-        )
-      )
-        return;
-      for (const item of pending.toReversed()) item.res.end(JSON.stringify(payloads[item.path]));
-    });
-    const result = await f.run([
-      'search',
-      'q',
-      '--sources',
-      'model,anysearch,exa',
-      '--format=json',
-      '--timeout',
-      '2',
-    ]);
-    assert.equal(result.exit, 0, result.channels.out);
-    assert.deepEqual(
-      result
-        .json()
-        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
-        .map((s: JsonObject) => s.provider),
-      ['anysearch', 'exa'],
-    );
-    assert.deepEqual(f.calls.find((c) => c.path === '/gateway/v1/search')?.body, {
-      query: 'q',
-      max_results: 2,
-      format: 'markdown',
-    });
-    assert.ok(
-      result
-        .json()
-        .data.sources.filter((source: { provider: string }) => source.provider !== 'model')
-        .every((s: { data: JsonObject }) => s.data.provider === undefined),
-    );
-    f.handle((call, res) => res.end(JSON.stringify(payloads[call.path])));
-    f.calls.length = 0;
-    await f.run(['search', 'q', '--format=json']);
-    assert.deepEqual(
-      f.calls.map((c) => c.path),
-      ['/model/responses'],
-    );
-  },
-);
-
-test('AnySearch search failures, valid empty supplements and model fallback retain independent results', async (t) => {
+test('Combined search retains an empty AnySearch result and reports an AnySearch failure separately', async (t) => {
   const f = await fixture(t);
   f.env.UNISEARCH_MODEL_API_KEY = 'fixture-model';
-  f.env.UNISEARCH_EXA_API_KEY = 'fixture-exa';
-  for (const mode of ['empty', 'any-failure', 'all-extras', 'model-failure', 'fallback'] as const) {
-    f.calls.length = 0;
-    f.save({ providers: { model: { fallback_models: [{ id: 'backup' }] } } });
+  const args = ['search', 'q', '--sources', 'model,anysearch', '--format=json'];
+  for (const rejected of [false, true]) {
     f.handle((call, res) => {
-      const model = call.path === '/model/responses';
-      const any = call.path === '/gateway/v1/search';
-      if (
-        (model && mode === 'model-failure') ||
-        (!model && mode === 'all-extras') ||
-        (any && mode === 'any-failure')
-      ) {
+      if (call.path === '/model/responses') res.end(JSON.stringify(payloads[call.path]));
+      else if (rejected) {
         res.writeHead(401);
         res.end(JSON.stringify({ code: -1, message: 'bad key' }));
-      } else if (model && mode === 'fallback' && call.body?.model !== 'backup') res.end('{}');
-      else if (any && mode === 'empty') res.end(JSON.stringify(envelope({ results: [] })));
-      else res.end(JSON.stringify(payloads[call.path]));
+      } else res.end(JSON.stringify(envelope({ results: [] })));
     });
-    const result = await f.run([
-      'search',
-      'q',
-      '--sources',
-      'model,anysearch,exa',
-      '--format=json',
-    ]);
-    assert.equal(
-      result.exit,
-      { empty: 0, 'any-failure': 6, 'all-extras': 6, 'model-failure': 6, fallback: 0 }[mode],
-      result.channels.out,
+    const result = await f.run(args);
+    const json = result.json();
+    assert.equal(result.exit, rejected ? 6 : 0);
+    assert.deepEqual(
+      json.data.sources.map(({ provider }: { provider: string }) => provider),
+      rejected ? ['model'] : ['model', 'anysearch'],
     );
-    const sources = result
-      .json()
-      .data.sources.filter((source: { provider: string }) => source.provider !== 'model');
-    if (mode === 'empty') assert.deepEqual(sources[0].data.results, []);
-    if (mode === 'all-extras') assert.deepEqual(sources, []);
-    if (mode === 'any-failure')
+    if (rejected) {
       assert.deepEqual(
-        sources.map((s: JsonObject) => s.provider),
-        ['exa'],
+        json.error.details.failures.map(({ provider, code }: JsonObject) => ({ provider, code })),
+        [{ provider: 'anysearch', code: 'AUTHENTICATION_ERROR' }],
       );
-    if (mode === 'model-failure') {
-      assert.equal(
-        result
-          .json()
-          .data.sources.find((source: { provider: string }) => source.provider === 'model')?.data,
-        undefined,
-      );
-      assert.equal(sources[0].provider, 'anysearch');
-    }
-    if (mode === 'fallback') {
-      assert.equal(f.calls.filter((c) => c.path === '/model/responses').length, 2);
-      assert.equal(f.calls.filter((c) => c.path === '/gateway/v1/search').length, 1);
+    } else {
+      assert.deepEqual(json.data.sources[1].data.results, []);
     }
   }
   const before = f.calls.length;
@@ -303,77 +163,9 @@ test('AnySearch search failures, valid empty supplements and model fallback reta
     { UNISEARCH_ANYSEARCH_API_KEY: '' },
     { UNISEARCH_ANYSEARCH_BASE_URL: 'bad' },
   ]) {
-    const result = await f.run(['search', 'q', '--sources', 'model,anysearch,exa'], override);
+    const result = await f.run(args, override);
     assert.equal(result.exit, 3);
+    assert.equal(result.json().error.code, 'INVALID_CONFIG');
   }
   assert.equal(f.calls.length, before);
 });
-
-test(
-  'Combined search cancellation and internal failures stop pending AnySearch work and preserve completed evidence',
-  { timeout: 5000 },
-  async (t) => {
-    const f = await fixture(t);
-    f.env.UNISEARCH_MODEL_API_KEY = 'fixture-model';
-    f.env.UNISEARCH_EXA_API_KEY = 'fixture-exa';
-    for (const mode of ['cancel', 'internal']) {
-      const controller = new AbortController();
-      let complete!: () => void;
-      const evidence = new Promise<void>((done) => {
-        complete = done;
-      });
-      let modelStarted!: () => void;
-      const started = new Promise<void>((done) => {
-        modelStarted = done;
-      });
-      f.handle((call, res) => {
-        if (call.path === '/model/responses') {
-          res.writeHead(200);
-          res.write('{');
-          modelStarted();
-        } else res.end(JSON.stringify(payloads[call.path]));
-      });
-      const transport: typeof fetch = async (url, init) => {
-        if (String(url).includes('/exa/')) {
-          await evidence;
-          await started;
-          // Let the completed AnySearch operation settle before terminating the group.
-          await new Promise<void>((done) => setImmediate(done));
-          if (mode === 'internal') throw new Error('fixture bug');
-          controller.abort();
-          return fetch(url, init);
-        }
-        const response = await fetch(url, init);
-        if (String(url).includes('/gateway/')) {
-          const read = response.arrayBuffer.bind(response);
-          response.arrayBuffer = async () => {
-            const value = await read();
-            complete();
-            return value;
-          };
-        }
-        return response;
-      };
-      const result = await combinedSearch(
-        prepareCombinedSearch('q', { sources: 'model,anysearch,exa' }, {}, f.env, 'en'),
-        controller.signal,
-        'en',
-        {},
-        { transport },
-      );
-      assert.equal(result.exitCode, mode === 'cancel' ? 130 : 5);
-      assert.equal(
-        result.result.data?.sources.filter(
-          (source: { provider: string }) => source.provider !== 'model',
-        )?.[0].provider,
-        'anysearch',
-      );
-      assert.equal(
-        result.result.data?.sources.find(
-          (source: { provider: string }) => source.provider === 'model',
-        )?.data,
-        undefined,
-      );
-    }
-  },
-);

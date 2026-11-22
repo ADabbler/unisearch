@@ -141,25 +141,25 @@ test('Unified commands select real configured operations and share each provider
 
 test('Selection and parameter errors fail before HTTP; disabled fallback scopes configuration checks', async (t) => {
   const f = await fixture(t);
-  for (const values of [
-    { fetch: { providers: [] } },
-    { fetch: { providers: ['tavily', 'tavily'] } },
-    { fetch: { providers: ['wrong-id'] } },
-    { map: { providers: ['exa'] } },
-    { providers: { firecrawl: { scrape: { only_main_content: 'bad' } } } },
-  ]) {
+  for (const [values, operation, code] of [
+    [{ fetch: { providers: [] } }, 'fetch', 'MISSING_CONFIG'],
+    [{ map: { providers: ['exa'] } }, 'map', 'INVALID_CONFIG'],
+    [
+      { providers: { firecrawl: { scrape: { only_main_content: 'bad' } } } },
+      'fetch',
+      'INVALID_CONFIG',
+    ],
+  ] as const) {
     f.save(values);
-    const operation = 'map' in values ? 'map' : 'fetch';
-    assert.notEqual((await f.run([operation, url])).exit, 0);
+    const result = await f.run([operation, url, '--format=json']);
+    assert.equal(result.exit, 3);
+    assert.equal(result.json().error.code, code);
   }
   f.save({});
   for (const args of [
     ['fetch', 'relative'],
     ['fetch', url, url],
-    ['fetch', url, '--no-fallback', '--no-fallback'],
     ['map', url, '--limit', '0'],
-    ['map', url, '--limit', '1.5'],
-    ['map', url, '--limit', '9007199254740992'],
     ['map', url, '--limit', '100001'],
   ])
     assert.equal((await f.run(args)).exit, 2);
@@ -549,16 +549,14 @@ test(
   { skip: process.platform === 'win32', timeout: 5000 },
   async (t) => {
     const f = await fixture(t);
+    f.save({ fetch: { providers: ['firecrawl', 'tavily'] } });
     const output = join(f.root, 'old.json');
     writeFileSync(output, 'original');
-    let received!: () => void;
-    const ready = new Promise<void>((done) => {
-      received = done;
-    });
+    const received = Promise.withResolvers<void>();
     f.handle((_path, res) => {
       res.writeHead(200);
       res.write('{"results":');
-      received();
+      received.resolve();
     });
     const child = spawn(
       process.execPath,
@@ -566,17 +564,27 @@ test(
       { cwd: f.root, env: f.env },
     );
     let stdout = '';
+    let stderr = '';
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString();
     });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
     const closed = once(child, 'close');
     t.after(() => {
-      if (child.exitCode === null) child.kill('SIGKILL');
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     });
-    await ready;
-    child.kill('SIGINT');
-    assert.equal((await closed)[0], 130);
-    assert.equal(JSON.parse(stdout).error.code, 'CANCELLED');
+    const earlyExit = await Promise.race([received.promise, closed]);
+    assert.equal(earlyExit, undefined, `CLI exited before requesting the fixture.\n${stderr}`);
+    assert.ok(child.kill('SIGINT'));
+    const [code, signal] = await closed;
+    assert.equal(code, 130, stderr);
+    assert.equal(signal, null);
+    const result = JSON.parse(stdout);
+    assert.equal(result.error.code, 'CANCELLED');
+    assert.equal(result.data, undefined);
+    assert.equal(f.calls.length, 1);
     assert.equal(readFileSync(output, 'utf8'), 'original');
     assert.deepEqual(readdirSync(f.root).sort(), ['config.json', 'old.json']);
   },
@@ -630,29 +638,16 @@ test('Native slow body cancellation preserves earlier complete data and reports 
   assert.equal(result.result.meta, undefined);
 });
 
-test('File preparation, empty success, errors and Markdown verbosity use the shared output lifecycle', async (t) => {
+test('Saved fetch Markdown includes the service switch and preserves the page body', async (t) => {
   const f = await fixture(t);
   f.save({ fetch: { providers: ['tavily', 'firecrawl'] } });
-  assert.equal((await f.run(['fetch', url, '--output', join(f.root, 'absent', 'out')])).exit, 5);
-  assert.equal(f.calls.length, 0);
-  const output = join(f.root, 'out.md');
-  writeFileSync(output, 'old');
-  f.reply({
-    '/tavily/extract': { status: 401, body: {} },
-    '/firecrawl/scrape': { status: 401, body: {} },
-  });
-  assert.equal((await f.run(['fetch', url, '--output', output])).exit, 3);
-  assert.equal(readFileSync(output, 'utf8'), 'old');
   f.reply({ '/tavily/extract': { status: 401, body: {} } });
-  const result = await f.run(['fetch', url, '--verbose', '--output', output]);
+  const output = join(f.root, 'out.md');
+  const result = await f.run(['fetch', url, '--output', output]);
   assert.equal(result.exit, 0);
-  assert.match(result.channels.err, /Execution time:/);
-  assert.doesNotMatch(readFileSync(output, 'utf8'), /duration_ms|Execution time:/);
-  assert.match(readFileSync(output, 'utf8'), /Service fallback: tavily → firecrawl/);
-  f.reply({ '/tavily/map': { body: { results: [] } } });
-  await f.run(['map', url, '--output', output]);
-  assert.match(readFileSync(output, 'utf8'), /No site links found/);
-  assert.deepEqual(readdirSync(f.root).sort(), ['config.json', 'out.md']);
+  const markdown = readFileSync(output, 'utf8');
+  assert.match(markdown, /tavily → firecrawl/);
+  assert.ok(markdown.includes('# Page\n\nBody.'));
 });
 
 test('Unified Firecrawl metadata and diagnostics retain content while redacting every known credential', async (t) => {

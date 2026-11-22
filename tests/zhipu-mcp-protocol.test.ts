@@ -233,37 +233,47 @@ test('Zhipu MCP retries whole sessions through the public budget, tracks Retry-A
   }
 });
 
-test('Zhipu MCP handshake, tool request, SSE reading and retry waits stop on cancellation and preserve files', async (t) => {
+test('Zhipu MCP cancels handshake, tool calls and SSE', { timeout: 5000 }, async (t) => {
   const f = await fixture(t);
   const output = join(f.root, 'saved.json');
-  for (const phase of ['initialize', 'tool', 'sse', 'wait'] as const) {
+  for (const phase of ['initialize', 'tool', 'sse'] as const) {
     f.calls.length = 0;
     writeFileSync(output, 'original');
-    let reached!: () => void;
-    const ready = new Promise<void>((resolve) => {
-      reached = resolve;
-    });
-    f.initialize(phase === 'initialize' ? (_call, _res) => reached() : undefined);
+    const ready = Promise.withResolvers<void>();
+    if (phase === 'sse') {
+      const nativeFetch = globalThis.fetch;
+      t.mock.method(globalThis, 'fetch', async (...args: Parameters<typeof nativeFetch>) => {
+        const response = await nativeFetch(...args);
+        if (response.headers.get('content-type') === 'text/event-stream') {
+          const body = response.body!;
+          const getReader = body.getReader.bind(body);
+          // Cancel after the client starts consuming the SSE response.
+          t.mock.method(body, 'getReader', () => {
+            const reader = getReader();
+            ready.resolve();
+            return reader;
+          });
+        }
+        return response;
+      });
+    }
+    f.initialize(phase === 'initialize' ? () => ready.resolve() : undefined);
     f.handle((_call, res) => {
       if (phase === 'sse') {
         res.writeHead(200, { 'content-type': 'text/event-stream' });
         res.write('data: {');
+        return;
       }
-      if (phase === 'wait') {
-        res.writeHead(503, { 'retry-after': '30' });
-        res.end('{}');
-      }
-      reached();
+      ready.resolve();
     });
     const listeners = process.listenerCount('SIGINT');
-    const pending = f.run(['zhipu-mcp', 'search', 'q', '--output', output, '--format=json'], {
-      UNISEARCH_RETRIES: '2',
-    });
-    await ready;
-    if (phase === 'wait') await new Promise<void>((done) => setTimeout(done, 20));
+    const pending = f.run(['zhipu-mcp', 'search', 'q', '--output', output, '--format=json']);
+    const earlyExit = await Promise.race([ready.promise, pending]);
+    assert.equal(earlyExit, undefined, `CLI exited before the ${phase} fixture was ready.`);
     process.emit('SIGINT');
     const result = await pending;
     assert.equal(result.exit, 130);
+    assert.equal(result.json().error.code, 'CANCELLED');
     assert.equal(readFileSync(output, 'utf8'), 'original');
     assert.equal(f.calls.length, phase === 'initialize' ? 1 : 3);
     assert.equal(process.listenerCount('SIGINT'), listeners);

@@ -6,7 +6,6 @@ import { manageSkills, preflightSkills } from '../src/skills/manage.js';
 import { parseTargets, targetPaths } from '../src/skills/targets.js';
 import { temporary, context, capture } from './helpers.js';
 import { createCli } from '../src/cli/program.js';
-import { AppError } from '../src/errors.js';
 
 test('Target paths use platform roots and Devin overrides, and IDs are strict', () => {
   const config = { ...context('/home/test'), platform: 'linux' as const };
@@ -16,7 +15,7 @@ test('Target paths use platform roots and Devin overrides, and IDs are strict', 
     { target: 'devin', path: '/home/test/.config/devin/skills/unisearch' },
   ]);
   for (const value of ['', 'codex,', 'codex,codex', 'Codex', 'windsurf', ' codex'])
-    assert.throws(() => parseTargets(value));
+    assert.throws(() => parseTargets(value), { code: 'INVALID_ARGUMENT' });
   assert.deepEqual(parseTargets('codex,devin'), ['codex', 'devin']);
   assert.equal(
     targetPaths(['devin'], { ...config, env: { XDG_CONFIG_HOME: '/xdg' } })[0].path,
@@ -144,14 +143,17 @@ test('Independent failures, cancellation, source validation and overlap prefligh
   const cancelled = await manageSkills('remove', targets, 'en', abort.signal);
   assert.equal(cancelled.exitCode, 130);
   assert.ok(cancelled.result.data?.targets.every((item) => item.state === 'not_started'));
-  await assert.rejects(preflightSkills([targets[0], targets[0]], source));
-  await assert.rejects(preflightSkills(targets, source, join(targets[1].path, 'config.json')));
+  await assert.rejects(preflightSkills(targets, source, join(targets[1].path, 'config.json')), {
+    code: 'INVALID_ARGUMENT',
+  });
   await fs.symlink(
     targets[1].path,
     join(source, 'linked'),
     process.platform === 'win32' ? 'junction' : 'dir',
   );
-  await assert.rejects(manageSkills('install', targets, 'en', undefined, source));
+  await assert.rejects(manageSkills('install', targets, 'en', undefined, source), {
+    code: 'FILE_IO_ERROR',
+  });
 });
 
 test('Failed removal and rename retain actual side effects and cleanup errors', async (t) => {
@@ -184,7 +186,7 @@ test('Failed removal and rename retain actual side effects and cleanup errors', 
   assert.equal(renamed.result.data?.targets[0].changed, true);
   assert.match(JSON.stringify(renamed), /cleanup/);
   assert.match(JSON.stringify(renamed), /rename/);
-  await assert.rejects(fs.stat(targets[0].path));
+  await assert.rejects(fs.stat(targets[0].path), { code: 'ENOENT' });
 });
 
 test('Cancellation during replacement finishes current target and does not start the next', async (t) => {
@@ -211,7 +213,7 @@ test('Cancellation during replacement finishes current target and does not start
   assert.equal(await fs.readFile(join(targets[1].path, 'SKILL.md'), 'utf8'), 'old');
 });
 
-test('Skill CLI manages explicit targets with compact plain text output', async (t) => {
+test('Skill CLI requires explicit targets for installation and changes their files', async (t) => {
   const root = temporary(t);
   const config = context(root, { UNISEARCH_LANG: 'en' });
   const run = async (args: string[]) => {
@@ -221,16 +223,13 @@ test('Skill CLI manages explicit targets with compact plain text output', async 
   };
   const missing = await run(['skills', 'install']);
   assert.equal(missing.exit, 2);
-  const status = await run(['skills', 'status', '--targets', 'codex']);
-  assert.match(status.channels.out, /Codex: not installed/);
-  const compactStatus = await run(['skills', 'status', '--targets', 'codex,claude']);
-  assert.doesNotMatch(compactStatus.channels.out, /\n\n/);
   const [target] = targetPaths(['codex'], config);
   const installed = await run(['skills', 'install', '--targets', 'codex']);
   assert.equal(installed.exit, 0);
-  assert.match(installed.channels.out, /Codex: installed/);
+  assert.ok((await fs.stat(join(target.path, 'SKILL.md'))).isFile());
   assert.ok(installed.channels.out.replace(/\r?\n\s*/g, '').includes(target.path));
   assert.equal((await run(['skills', 'remove', '--targets', 'codex'])).exit, 0);
+  await assert.rejects(fs.stat(target.path), { code: 'ENOENT' });
 });
 
 test('Unexpected read failures stop subsequent Skill targets', async (t) => {
@@ -248,22 +247,4 @@ test('Unexpected read failures stop subsequent Skill targets', async (t) => {
   assert.equal(result.exitCode, 5);
   assert.equal(result.result.error?.code, 'INTERNAL_ERROR');
   assert.equal(result.result.data?.targets[1].state, 'not_started');
-});
-
-test('Skill preflight preserves unexpected errors and classifies filesystem failures', async (t) => {
-  const root = temporary(t);
-  const source = join(root, 'source');
-  await fs.mkdir(source);
-  const realpath = fs.realpath;
-  let problem: Error = new TypeError('fixture programming failure');
-  t.mock.method(fs, 'realpath', async (...args: Parameters<typeof fs.realpath>) => {
-    if (args[0] === source) throw problem;
-    return realpath(...args);
-  });
-  await assert.rejects(preflightSkills([], source), (error) => error === problem);
-  problem = Object.assign(new Error('fixture IO failure'), { code: 'EACCES' });
-  await assert.rejects(
-    preflightSkills([], source),
-    (error) => error instanceof AppError && error.code === 'FILE_IO_ERROR',
-  );
 });

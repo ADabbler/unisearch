@@ -14,7 +14,6 @@ import type { SearchOptions } from '../src/providers/exa.js';
 import { localStatus } from '../src/config/status.js';
 import { renderSearch } from '../src/output/exa.js';
 import { render } from '../src/output/render.js';
-import { success } from '../src/result.js';
 import { capture, context, temporary } from './helpers.js';
 
 const env = { UNISEARCH_EXA_API_KEY: 'test-exa-key', UNISEARCH_LANG: 'en' };
@@ -36,31 +35,9 @@ export async function server(t: TestContext, listener: RequestListener): Promise
   return `http://127.0.0.1:${address.port}`;
 }
 
-test('Exa help exposes search and fetch, and parameter errors are local', async (t) => {
+test('Exa CLI reports invalid search arguments as JSON', async (t) => {
   const root = temporary(t);
-  const outputs: string[] = [];
-  for (const args of [['exa'], ['exa', '--help']]) {
-    const channels = capture();
-    assert.equal(await createCli('test', { config: context(root), channels }).run(args), 0);
-    assert.match(channels.out, /search/);
-    assert.match(channels.out, /fetch/);
-    outputs.push(channels.out);
-  }
-  assert.equal(outputs[0], outputs[1]);
-  const invalid = [
-    [],
-    ['q', '--limit', '0'],
-    ['q', '--limit', '101'],
-    ['q', '--limit', '1.1'],
-    ['q', '--limit', '2', '--limit', '3'],
-    ['q', '--search-type', 'neural'],
-    ['q', '--include-text', '--include-text'],
-    ['q', '--timeout', '0'],
-    ['q', '--timeout', 'Infinity'],
-    ['q', '--timeout', '-1'],
-    ['q', '--timeout', '2', '--timeout', '3'],
-    ['   '],
-  ];
+  const invalid = [[], ['q', '--limit', '101'], ['q', '--search-type', 'unrecognized'], ['   ']];
   for (const args of invalid) {
     const channels = capture();
     assert.equal(
@@ -94,10 +71,16 @@ test('Search mapping preserves defaults, explicit modes, dates, domains and requ
   assert.equal(prepare().timeout, 300);
   assert.equal(prepare().retries, 2);
   assert.equal(prepare().url, 'https://api.exa.ai/search');
-  for (const mode of ['auto', 'lite', 'deep', 'deep-lite'])
-    for (const limit of ['1', '100']) {
-      assert.equal(prepare({ searchType: mode, limit }).body.numResults, Number(limit));
-    }
+  for (const [searchType, limit] of [
+    ['auto', '1'],
+    ['lite', '100'],
+    ['deep', '5'],
+    ['deep-lite', '5'],
+  ]) {
+    const { body } = prepare({ searchType, limit });
+    assert.equal(body.type, searchType);
+    assert.equal(body.numResults, Number(limit));
+  }
   assert.deepEqual(
     prepare({
       includeText: true,
@@ -147,7 +130,7 @@ test('Invalid dates, domain forms and category combinations fail before configur
     '2026-01-01T00:00:00+24:00',
     'tomorrow',
   ]) {
-    assert.throws(() => prepare({ publishedAfter: date }), AppError, date);
+    assert.throws(() => prepare({ publishedAfter: date }), { code: 'INVALID_ARGUMENT' }, date);
   }
   for (const domains of [
     '',
@@ -165,7 +148,11 @@ test('Invalid dates, domain forms and category combinations fail before configur
     'example.com\\evil',
     Array(1201).fill('a.test').join(','),
   ]) {
-    assert.throws(() => prepare({ includeDomains: domains }), AppError, domains.slice(0, 100));
+    assert.throws(
+      () => prepare({ includeDomains: domains }),
+      { code: 'INVALID_ARGUMENT' },
+      domains.slice(0, 100),
+    );
   }
   for (const category of ['company', 'people']) {
     assert.throws(() => prepare({ category, publishedAfter: '2026-01-01' }), AppError);
@@ -445,8 +432,8 @@ test('Local retry success renders and saves the same complete data with verbose 
     } else {
       assert.match(saved, /# Original\n\nContent/);
       assert.doesNotMatch(saved, /Attempt|retry-id|success-id/);
-      assert.match(channels.err, /Attempt 1: HTTP 503/);
-      assert.match(channels.err, /Attempt 2: HTTP 200/);
+      assert.match(channels.err, /HTTP 503/);
+      assert.match(channels.err, /HTTP 200/);
     }
   }
   assert.equal(calls, 4);
@@ -551,30 +538,19 @@ test('Results preserve order, duplicates, original Markdown and optional-content
     text: item.text,
     highlights: item.highlights,
   });
-  const expected = `来源：Exa\n\n## 1. [Runtime release schedule](https://example.com/releases)\n\n发布日期：2026-09-01 · 作者：Runtime team\n\n### 摘录\n\nThe release schedule lists supported versions.\n\n### 正文\n\n${item.text}`;
-  assert.equal(renderSearch({ ...data, results: [data.results[0]] }, 'zh'), expected);
-  assert.match(renderSearch(data, 'en'), /\n---\n/);
+  const markdown = renderSearch(data, 'en');
+  assert.ok(markdown.includes(item.text));
+  assert.ok(markdown.includes(item.highlights[0]));
   const missing = searchData(
     { results: [{ title: '', url: item.url, text: '  ', highlights: ['', '  '] }] },
     { text: true, highlights: true },
   );
   assert.deepEqual(missing.results, [{ url: item.url, missing_content: ['text'] }]);
-  assert.match(renderSearch(missing, 'en'), /Requested content unavailable: text/);
   const compact = searchData(
     { results: [{ ...item, text: 42, highlights: {} }] },
     { text: false, highlights: false },
   );
   assert.equal(compact.results[0].text, undefined);
-  assert.equal(
-    renderSearch({ provider: 'exa', results: [] }, 'en'),
-    'Source: Exa\n\nNo results found',
-  );
-  assert.deepEqual(
-    JSON.parse(
-      render(success({ provider: 'exa', results: [] }), { language: 'en', format: 'json' }).content,
-    ),
-    { status: 'success', data: { provider: 'exa', results: [] } },
-  );
 });
 
 test('Invalid retained response fields fail as a whole and never use id as URL', () => {

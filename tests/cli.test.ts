@@ -134,8 +134,9 @@ test('Invalid input produces one result using the recognized format', async (t) 
     ['search', 'query', '--format=json', '--unknown'],
     ['search', 'query', '--format=json', '--verbose', '--verbose'],
     ['search', 'query', '--format=json', '--output='],
+    ['search', 'query', '--timeout=0', '--format=json'],
     ['status', '--json', '--unknown'],
-    ['doctor', '--json', '--timeout=0'],
+    ['doctor', '--timeout=0', '--json'],
     ['config', 'list', '--format=json'],
     ['config', 'get'],
   ]) {

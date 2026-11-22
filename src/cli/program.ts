@@ -94,6 +94,8 @@ export function commandPath(command: Command): string {
 }
 
 class CliCommand extends Command {
+  private optionParsing?: { error?: AppError };
+
   constructor(
     private language: () => Language,
     private select: (command: Command) => void,
@@ -108,6 +110,34 @@ class CliCommand extends Command {
 
   override createCommand(name?: string): Command {
     return new CliCommand(this.language, this.select, name);
+  }
+
+  override parseOptions(args: string[]) {
+    const parsing: { error?: AppError } = {};
+    this.optionParsing = parsing;
+    let parsed: ReturnType<Command['parseOptions']>;
+    try {
+      parsed = super.parseOptions(args);
+    } catch (error) {
+      throw error instanceof AppError ? (parsing.error ?? error) : error;
+    } finally {
+      this.optionParsing = undefined;
+    }
+    if (parsing.error) throw parsing.error;
+    return parsed;
+  }
+
+  override on(name: string | symbol, listener: Parameters<Command['on']>[1]): this {
+    if (typeof name !== 'string' || !name.startsWith('option:')) return super.on(name, listener);
+    return super.on(name, (...args: unknown[]) => {
+      try {
+        listener.apply(this, args);
+      } catch (error) {
+        // Parse the remaining options so usage errors can use the requested output format.
+        if (!this.optionParsing || !(error instanceof AppError)) throw error;
+        this.optionParsing.error ??= error;
+      }
+    });
   }
 
   override createHelp(): Help {

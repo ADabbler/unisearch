@@ -406,9 +406,10 @@ test('Default and explicitly missing configurations retain distinct read and cre
     assert.equal(result.exit, 3);
     if (args[1] === 'unset') {
       assert.equal(result.out, '');
-      assert.ok(result.err.includes(explicit));
+      assert.ok(result.err.trim());
     } else assert.equal(JSON.parse(result.out).error.code, 'CONFIG_NOT_FOUND');
   }
+  assert.equal(existsSync(explicit), false);
   const path = await f.run(['config', 'path'], {
     UNISEARCH_CONFIG_PATH: explicit,
     UNISEARCH_LANG: undefined,

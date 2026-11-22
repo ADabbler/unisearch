@@ -91,3 +91,7 @@ UniSearch 参考 [Smart Search](https://github.com/konbakuyomu/smartsearch) 重�
 ## 许可证
 
 本项目采用 [MIT 许可证](LICENSE)。
+
+## 致谢
+
+感谢 [LINUX DO](https://linux.do/) 社区。

@@ -91,3 +91,7 @@ UniSearch was rebuilt with reference to [Smart Search](https://github.com/konbak
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## Acknowledgements
+
+Thanks to the [LINUX DO](https://linux.do/) community.

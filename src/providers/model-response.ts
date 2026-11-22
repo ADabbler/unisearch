@@ -95,11 +95,9 @@ const urlChar = String.raw`[^\s()<>"'\`，。、；：！？》）】]`;
 /** A URL body with balanced parentheses, as used by paths such as `X_(company)`. */
 const urlBody = String.raw`${urlChar}*(?:\(${urlChar}*\)${urlChar}*)*`;
 
-/** Markdown links and bare URLs matched in text order. */
-const linkOrUrl = new RegExp(
-  String.raw`\[([^\]]*)\]\((https?:\/\/${urlBody})\)|https?:\/\/${urlBody}`,
-  'g',
-);
+const linkOrUrlPattern = String.raw`\[([^\]]*)\]\((https?:\/\/${urlBody})\)|https?:\/\/${urlBody}`;
+const linkOrUrl = new RegExp(linkOrUrlPattern, 'g');
+const linkOnlyLine = new RegExp(`^(?:${linkOrUrlPattern})$`);
 
 /** A standalone line naming the source list, such as `## Sources` or `参考资料：`. */
 const sourceHeading =
@@ -155,7 +153,7 @@ function headingBlock(text: string): { text: string; sources: AnswerSource[] } |
 
 /** A source line is a list item or a link line that carries a URL. */
 function isSourceLine(line: string): boolean {
-  return (listMarker.test(line) || isLinkLine(line)) && anyUrl.test(line);
+  return (listMarker.test(line) || linkLine.test(line.trim())) && anyUrl.test(line);
 }
 
 function linkBlock(text: string): { text: string; sources: AnswerSource[] } | undefined {
@@ -164,16 +162,16 @@ function linkBlock(text: string): { text: string; sources: AnswerSource[] } | un
   while (end >= 0 && !lines[end].trim()) end -= 1;
   if (end < 0) return undefined;
   let first = end;
-  while (first >= 0 && (!lines[first].trim() || isLinkLine(lines[first]))) first -= 1;
+  while (first >= 0 && (!lines[first].trim() || isLinkOnlyLine(lines[first]))) first -= 1;
   first += 1;
-  if (lines.slice(first, end + 1).filter((line) => isLinkLine(line)).length < 2) return undefined;
+  if (lines.slice(first, end + 1).filter(isLinkOnlyLine).length < 2) return undefined;
   const sources = linksIn(lines.slice(first, end + 1).join('\n'));
   if (!sources.length) return undefined;
   return { text: lines.slice(0, first).join('\n').trimEnd(), sources };
 }
 
-function isLinkLine(line: string): boolean {
-  return linkLine.test(line.replace(listMarker, '').trim());
+function isLinkOnlyLine(line: string): boolean {
+  return linkOnlyLine.test(line.replace(listMarker, '').trim());
 }
 
 function linksIn(text: string): AnswerSource[] {

@@ -61,8 +61,8 @@ export async function searchModel(
             language,
             transport,
           );
-          // An attempt without a fallback verdict keeps the preceding retry's verdict.
-          policy = result.fallback ?? policy;
+          // A retryable failure without a verdict preserves the preceding decision.
+          if (result.fallback !== undefined || !result.retry) policy = result.fallback;
           if (result.outcome.result.error) {
             result.outcome.result.error.details = {
               ...result.outcome.result.error.details,

@@ -574,6 +574,9 @@ test('Sources headings and trailing link blocks become structured sources', () =
   // without adding a second copy to the structured sources.
   const inline = 'Cites [[1]](https://example.org/a) and [[2]](https://example.org/b).';
   assert.deepEqual(responseAnswer(response(inline)), { model: 'reported-model', text: inline });
+  const comparison =
+    'Two options:\n\n- [A](https://example.org/a) is faster.\n- [B](https://example.org/b) works offline.';
+  assert.equal(responseAnswer(response(comparison)).text, comparison);
   const prose =
     'Body text.\n\n## Sources\nSee the [Example](https://example.org/a) page for details.';
   assert.deepEqual(responseAnswer(response(prose)), { model: 'reported-model', text: prose });
@@ -1248,6 +1251,15 @@ test('A retry wait taking too much of the budget switches models, and the latest
   });
   assert.deepEqual(mixed.calls, ['primary', 'primary', 'primary', 'backup']);
   assert.equal(mixed.outcome.exitCode, 0);
+  const refused = await run([{ id: 'backup' }], {
+    primary: (step) =>
+      step
+        ? Response.json({ error: { code: 'invalid_api_key' } }, { status: 401 })
+        : retry(429, '1'),
+    backup: () => Response.json(response()),
+  });
+  assert.deepEqual(refused.calls, ['primary', 'primary']);
+  assert.equal(refused.outcome.result.error?.code, 'AUTHENTICATION_ERROR');
   const later = await run([{ id: 'backup' }, { id: 'third' }], {
     primary: effort,
     backup: () => retry(429, '200'),

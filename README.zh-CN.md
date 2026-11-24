@@ -20,7 +20,7 @@ UniSearch 是面向 AI Agent 的统一检索 CLI，支持网页搜索、正文�
 
 ## 支持的服务
 
-支持使用 Responses 或 Chat Completions 接口的模型 API，以及 [Exa](https://exa.ai/)、[Tavily](https://www.tavily.com/)、[Firecrawl](https://www.firecrawl.dev/)、[Context7](https://context7.com/)、[Jina AI](https://jina.ai/)、智谱 API（[BigModel](https://docs.bigmodel.cn/cn/guide/tools/web-search) / [Z.AI](https://docs.z.ai/guides/tools/web-search)）、智谱 MCP（[BigModel](https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server) / [Z.AI](https://docs.z.ai/devpack/mcp/search-mcp-server)）、[AnySearch](https://www.anysearch.com/)、[TinyFish Search](https://www.tinyfish.ai/search) 和 [DeepSeek 搜索与抓取](https://api-docs.deepseek.com/zh-cn/guides/search/)。
+支持使用 Responses 或 Chat Completions 接口的模型 API，以及 [Exa](https://exa.ai/)、[Tavily](https://www.tavily.com/)、[Firecrawl](https://www.firecrawl.dev/)、[Context7](https://context7.com/)、[Jina AI](https://jina.ai/)、智谱 API（[BigModel](https://docs.bigmodel.cn/cn/guide/tools/web-search) / [Z.AI](https://docs.z.ai/guides/tools/web-search)）、智谱 MCP（[BigModel](https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server) / [Z.AI](https://docs.z.ai/devpack/mcp/search-mcp-server)）、[AnySearch](https://www.anysearch.com/)、[TinyFish](https://www.tinyfish.ai/) 和 [DeepSeek 搜索与抓取](https://api-docs.deepseek.com/zh-cn/guides/search/)。
 
 模型联网检索需要模型服务提供搜索工具，并在 UniSearch 的配置中启用。API 地址、模型和工具的配置方法见[模型配置](docs/zh-CN/configuration.md#模型配置)。各服务的默认 API 地址和凭证要求见[服务配置](docs/zh-CN/configuration.md#服务配置)。
 
@@ -78,13 +78,21 @@ unisearch skills status --targets codex,claude
 ```mermaid
 ---
 config:
+    layout: dagre
+    themeVariables:
+        fontSize: 14px
     flowchart:
         nodeSpacing: 32
-        rankSpacing: 28
+        rankSpacing: 32
+        padding: 10
+        diagramPadding: 4
+        minNodeWidth: 0
+        wrappingWidth: 192
+        curve: bumpY
 ---
 flowchart TD
     accTitle: Agent 如何按需了解并使用 UniSearch
-    skill("<b>阅读 UniSearch Skill</b><br/>了解大致用法") --> entry{"选择使用方式"}
+    skill("<b>阅读 UniSearch Skill</b><br/>了解大致用法") --> entry{"选择<br/>使用方式"}
     skill -.->|按需了解配置| status("unisearch status --json<br/>查看本地配置状态")
     status --> entry
 
@@ -95,8 +103,7 @@ flowchart TD
     guide -.->|需要了解参数| help("相关命令 --help<br/>查看可用参数")
     help --> run
 
-    run --> review("<b>检查结果</b><br/>确认状态、来源和错误<br/>按需读取原文")
-    auto --> review
+    run & auto --> review("<b>检查结果</b><br/>确认状态、来源和错误<br/>按需读取原文")
 
     classDef shared fill:#EAF1FA,stroke:#8DA5C1,color:#17324C;
     classDef neutral fill:#F5F8FC,stroke:#A1B3C8,color:#243D56;

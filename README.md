@@ -20,7 +20,7 @@ Searches can use a configured model or web search services. Search sources can b
 
 ## Supported services
 
-UniSearch supports model APIs using Responses or Chat Completions, along with [Exa](https://exa.ai/), [Tavily](https://www.tavily.com/), [Firecrawl](https://www.firecrawl.dev/), [Context7](https://context7.com/), [Jina AI](https://jina.ai/), Zhipu API ([BigModel](https://docs.bigmodel.cn/cn/guide/tools/web-search) / [Z.AI](https://docs.z.ai/guides/tools/web-search)), Zhipu MCP ([BigModel](https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server) / [Z.AI](https://docs.z.ai/devpack/mcp/search-mcp-server)), [AnySearch](https://www.anysearch.com/), [TinyFish Search](https://www.tinyfish.ai/search), and [DeepSeek Search & Fetch](https://api-docs.deepseek.com/guides/search/).
+UniSearch supports model APIs using Responses or Chat Completions, along with [Exa](https://exa.ai/), [Tavily](https://www.tavily.com/), [Firecrawl](https://www.firecrawl.dev/), [Context7](https://context7.com/), [Jina AI](https://jina.ai/), Zhipu API ([BigModel](https://docs.bigmodel.cn/cn/guide/tools/web-search) / [Z.AI](https://docs.z.ai/guides/tools/web-search)), Zhipu MCP ([BigModel](https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server) / [Z.AI](https://docs.z.ai/devpack/mcp/search-mcp-server)), [AnySearch](https://www.anysearch.com/), [TinyFish](https://www.tinyfish.ai/), and [DeepSeek Search & Fetch](https://api-docs.deepseek.com/guides/search/).
 
 For a model to search the web, the model service must provide a search tool and the tool must be enabled in the UniSearch configuration. See [model settings](docs/en/configuration.md#model-settings) for how to configure the API address, model, and tools. See [service settings](docs/en/configuration.md#service-settings) for default API addresses and credential requirements.
 
@@ -78,13 +78,21 @@ The example installs the Skill under `~/.codex/skills/` and `~/.claude/skills/`.
 ```mermaid
 ---
 config:
+    layout: dagre
+    themeVariables:
+        fontSize: 14px
     flowchart:
         nodeSpacing: 32
-        rankSpacing: 28
+        rankSpacing: 32
+        padding: 10
+        diagramPadding: 4
+        minNodeWidth: 0
+        wrappingWidth: 224
+        curve: bumpY
 ---
 flowchart TD
     accTitle: How agents learn about and use UniSearch as needed
-    skill("<b>Read the UniSearch Skill</b><br/>Learn the basic workflow") --> entry{"Choose how to proceed"}
+    skill("<b>Read the UniSearch Skill</b><br/>Learn the basic workflow") --> entry{"Choose<br/>how to proceed"}
     skill -.->|Check configuration as needed| status("unisearch status --json<br/>View local configuration")
     status --> entry
 
@@ -95,8 +103,7 @@ flowchart TD
     guide -.->|Need option details| help("Command --help<br/>Review available options")
     help --> run
 
-    run --> review("<b>Review the result</b><br/>Check status, sources, and errors<br/>Read original pages as needed")
-    auto --> review
+    run & auto --> review("<b>Review the result</b><br/>Check status, sources, and errors<br/>Read original pages as needed")
 
     classDef shared fill:#EAF1FA,stroke:#8DA5C1,color:#17324C;
     classDef neutral fill:#F5F8FC,stroke:#A1B3C8,color:#243D56;

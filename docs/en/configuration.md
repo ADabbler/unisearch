@@ -8,7 +8,15 @@
 - [File location and precedence](#file-location-and-precedence)
 - [Credential management](#credential-management)
 - [Common settings](#common-settings)
+  - [Language](#language)
+  - [Execution](#execution)
+  - [Unified search](#unified-search)
+    - [Automatic search source selection](#automatic-search-source-selection)
+  - [Unified fetch and map](#unified-fetch-and-map)
+  - [Service switches](#service-switches)
 - [Model settings](#model-settings)
+  - [Model selection](#model-selection)
+  - [Tool configuration](#tool-configuration)
 - [Service settings](#service-settings)
   - [Exa](#exa)
   - [Tavily](#tavily)
@@ -25,20 +33,20 @@
 
 ## Configure and inspect
 
-With `unisearch setup`, you can interactively configure service connections and credentials, unified search, and the interface language, and install the UniSearch Skill for selected agents. The preview shows configuration changes and Skill installation paths before saving.
+With `unisearch setup`, you can interactively configure service connections and credentials, unified search, and the interface language, and install the UniSearch Skill for selected agents. The preview shows configuration changes and Skill installation paths before saving. `setup` requires an interactive terminal.
 
 Settings can be inspected and changed with `unisearch config`. The [configuration file](#file-location) can also be edited directly.
 
 Replace `KEY` with a field name from the configuration tables below. Dots (`.`) separate nested levels in the configuration file: `providers.exa.search.limit` follows the JSON path `providers` → `exa` → `search` → `limit`.
 
-| Command                          | Purpose                                                                         |
-| -------------------------------- | ------------------------------------------------------------------------------- |
-| `unisearch config path`          | Show the configuration file path.                                               |
-| `unisearch config list`          | Show effective values set in the file or environment, with their sources.       |
-| `unisearch config list --all`    | Show effective configuration and sources, including built-in defaults.          |
-| `unisearch config get KEY`       | Show one setting or a group of settings with their sources, including defaults. |
-| `unisearch config set KEY VALUE` | Set and save one setting.                                                       |
-| `unisearch config unset KEY`     | Remove a saved setting or group of settings.                                    |
+| Command                          | Purpose                                                               |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `unisearch config path`          | Show the configuration file path.                                     |
+| `unisearch config list`          | List configured fields and their sources.                             |
+| `unisearch config list --all`    | List all effective settings and sources, including built-in defaults. |
+| `unisearch config get KEY`       | Show one field or a group of fields, including defaults and sources.  |
+| `unisearch config set KEY VALUE` | Set and save one setting.                                             |
+| `unisearch config unset KEY`     | Remove a saved setting or group of settings.                          |
 
 For example, set, inspect, and remove Exa's search result limit:
 
@@ -51,6 +59,8 @@ unisearch config unset providers.exa.search.limit
 To inspect or remove all Exa settings, replace the field name in the `get` or `unset` command above with `providers.exa`.
 
 `VALUE` must match the type and accepted values listed for the field. For arrays, quote the JSON value, as in `'["exa","jina"]'`; setting an array replaces the existing list.
+
+In the configuration tables, “None” means no default value and “—” means no environment variable is supported.
 
 ## File location and precedence
 
@@ -81,13 +91,11 @@ Configuration changes take effect on the next CLI invocation. `config unset` rem
 
 ## Credential management
 
-Enter API keys through setup's hidden input or set the environment variables listed in the tables. Configuration files store API keys as plain text; query results show `[REDACTED]`.
+Save API keys with setup's hidden input or `config set`, or set the environment variables listed in the tables. Saved API keys are stored as plain text in the configuration file; `config list` and `config get` display them as `[REDACTED]`. Environment variables can provide credentials without writing them to the file.
 
 API keys passed directly on the command line may remain in shell history and process arguments.
 
 ## Common settings
-
-In the tables, “None” means no default value and “—” means no environment variable is supported.
 
 ### Language
 
@@ -95,7 +103,7 @@ In the tables, “None” means no default value and “—” means no environm
 | ---------- | ------------------ | ------- | -------------------- |
 | `language` | `en`, `zh`, `auto` | `auto`  | `UNISEARCH_LANG`     |
 
-`auto` follows the system language: Chinese for a Chinese locale and English otherwise. Provider content stays in its original language.
+`auto` checks `LC_ALL`, `LC_MESSAGES`, and `LANG`, falling back to the system locale: Chinese locales use Chinese and others use English. Provider content stays in its original language.
 
 ### Execution
 
@@ -105,9 +113,7 @@ In the tables, “None” means no default value and “—” means no environm
 | `execution.retries`         | Nonnegative integer, additional retries per request; `0` disables retries            | `2`     | `UNISEARCH_RETRIES`         |
 | `execution.fallback`        | `true` or `false`; controls backup models and service switching in unified fetch/map | `true`  | `UNISEARCH_FALLBACK`        |
 
-Use `--timeout SECONDS` to override the time limit for one call. The limit includes retry waits and service switching. Model streaming follows [separate timeout rules](#streaming).
-
-`--no-fallback` disables model or service switching without disabling retries. Provider-specific commands do not switch services.
+Use `--timeout SECONDS` to override the time limit for one call. `--no-fallback` disables model or service switching without disabling retries. Model streaming follows [separate timeout rules](design.md#timeouts-retries-and-cancellation).
 
 ### Unified search
 
@@ -115,17 +121,24 @@ Use `--timeout SECONDS` to override the time limit for one call. The limit inclu
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------------------- |
 | `search.providers` | Nonempty array of source IDs: `model`, `exa`, `tavily`, `firecrawl`, `jina`, `zhipu`, `zhipu-mcp`, `anysearch`, `tinyfish`, `deepseek` | `["model"]` | —                    |
 
-`unisearch search` uses this list when automatic selection is off. Selected sources run in parallel and are output in selection order. Use `--sources IDS` to set the sources for one call, separating multiple IDs with commas; this will also bypass automatic selection.
+`unisearch search` uses this list when automatic selection is off. For one call, `--sources IDS` takes precedence over both the configured list and automatic selection; separate multiple IDs with commas.
 
-If the list contains duplicate or unsupported IDs, or a selected service is disabled or lacks required settings, the command fails before sending any requests.
+The list cannot contain duplicate IDs, and every service must be supported, enabled, and fully configured; otherwise the command fails before sending requests. The default list contains only `model`, so use `--sources` for other sources when no model is configured.
+
+After configuring Exa and Tavily, save them as a fixed list. If automatic selection is enabled by default, `--no-auto` makes this search use the list.
 
 ```sh
 unisearch config set search.providers '["exa","tavily"]'
-unisearch search "search question"
+unisearch search "search question" --no-auto
+```
+
+Sources other than `model` require no model configuration. Model-search options such as `--model` and `--effort` are available only when this call uses a fixed list that includes `model`. If you have configured a model and Exa, and the model supports `low`, you can set its reasoning effort for one call.
+
+```sh
 unisearch search "search question" --sources model,exa --effort low
 ```
 
-Other sources require no model configuration. Model-search options such as `--model` and `--effort` are available only when this call does not use automatic selection and the selected sources include `model`. See `unisearch model search --help` for the full option list.
+See `unisearch search --help` for the full option list.
 
 #### Automatic search source selection
 
@@ -140,18 +153,24 @@ Other sources require no model configuration. Model-search options such as `--mo
 
 Automatic selection is enabled by default when `search.routing.enabled` is `true`. For the current search, `--auto` enables automatic selection and `--no-auto` disables it.
 
-Automatic mode selects sources for the query and may use fewer than `search.routing.max_sources`. For selected sources that support automatic parameter selection, the classifier also chooses settings for the current search.
+Configure the classifier before making automatic selection the default in `setup`. With one eligible source and no settings to choose, the command does not call the classifier and searches directly.
 
-When only one source is eligible and no search settings need to be chosen, the command skips the classifier. It reports an error if no sources are eligible, classification fails, or automatic selection yields no sources. Classification time counts toward the search timeout.
+```sh
+unisearch config set search.routing.classifier.api_key 'example-classifier-key'
+unisearch config set search.routing.classifier.model your-classifier-model-id
+unisearch config set search.routing.enabled true
+```
+
+The command can select fewer than `search.routing.max_sources`. Under automatic selection, the saved values of `providers.exa.search.search_type`, `providers.tavily.search.search_depth`, and `providers.zhipu.search.engine` are only preferences: a search can use other values, which can differ in cost. Other settings, such as result limits, apply as usual. See the [design overview](design.md#automatic-source-and-setting-selection) for the selection rules.
 
 ### Unified fetch and map
 
-| Field             | Type and values                                                         | Default                                                                                                 | Environment variable |
-| ----------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------- |
-| `fetch.providers` | Ordered string array; supports only the service IDs in the default list | `firecrawl` → `exa` → `tavily` → `jina` → `zhipu` → `zhipu-mcp` → `tinyfish` → `anysearch` → `deepseek` | —                    |
-| `map.providers`   | Ordered string array; supports only `tavily` and `firecrawl`            | `tavily` → `firecrawl`                                                                                  | —                    |
+| Field             | Type and values                                    | Default                                                                                                 | Environment variable |
+| ----------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------- |
+| `fetch.providers` | Ordered service ID array; values listed in Default | `firecrawl` → `exa` → `tavily` → `jina` → `zhipu` → `zhipu-mcp` → `tinyfish` → `anysearch` → `deepseek` | —                    |
+| `map.providers`   | Ordered service ID array; values listed in Default | `tavily` → `firecrawl`                                                                                  | —                    |
 
-`unisearch fetch` and `unisearch map` select enabled, configured services in list order and can try the next service after a failure when fallback is enabled. Service IDs must be unique; an empty list `[]` makes the command fail. Provider-specific commands are unaffected by these lists.
+The list order is the order in which services are tried. Service IDs must be unique; an empty list `[]` makes the command fail. Provider-specific commands are unaffected by these lists.
 
 Unified commands reuse each service's settings. `map --limit` overrides the limit for one call; each service's interpretation of that limit is listed in its configuration table.
 
@@ -188,6 +207,8 @@ Set `base_url` to the API root, such as `https://api.x.ai/v1`, without endpoint 
 
 Accepted `model.effort` values depend on the model API. Omit it or use `default` for the model's default effort.
 
+`--stream` and `--no-stream` apply only to the current call, and both modes produce output after the complete answer arrives. See the [design overview](design.md#timeouts-retries-and-cancellation) for streaming timeout rules.
+
 ### Model selection
 
 Each `fallback_models` entry has the form `{ "id": "...", "effort": "...", "protocol": "...", "tools": [...] }`. All fields except `id` are optional. Entries share the primary `base_url` and `api_key`. Omitted `protocol` and `tools` use the primary model's values; omitted `effort` sends no effort and lets the model use its own default.
@@ -221,17 +242,6 @@ unisearch config set providers.model.tools '[{"type":"web_search","filters":{"al
 `[]` disables tools. Web search requires the model API to support and enable the tools. UniSearch supports only tools executed by the model service.
 
 Setup's xAI shortcut fills in the URL, Responses protocol, and `web_search` and `x_search` tools. For other APIs, configure the tools they support.
-
-### Streaming
-
-`--stream` enables streaming requests and `--no-stream` disables them for the current call. Both modes collect the complete answer before producing output.
-
-Streaming model requests use the timeout duration from `execution.timeout_seconds` or `--timeout`, with these rules:
-
-- The model service must return the first text within the call's total time limit.
-- After receiving the first text, UniSearch resets the timer whenever it receives new model text. The request times out if no new text arrives within the timeout duration. Heartbeats and tool progress do not reset the timer.
-
-A model request that keeps returning text can exceed the initial total limit; other sources in a unified search remain subject to that limit. Once text starts arriving, an interrupted answer fails the model task without retries or model switching.
 
 ## Service settings
 
@@ -293,11 +303,9 @@ Unified fetch uses Firecrawl's scrape operation.
 | `providers.zhipu.search.engine` | Search engine depends on platform; see below       | BigModel: `search_std`; Z.AI: `search-prime` | —                          |
 | `providers.zhipu.search.limit`  | Integer `1–50`; Sogou and Quark restrictions below | `10`; no default for Quark                   | —                          |
 
-Default connection URLs: `https://open.bigmodel.cn/api/paas/v4` for BigModel and `https://api.z.ai/api/paas/v4` for Z.AI.
-
-The search engine parameter, `search.engine`, accepts `search_std`, `search_pro`, `search_pro_sogou`, or `search_pro_quark` on BigModel, and `search-prime` on Z.AI. Sogou accepts `search.limit` values of `10`, `20`, `30`, `40`, or `50`.
-
-Do not set `search.limit` or `--limit` with Quark, or with Sogou when both domain and time filters are used. If `search.limit` is saved, remove it with `unisearch config unset providers.zhipu.search.limit`.
+- `base_url`: `https://open.bigmodel.cn/api/paas/v4` for BigModel and `https://api.z.ai/api/paas/v4` for Z.AI.
+- `search.engine` accepts `search_std`, `search_pro`, `search_pro_sogou`, or `search_pro_quark` on BigModel, and only `search-prime` on Z.AI.
+- `search.limit` on Sogou accepts only `10`, `20`, `30`, `40`, or `50`. Do not set this field or `--limit` with Quark, or with Sogou when both domain and time filters are used; if it is saved, remove it with `unisearch config unset providers.zhipu.search.limit`.
 
 After switching platforms, check any manually set `base_url` and `search.engine` values; they do not change automatically.
 
@@ -387,7 +395,7 @@ unisearch status
 | `disabled` | The service is disabled.                 |
 | `invalid`  | Configuration is invalid.                |
 
-For `missing` or `invalid`, follow the reported issues to complete or correct the settings. `ready` means only that local configuration is valid. Use `doctor` to verify search service credentials and connectivity.
+Operations within a service can have different states. Check the operation you intend to call. For `missing` or `invalid`, follow the reported issues to complete or correct the settings. `ready` means only that the local settings are valid. Use `doctor` to verify credentials and connectivity.
 
 For an online check, choose a configured provider:
 
@@ -395,7 +403,7 @@ For an online check, choose a configured provider:
 unisearch doctor exa
 ```
 
-Without a service name, `doctor` checks all enabled, configured services, including anonymous services, and may consume quota. Diagnostics do not retry or switch services. `passed` means that check succeeded, not that every service operation is available.
+Without a service name, `doctor` checks all enabled, configured services, including anonymous services, and may consume quota. `doctor` does not check the classifier. Diagnostics do not retry or switch services. `passed` means that check succeeded, not that every service operation is available.
 
 ### A saved value is not taking effect
 
@@ -409,10 +417,10 @@ Use `unisearch config path` to locate the file, then check read permissions and 
 
 Run `unisearch status` and `unisearch config get providers.SERVICE`, replacing `SERVICE` with the service ID. Use the results to [enable the service](#service-switches) and supply required fields. Credential requirements are listed under [Service settings](#service-settings).
 
-### Authentication, protocol, or model errors
+### Authentication, protocol, model, or classifier errors
 
-Check the API key's platform and permissions, along with the URL, protocol, and model ID. See [Model settings](#model-settings) for API root, tool, and effort requirements.
+Check the API key's platform and permissions, along with the URL, protocol, and model ID. See [Model settings](#model-settings) for API root, tool, and effort requirements. For classification errors during automatic selection, check the classifier's URL, API key, and model ID.
 
 ### Timeouts or repeated requests
 
-Add `--verbose` to the failing command to inspect its execution records. Check connectivity and service limits before increasing the timeout; some services have shorter limits per request. See [Execution](#execution) for retries and switching, and [Streaming](#streaming) for streamed timeouts.
+Add `--verbose` to the failing command to inspect its execution records. Check connectivity and service limits before increasing the timeout; some services have shorter limits per request. See [Execution](#execution) for retries and switching, and the [design overview](design.md#timeouts-retries-and-cancellation) for streamed timeouts.

@@ -14,9 +14,15 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
 </p>
 
-UniSearch is a unified retrieval CLI for AI agents. It combines model search, web search, page reading, site link discovery, and library or repository documentation lookup.
+UniSearch is a unified retrieval CLI for AI agents. It supports web search, page reading, site link discovery, and documentation lookup for libraries and code repositories.
 
-It connects to model APIs, [Exa](https://exa.ai/), [Tavily](https://www.tavily.com/), [Firecrawl](https://www.firecrawl.dev/), [Context7](https://context7.com/), [Jina](https://jina.ai/), [Zhipu API](https://docs.z.ai/guides/tools/web-search), [Zhipu MCP](https://docs.z.ai/devpack/mcp/search-mcp-server), [AnySearch](https://anysearch.com/), [TinyFish](https://www.tinyfish.ai/), and [DeepSeek](https://api-docs.deepseek.com/guides/search).
+Searches can use a configured model or web search services. Search sources can be specified manually or selected by UniSearch based on the query.
+
+## Supported services
+
+UniSearch supports model APIs using Responses or Chat Completions, along with [Exa](https://exa.ai/), [Tavily](https://www.tavily.com/), [Firecrawl](https://www.firecrawl.dev/), [Context7](https://context7.com/), [Jina AI](https://jina.ai/), Zhipu API ([BigModel](https://docs.bigmodel.cn/cn/guide/tools/web-search) / [Z.AI](https://docs.z.ai/guides/tools/web-search)), Zhipu MCP ([BigModel](https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server) / [Z.AI](https://docs.z.ai/devpack/mcp/search-mcp-server)), [AnySearch](https://www.anysearch.com/), [TinyFish Search](https://www.tinyfish.ai/search), and [DeepSeek Search & Fetch](https://api-docs.deepseek.com/guides/search/).
+
+For a model to search the web, the model service must provide a search tool and the tool must be enabled in the UniSearch configuration. See [model settings](docs/en/configuration.md#model-settings) for how to configure the API address, model, and tools. See [service settings](docs/en/configuration.md#service-settings) for default API addresses and credential requirements.
 
 ## Install
 
@@ -31,36 +37,76 @@ Ensure `unisearch` is available on the PATH of the process running your agent.
 
 ## Configure
 
-Open the interactive configuration menu:
+Open the configuration menu in an interactive terminal to enter service credentials, set up unified search, and install the Skill for your agents:
 
 ```sh
 unisearch setup
 ```
 
-After configuring, check local settings or test connectivity:
+If an interactive terminal is unavailable, use `unisearch config set` or environment variables instead. After configuring, check the configuration as needed:
+
+- `unisearch status` checks local configuration only and sends no network requests.
+- `unisearch doctor` runs online checks for enabled services with usable diagnostic settings and may consume quota. `unisearch doctor PROVIDER` checks only the specified service; for example, `unisearch doctor exa` checks Exa.
+
+See [Configuration](docs/en/configuration.md) for all fields, how credentials are stored, environment variables, model protocols, and troubleshooting.
+
+## First search
+
+This example uses only Exa. Configure the Exa API key in `setup` first; no model configuration is needed:
 
 ```sh
-unisearch status
-unisearch doctor
+unisearch search 'Node.js 24 LTS release schedule' --sources exa
 ```
 
-- `status` checks local configuration without making network requests.
-- `doctor` runs online checks for enabled services with usable diagnostic settings and may consume quota. Use `unisearch doctor exa` to check only one service.
+`--sources` sets the sources for this search. Without it, the search uses the source list configured in `search.providers`; the default list contains only `model` and requires model settings.
 
-See [Configuration](docs/en/configuration.md) for all settings, credentials, environment variables, model protocols, and configuration troubleshooting.
+Use `unisearch fetch URL` to read a page and `unisearch map URL` to discover links within a site. `unisearch --help` lists all commands, and the [design overview](docs/en/design.md) explains source selection, failure handling, and exit codes.
 
 ## Connect an agent
 
-If you did not install the Skill during setup, install it for selected agents:
+If you did not add the UniSearch Skill during `setup`, use `unisearch skills install` to add it and `unisearch skills status` to check the installed copies.
 
 ```sh
 unisearch skills install --targets codex,claude
 unisearch skills status --targets codex,claude
 ```
 
-These examples install the bundled UniSearch Skill under `~/.codex/skills/` and `~/.claude/skills/`. Omit `--targets` during installation to select agents interactively; `skills status` without this option checks all targets. `unisearch skills install --help` lists the supported targets.
+The example installs the Skill under `~/.codex/skills/` and `~/.claude/skills/`. Omit `--targets` during installation to select agents interactively. Omit it in `unisearch skills status` to check all targets. `unisearch skills install --help` lists the supported targets.
 
-`install` creates missing copies and synchronizes existing ones with the package. `status` compares installed copies without changing them. Synchronization replaces the managed Skill directory with the bundled version, including any local edits.
+`unisearch skills install` creates missing copies and synchronizes existing ones with the bundled version. Synchronizing replaces the entire `unisearch` Skill directory under the agent's directory, so local edits in it are lost. `unisearch skills status` only compares the installed copies with the bundled version and does not modify files.
+
+```mermaid
+---
+config:
+    flowchart:
+        nodeSpacing: 32
+        rankSpacing: 28
+---
+flowchart TD
+    accTitle: How agents learn about and use UniSearch as needed
+    skill("<b>Read the UniSearch Skill</b><br/>Learn the basic workflow") --> entry{"Choose how to proceed"}
+    skill -.->|Check configuration as needed| status("unisearch status --json<br/>View local configuration")
+    status --> entry
+
+    entry -->|Agent chooses providers| guide("Read the Skill's provider guide")
+    entry -->|Automatic selection is configured| auto("unisearch search QUERY<br/>--auto")
+
+    guide --> run("Run the selected command")
+    guide -.->|Need option details| help("Command --help<br/>Review available options")
+    help --> run
+
+    run --> review("<b>Review the result</b><br/>Check status, sources, and errors<br/>Read original pages as needed")
+    auto --> review
+
+    classDef shared fill:#EAF1FA,stroke:#8DA5C1,color:#17324C;
+    classDef neutral fill:#F5F8FC,stroke:#A1B3C8,color:#243D56;
+    classDef agent fill:#E8F3FC,stroke:#80ACD3,color:#1A4264;
+    classDef automatic fill:#E5F4EF,stroke:#7DB4A5,color:#1B5646;
+    class skill,entry,review shared;
+    class status neutral;
+    class guide,help,run agent;
+    class auto automatic;
+```
 
 ## Upgrade and uninstall
 

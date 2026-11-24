@@ -57,6 +57,12 @@ const files = packed[0].files.map((file) => file.path);
 const compiledFiles = readdirSync(join(root, 'src'), { recursive: true })
   .filter((path) => path.endsWith('.ts'))
   .map((path) => `dist/${path.slice(0, -3).split(sep).join('/')}.js`);
+const documentation = [
+  'docs/en/configuration.md',
+  'docs/en/design.md',
+  'docs/zh-CN/configuration.md',
+  'docs/zh-CN/design.md',
+];
 const expectedFiles = [
   ...compiledFiles,
   'skills/unisearch/SKILL.md',
@@ -66,8 +72,7 @@ const expectedFiles = [
   'LICENSE',
   'README.md',
   'README.zh-CN.md',
-  'docs/en/configuration.md',
-  'docs/zh-CN/configuration.md',
+  ...documentation,
 ];
 assert.deepEqual(
   files.toSorted(),
@@ -129,7 +134,7 @@ function installed(args, expectedStatus = 0) {
 }
 
 const installedManifest = JSON.parse(readFileSync(join(packageDirectory, 'package.json'), 'utf8'));
-for (const path of ['docs/en/configuration.md', 'docs/zh-CN/configuration.md']) {
+for (const path of documentation) {
   assert.deepEqual(readFileSync(join(packageDirectory, path)), readFileSync(join(root, path)));
 }
 const skillPath = join(env.HOME, '.codex', 'skills', 'unisearch');

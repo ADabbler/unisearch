@@ -8,7 +8,15 @@
 - [文件位置与优先级](#文件位置与优先级)
 - [凭证管理](#凭证管理)
 - [公共设置](#公共设置)
+  - [界面语言](#界面语言)
+  - [执行设置](#执行设置)
+  - [统一 search](#统一-search)
+    - [自动选择搜索来源](#自动选择搜索来源)
+  - [统一 fetch 与 map](#统一-fetch-与-map)
+  - [服务开关](#服务开关)
 - [模型配置](#模型配置)
+  - [模型选择](#模型选择)
+  - [工具配置](#工具配置)
 - [服务配置](#服务配置)
   - [Exa](#exa)
   - [Tavily](#tavily)
@@ -25,20 +33,20 @@
 
 ## 配置与查询
 
-通过 `unisearch setup` 可交互式配置服务连接与凭证、统一搜索和界面语言，并为所选 Agent 安装 UniSearch Skill。保存前可预览配置改动和 Skill 安装路径。
+通过 `unisearch setup` 可交互式配置服务连接与凭证、统一搜索和界面语言，并为所选 Agent 安装 UniSearch Skill。保存前可预览配置改动和 Skill 安装路径。`setup` 需要交互式终端。
 
 设置可通过 `unisearch config` 查询和修改，也可直接在[配置文件](#文件位置)中编辑。
 
 `KEY` 填写下方配置表中的字段名。点号 `.` 分隔配置文件中的嵌套层级，例如 `providers.exa.search.limit` 对应 JSON 中的 `providers` → `exa` → `search` → `limit`。
 
-| 命令                             | 作用                                                 |
-| -------------------------------- | ---------------------------------------------------- |
-| `unisearch config path`          | 显示配置文件路径。                                   |
-| `unisearch config list`          | 查看文件或环境变量中已设置的生效值及来源。           |
-| `unisearch config list --all`    | 查看生效配置及来源，包括内置默认值。                 |
-| `unisearch config get KEY`       | 查看一个配置项或一组配置的生效值及来源，包括默认值。 |
-| `unisearch config set KEY VALUE` | 设置并保存一个配置项。                               |
-| `unisearch config unset KEY`     | 删除已保存的配置项或整组配置。                       |
+| 命令                             | 作用                                       |
+| -------------------------------- | ------------------------------------------ |
+| `unisearch config path`          | 显示配置文件路径。                         |
+| `unisearch config list`          | 列出已设置的配置项及来源。                 |
+| `unisearch config list --all`    | 列出全部生效配置及来源，包括内置默认值。   |
+| `unisearch config get KEY`       | 查看一个配置项或一组配置，含默认值和来源。 |
+| `unisearch config set KEY VALUE` | 设置并保存一个配置项。                     |
+| `unisearch config unset KEY`     | 删除已保存的配置项或整组配置。             |
 
 例如，设置、查询并删除 Exa 的搜索结果数量上限：
 
@@ -51,6 +59,8 @@ unisearch config unset providers.exa.search.limit
 查询或删除 Exa 的整组配置时，将上述 `get` 或 `unset` 命令中的字段名替换为 `providers.exa`。
 
 `VALUE` 的类型与取值见下方配置表。数组使用 JSON 格式并用引号包住，例如 `'["exa","jina"]'`；设置数组会替换原有列表。
+
+配置表中，“无”表示没有默认值，“—”表示不支持环境变量覆盖。
 
 ## 文件位置与优先级
 
@@ -81,13 +91,11 @@ UniSearch 读取一个用户配置文件：
 
 ## 凭证管理
 
-使用 setup 的隐藏输入填写 API Key，或设置表格中对应的环境变量。配置文件以明文保存 API Key，查询结果会显示为 `[REDACTED]`。
+用 `setup` 的隐藏输入或 `config set` 保存 API Key，也可设置表格中对应的环境变量。保存的 API Key 以明文存放在配置文件中；`config list` 和 `config get` 会将其显示为 `[REDACTED]`。使用环境变量提供凭证时，无需写入配置文件。
 
 直接在命令行传入 API Key 可能将其留在 shell 历史和进程参数中。
 
 ## 公共设置
-
-表格中的“无”表示没有默认值，“—”表示不支持环境变量覆盖。
 
 ### 界面语言
 
@@ -95,7 +103,7 @@ UniSearch 读取一个用户配置文件：
 | ---------- | ------------------ | ------ | ---------------- |
 | `language` | `en`、`zh`、`auto` | `auto` | `UNISEARCH_LANG` |
 
-`auto` 跟随系统语言：中文环境使用中文，其他环境使用英文。服务返回的内容保留原文。
+`auto` 按 `LC_ALL`、`LC_MESSAGES`、`LANG` 判断，都未设置时使用系统区域设置：中文区域使用中文，其他使用英文。服务返回的内容保留原文。
 
 ### 执行设置
 
@@ -105,9 +113,7 @@ UniSearch 读取一个用户配置文件：
 | `execution.retries`         | 非负整数，每个请求的额外重试次数；`0` 关闭重试             | `2`    | `UNISEARCH_RETRIES`         |
 | `execution.fallback`        | `true`、`false`，控制备用模型和统一 fetch/map 的跨服务切换 | `true` | `UNISEARCH_FALLBACK`        |
 
-单次调用可用 `--timeout SECONDS` 覆盖时限。时限包含重试等待和服务切换；模型流式请求采用[单独的超时规则](#流式请求)。
-
-`--no-fallback` 关闭模型或服务切换，不影响重试。服务专用命令不会跨服务切换。
+单次调用可用 `--timeout SECONDS` 覆盖时限。`--no-fallback` 关闭模型或服务切换，不影响重试。模型流式请求采用[单独的超时规则](design.md#超时重试和取消)。
 
 ### 统一 search
 
@@ -115,17 +121,24 @@ UniSearch 读取一个用户配置文件：
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- |
 | `search.providers` | 非空来源 ID 数组；支持 `model`、`exa`、`tavily`、`firecrawl`、`jina`、`zhipu`、`zhipu-mcp`、`anysearch`、`tinyfish`、`deepseek` | `["model"]` | —        |
 
-`unisearch search` 在关闭自动选择时使用此列表。选定的来源并行执行，按选择顺序输出。使用 `--sources IDS` 可指定本次调用的来源，多个 ID 用逗号分隔，同时会跳过自动选择。
+关闭自动选择时，`unisearch search` 使用此列表。`--sources IDS` 指定本次调用的完整来源列表，优先于配置列表和自动选择；多个 ID 用逗号分隔。
 
-若列表包含重复或不支持的 ID，或所选服务已禁用、缺少必要配置，命令会在发送任何请求前报错。
+列表中的 ID 不能重复，且须为受支持、已启用并配置完整的服务，否则命令在发出请求前报错。默认列表仅含 `model`，未配置模型时需用 `--sources` 指定其他来源。
+
+配置好 Exa 和 Tavily 后，可以将它们保存为固定来源。已默认启用自动选择时，`--no-auto` 让本次搜索使用这份列表。
 
 ```sh
 unisearch config set search.providers '["exa","tavily"]'
-unisearch search "搜索问题"
+unisearch search "搜索问题" --no-auto
+```
+
+来源不含 `model` 时无需模型配置。未使用自动选择且来源包含 `model` 时，可使用 `--model`、`--effort` 等模型搜索专属参数。比如已配置模型和 Exa，且模型支持 `low`，就可以为本次调用指定思考等级。
+
+```sh
 unisearch search "搜索问题" --sources model,exa --effort low
 ```
 
-只选其他来源时无需模型配置。未使用自动选择且来源包含 `model` 时，可使用 `--model`、`--effort` 等模型搜索专属参数。完整参数见 `unisearch model search --help`。
+完整参数见 `unisearch search --help`。
 
 #### 自动选择搜索来源
 
@@ -140,18 +153,24 @@ unisearch search "搜索问题" --sources model,exa --effort low
 
 `search.routing.enabled` 为 `true` 时，默认启用自动选择。`--auto` 和 `--no-auto` 分别启用和禁用自动选择，仅对本次搜索生效。
 
-自动模式按查询选择来源，实际数量可少于 `search.routing.max_sources`。对于支持自动选参的已选来源，分类器也会为本次搜索选择参数。
+在 `setup` 中将自动选择设为默认模式前，需先配置分类器。只有一个适用来源且无需选参时，命令不会调用分类器，会直接搜索。
 
-只有一个适用来源且无需选择搜索参数时，命令会跳过分类器。无适用来源、分类失败或自动选择未选出来源时，命令会报错。分类耗时计入本次搜索的超时预算。
+```sh
+unisearch config set search.routing.classifier.api_key 'example-classifier-key'
+unisearch config set search.routing.classifier.model your-classifier-model-id
+unisearch config set search.routing.enabled true
+```
+
+实际选中的来源数量可以少于 `search.routing.max_sources`。在自动选择下，`providers.exa.search.search_type`、`providers.tavily.search.search_depth` 和 `providers.zhipu.search.engine` 的保存值只作为偏好，本次搜索可能改用其他取值，费用也可能不同。结果数量等其他设置照常生效。选源与选参的规则见[设计概览](design.md#自动选源和选参)。
 
 ### 统一 fetch 与 map
 
-| 字段              | 类型与取值                                   | 默认值                                                                                                  | 环境变量 |
-| ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------- |
-| `fetch.providers` | 有序字符串数组，仅支持默认列表中的服务 ID    | `firecrawl` → `exa` → `tavily` → `jina` → `zhipu` → `zhipu-mcp` → `tinyfish` → `anysearch` → `deepseek` | —        |
-| `map.providers`   | 有序字符串数组，仅支持 `tavily`、`firecrawl` | `tavily` → `firecrawl`                                                                                  | —        |
+| 字段              | 类型与取值                           | 默认值                                                                                                  | 环境变量 |
+| ----------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------- | -------- |
+| `fetch.providers` | 有序服务 ID 数组，取值见“默认值”一栏 | `firecrawl` → `exa` → `tavily` → `jina` → `zhipu` → `zhipu-mcp` → `tinyfish` → `anysearch` → `deepseek` | —        |
+| `map.providers`   | 有序服务 ID 数组，取值见“默认值”一栏 | `tavily` → `firecrawl`                                                                                  | —        |
 
-`unisearch fetch` 和 `unisearch map` 按列表顺序选择已启用且配置完整的服务，启用回退时可在失败后尝试下一服务。列表中的服务 ID 不能重复，空列表 `[]` 会导致对应命令报错；服务专用命令不受列表影响。
+列表顺序即尝试顺序。列表中的 ID 不能重复，空列表 `[]` 会导致对应命令报错；服务专用命令不受列表影响。
 
 统一命令复用各服务的配置。`map --limit` 可覆盖本次的数量设置，各服务对数量的定义见下方配置表。
 
@@ -188,6 +207,8 @@ unisearch config set providers.exa.enabled false
 
 `model.effort` 的可选值由模型 API 决定；未设置或填 `default` 时，使用该模型的默认思考等级。
 
+`--stream` 和 `--no-stream` 只对本次调用生效，两种模式都在收到完整回答后输出；流式请求的超时规则见[设计概览](design.md#超时重试和取消)。
+
 ### 模型选择
 
 `fallback_models` 的每项格式为 `{ "id": "...", "effort": "...", "protocol": "...", "tools": [...] }`，除 `id` 外均可省略。备用条目共用主模型的 `base_url` 和 `api_key`。未设置 `protocol` 和 `tools` 时沿用主模型的值；未设置 `effort` 时不发送思考等级，由模型使用自身默认值。
@@ -221,17 +242,6 @@ unisearch config set providers.model.tools '[{"type":"web_search","filters":{"al
 `[]` 表示不使用工具。联网搜索需要模型 API 支持并启用对应工具；UniSearch 仅支持由模型服务执行的工具。
 
 setup 的 xAI 快捷项会自动填写地址、Responses 协议及 `web_search`、`x_search`。其他 API 应按其支持情况配置工具。
-
-### 流式请求
-
-`--stream` 启用流式请求，`--no-stream` 关闭，均只对本次调用生效。两种模式都在收到完整回答后输出。
-
-模型流式请求的超时时长由 `execution.timeout_seconds` 或 `--timeout` 指定，按以下规则计时：
-
-- 模型服务须在本次调用的总时限内返回首段文本。
-- UniSearch 收到首段文本后，每次收到新的模型文本都会重置计时；超过设定时长未收到新文本，该请求即超时。心跳和工具进度不会重置计时。
-
-持续返回文本的模型请求可超过最初的总时限；统一搜索中的其他来源仍受该时限约束。开始返回文本后若回答中断，模型任务会报错且不再重试或切换模型。
 
 ## 服务配置
 
@@ -293,11 +303,9 @@ setup 的 xAI 快捷项会自动填写地址、Responses 协议及 `web_search`�
 | `providers.zhipu.search.engine` | 按平台选择搜索引擎，见下文          | BigModel：`search_std`；Z.AI：`search-prime` | —                          |
 | `providers.zhipu.search.limit`  | 整数 `1–50`；搜狗和夸克的限制见下文 | `10`；夸克无默认值                           | —                          |
 
-默认连接地址：BigModel 为 `https://open.bigmodel.cn/api/paas/v4`，Z.AI 为 `https://api.z.ai/api/paas/v4`。
-
-搜索引擎参数 `search.engine` 的可选值：BigModel 为 `search_std`、`search_pro`、`search_pro_sogou` 和 `search_pro_quark`；Z.AI 为 `search-prime`。搜狗的 `search.limit` 仅支持 `10`、`20`、`30`、`40`、`50`。
-
-使用夸克，或使用搜狗且同时按域名和时间过滤时，不能指定 `search.limit` 或 `--limit`。如已保存 `search.limit`，运行 `unisearch config unset providers.zhipu.search.limit` 删除。
+- `base_url`：BigModel 为 `https://open.bigmodel.cn/api/paas/v4`，Z.AI 为 `https://api.z.ai/api/paas/v4`。
+- `search.engine`：BigModel 可选 `search_std`、`search_pro`、`search_pro_sogou` 和 `search_pro_quark`；Z.AI 仅有 `search-prime`。
+- `search.limit`：搜狗仅支持 `10`、`20`、`30`、`40`、`50`。使用夸克，或使用搜狗且同时按域名和时间过滤时，不能指定该字段或 `--limit`；已保存时运行 `unisearch config unset providers.zhipu.search.limit` 删除。
 
 切换平台后，检查已手动设置的 `base_url` 和 `search.engine`，它们不会自动更换。
 
@@ -387,7 +395,7 @@ unisearch status
 | `disabled` | 服务已禁用。             |
 | `invalid`  | 配置无效。               |
 
-出现 `missing` 或 `invalid` 时，按提示补齐或修正配置。`ready` 只表示本地配置有效；各搜索服务的凭证和连接可通过 `doctor` 检查。
+同一家服务的各项操作可能有不同状态，以你要调用的操作为准。出现 `missing` 或 `invalid` 时，按提示补齐或修正配置。`ready` 只表示本地配置有效，凭证和连接可通过 `doctor` 检查。
 
 需要联网检查时，选择已配置的服务：
 
@@ -395,7 +403,7 @@ unisearch status
 unisearch doctor exa
 ```
 
-不指定服务时，`doctor` 检查所有已启用且配置可用的服务，包括匿名服务，可能消耗额度。诊断不重试或切换服务。`passed` 表示该项诊断成功，不保证该服务的所有操作均可用。
+不指定服务时，`doctor` 检查所有已启用且配置可用的服务，包括匿名服务，可能消耗额度。`doctor` 不检查分类器。诊断不重试或切换服务。`passed` 表示该项诊断成功，不保证该服务的所有操作均可用。
 
 ### 保存值没有生效
 
@@ -409,10 +417,10 @@ unisearch doctor exa
 
 执行 `unisearch status` 和 `unisearch config get providers.SERVICE`，将 `SERVICE` 替换为实际服务 ID。根据结果[启用服务](#服务开关)并补齐必要字段；凭证要求见对应的[服务配置](#服务配置)。
 
-### 认证、协议或模型报错
+### 认证、协议、模型或分类器报错
 
-检查 API Key 对应的平台与访问权限，以及地址、协议和模型 ID 是否正确。模型的根地址、工具和思考等级要求见[模型配置](#模型配置)。
+检查 API Key 对应的平台与访问权限，以及地址、协议和模型 ID 是否正确。模型的根地址、工具和思考等级要求见[模型配置](#模型配置)。自动选择报分类错误时，检查分类器的地址、API Key 和模型 ID。
 
 ### 超时或重复请求
 
-在失败命令后添加 `--verbose` 查看执行记录，先检查网络连接和服务限制，再考虑增加超时。部分服务的单次请求时限可能更短。重试和切换见[执行设置](#执行设置)，流式超时见[流式请求](#流式请求)。
+在失败命令后添加 `--verbose` 查看执行记录，先检查网络连接和服务限制，再考虑增加超时。部分服务的单次请求时限可能更短。重试和切换见[执行设置](#执行设置)，流式超时见[设计概览](design.md#超时重试和取消)。

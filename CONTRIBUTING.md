@@ -19,13 +19,13 @@ npm run dev -- --help
 
 - `src/cli.ts` loads the package version and runs the CLI. `src/cli/` defines commands, help, and terminal prompts.
 - `src/config/` defines fields and resolves, queries, and saves configuration. `src/i18n/` owns interface language and typed Chinese/English messages.
-- `src/search.ts` combines model and supplementary searches. `src/retrieval.ts` selects and switches services for unified fetch/map.
+- `src/search.ts` coordinates unified search, and `src/model-search.ts` runs model search and backup-model fallback. `src/routing.ts` prepares automatic source selection, `src/routing-parameters.ts` defines the settings it can choose, and `src/classifiers/` calls the classifier service. `src/retrieval.ts` selects and switches services for unified `fetch` and `map`.
 - `src/execution.ts` manages request deadlines, retry waits, cancellation, and execution records. `src/providers/` constructs provider requests and interprets responses.
 - `src/result.ts` and `src/errors.ts` define results and failures. `src/output/` renders results and delivers them to streams or files.
 - `src/setup.ts`, `src/doctor.ts`, and `src/skills/` implement interactive configuration, online diagnostics, and Skill copy management.
 - `tests/` contains Node tests and fixtures. `scripts/check-package.mjs` verifies the distributed package through an isolated installation.
 
-Commands resolve the configuration they need before running an operation. Model and supplementary searches run in parallel and retain separate results. Unified fetch/map tries configured candidates in order. Both paths use the shared request executor, then present results through the output module.
+See the [design overview](docs/en/design.md) for retrieval workflows and failure handling.
 
 ## Checks
 
@@ -49,7 +49,7 @@ Source and tests use strict TypeScript with ESM and NodeNext resolution. Relativ
 
 For a provider change, review its configuration fields, command definitions, request construction, response handling, output rendering, and relevant tests together. Keep provider-specific logic in its module and reuse the request executor for common request behavior. New interface text belongs in both language versions of `src/i18n/` messages.
 
-Update both [English](docs/en/configuration.md) and [Chinese](docs/zh-CN/configuration.md) configuration references when settings change. When adding or removing packaged files, update `files` in `package.json` and the package-check allowlist together.
+Update both [English](docs/en/configuration.md) and [Chinese](docs/zh-CN/configuration.md) configuration references when settings change, and both [English](docs/en/design.md) and [Chinese](docs/zh-CN/design.md) design overviews when selection, execution, or result rules change. When adding or removing packaged files, update `files` in `package.json` and the package-check allowlist together.
 
 Keep each commit focused on one change and use `<type>(<scope>): <description>` for commit messages. Describe the problem, resulting behavior, and checks you ran in the PR so maintainers can reproduce and review the change.
 

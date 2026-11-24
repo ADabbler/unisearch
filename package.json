@@ -34,7 +34,9 @@
     "README.md",
     "README.zh-CN.md",
     "docs/en/configuration.md",
+    "docs/en/design.md",
     "docs/zh-CN/configuration.md",
+    "docs/zh-CN/design.md",
     "LICENSE"
   ],
   "scripts": {

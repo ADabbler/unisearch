@@ -19,13 +19,13 @@ npm run dev -- --help
 
 - `src/cli.ts` 读取包版本并运行 CLI，`src/cli/` 定义命令、帮助与终端交互。
 - `src/config/` 定义配置字段并负责解析、查询和保存，`src/i18n/` 管理界面语言与带类型的中英文消息。
-- `src/search.ts` 组合模型与补充检索，`src/retrieval.ts` 为统一 fetch/map 选择和切换服务。
+- `src/search.ts` 组织统一搜索，`src/model-search.ts` 执行模型搜索和备用模型切换。`src/routing.ts` 准备自动选源，`src/routing-parameters.ts` 定义可自动选择的参数，`src/classifiers/` 调用分类服务。`src/retrieval.ts` 为统一 `fetch` 和 `map` 选择和切换服务。
 - `src/execution.ts` 管理请求截止时间、重试等待、取消和执行记录，`src/providers/` 构造服务请求并解析响应。
 - `src/result.ts` 和 `src/errors.ts` 定义结果与失败，`src/output/` 渲染结果并写入输出流或文件。
 - `src/setup.ts`、`src/doctor.ts` 和 `src/skills/` 分别实现交互配置、联网诊断和 Skill 副本管理。
 - `tests/` 包含 Node 测试与夹具，`scripts/check-package.mjs` 通过隔离安装验证分发包。
 
-命令先解析所需配置，再执行操作。模型与补充检索并行运行，分别保留结果；统一 fetch/map 按配置顺序尝试候选服务。两者复用请求执行层，最后由输出模块呈现结果。
+检索流程与失败处理见[设计概览](docs/zh-CN/design.md)。
 
 ## 开发检查
 
@@ -49,7 +49,7 @@ npm run dev -- --help
 
 修改服务接入时，一并检查配置字段、命令定义、请求构造、响应处理、结果渲染和相关测试。服务特有逻辑保留在对应模块，通用请求逻辑复用公共执行层。新增界面文案须同时补齐 `src/i18n/` 中的中英文消息。
 
-配置变更同步更新[英文](docs/en/configuration.md)和[中文](docs/zh-CN/configuration.md)配置文档。新增或移除随包文件时，同步更新 `package.json` 的 `files` 和包检查白名单。
+配置变更同步更新[英文](docs/en/configuration.md)和[中文](docs/zh-CN/configuration.md)配置文档，选源、执行或结果规则变更同步更新[英文](docs/en/design.md)和[中文](docs/zh-CN/design.md)设计概览。新增或移除随包文件时，同步更新 `package.json` 的 `files` 和包检查白名单。
 
 每个提交聚焦一个改动，提交信息使用 `<type>(<scope>): <description>`。PR 说明解决的问题、修改后的行为和已运行的检查，方便维护者复现和审阅。
 

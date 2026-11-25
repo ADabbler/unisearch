@@ -5,7 +5,7 @@ import type { SetupData, SetupDraft } from '../setup.js';
 import type { TargetResult } from '../skills/manage.js';
 import { renderSkills } from './skills.js';
 import { skillTargets } from '../skills/targets.js';
-import { promptFrame } from '../cli/prompts.js';
+import { cancelledPrompt, promptFrame } from '../cli/prompts.js';
 import { errorText } from './render.js';
 
 function changes(items: JsonObject[]): string {
@@ -31,7 +31,7 @@ export function renderSetup(result: Result<SetupData>, language: Language): stri
   const { data, error } = result;
   const cancelled = error?.code === 'CANCELLED';
   if (cancelled && (!data || data.config.state === 'not_saved'))
-    return promptFrame(errorText(error, language), 'cancel', [], process.stderr, true) + '\n';
+    return cancelledPrompt(errorText(error, language));
   const states: Record<string, string> = zh
     ? { saved: '配置已保存', unchanged: '配置无变化', not_saved: '配置未保存' }
     : {

@@ -103,10 +103,20 @@ export function promptFrame(
     .join('\n')}${finished || endGuide ? '' : '\n'}`;
 }
 
+export function cancelledPrompt(message: string): string {
+  return promptFrame(message, 'cancel', [], process.stderr, true) + '\n';
+}
+
 function choicePadding(title: string, footer: string, output: Writable): number {
   const frameRows = wrappedLines(title, output).length + 2;
   const footerRows = wrappedLines(footer, output).length + 1;
   return frameRows + footerRows;
+}
+
+function clearClosedPrompt(output: Writable, rows: number): void {
+  // Closing advances one row. An abort can close without clearing the prompt.
+  moveCursor(output, 0, -rows - 1);
+  if (rows) clearScreenDown(output);
 }
 
 function choiceLines(
@@ -269,11 +279,7 @@ export function terminalPrompts(
           },
         });
         if (menu) {
-          // Closing advances one row. An abort can close without clearing the menu.
-          const finishMenu = () => {
-            moveCursor(common.output, 0, -menuRows - 1);
-            if (menuRows) clearScreenDown(common.output);
-          };
+          const finishMenu = () => clearClosedPrompt(common.output, menuRows);
           prompt.once('submit', finishMenu);
           prompt.once('cancel', finishMenu);
         }
@@ -290,19 +296,23 @@ export function terminalPrompts(
     multi: (message, choices, initial, language, validate) => {
       const footer = keyFooter(language, 'multiSelectKeys');
       return ask((signal) => {
-        return new MultiSelectPrompt({
+        let rows = 0;
+        const prompt = new MultiSelectPrompt({
           ...common,
           signal,
           options: choices,
           initialValues: initial,
           validate,
           render() {
-            const finished = this.state === 'submit' || this.state === 'cancel';
+            if (this.state === 'cancel') {
+              rows = 0;
+              return;
+            }
             const selected = this.value ?? [];
             const title =
               this.state === 'error' ? errorTitle(message, this.error, language) : message;
             let lines: string[];
-            if (finished) {
+            if (this.state === 'submit') {
               const summary =
                 this.options
                   .filter((choice) => selected.includes(choice.value))
@@ -320,9 +330,13 @@ export function terminalPrompts(
               );
               lines.push('', footer);
             }
-            return promptFrame(title, this.state, lines, common.output);
+            const frame = promptFrame(title, this.state, lines, common.output);
+            rows = frame.split('\n').length - 1;
+            return frame;
           },
         });
+        prompt.once('cancel', () => clearClosedPrompt(common.output, rows));
+        return prompt;
       });
     },
     input: (message, secret, validate, language, placeholder) => {

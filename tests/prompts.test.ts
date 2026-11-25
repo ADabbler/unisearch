@@ -8,6 +8,7 @@ import { setImmediate } from 'node:timers/promises';
 import { stripVTControlCharacters } from 'node:util';
 import stringWidth from 'fast-string-width';
 import * as clack from '@clack/prompts';
+import { createCli } from '../src/cli/program.js';
 import { terminalPrompts } from '../src/cli/prompts.js';
 import { AppError } from '../src/errors.js';
 import { text } from '../src/i18n/messages.js';
@@ -260,6 +261,21 @@ test('Terminal choice lists scroll within the viewport and retain every selectab
   assert.match(f.take(), /Target 16/);
   f.input.write(' \r');
   assert.deepEqual(await result, ['16']);
+});
+
+test('Cancelling Skill target selection closes the menu and reports cancellation once', async (t) => {
+  const f = terminal(t);
+  t.mock.getter(process, 'stdin', () =>
+    Object.assign(f.input, { isTTY: true, setRawMode: () => f.input }),
+  );
+  t.mock.getter(process, 'stderr', () => Object.assign(f.output, { isTTY: true }));
+  const config = context(temporary(t), { UNISEARCH_LANG: 'en' });
+  const result = createCli('test', { config }).run(['skills', 'install']);
+  await setImmediate();
+  f.take();
+  f.input.write('\x03');
+  assert.equal(await result, 130);
+  assert.equal(f.take().trim(), `${clack.S_BAR}\n${clack.S_BAR_END}  ${text('en', 'cancelled')}`);
 });
 
 test('Terminal Escape, Ctrl+C, Ctrl+D, EOF and abort cancel prompts and release listeners', async (t) => {

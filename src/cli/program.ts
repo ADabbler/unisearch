@@ -66,6 +66,7 @@ import type { ExitCode, JsonObject, JsonValue, Outcome } from '../result.js';
 import { manageSkills, preflightSkills } from '../skills/manage.js';
 import { parseTargets, skillTargets, targetPaths } from '../skills/targets.js';
 import {
+  cancelledPrompt,
   requireTerminal,
   selectSkillTargets,
   terminalPrompts,
@@ -487,7 +488,21 @@ export function createCli(version: string, options: CliOptions = {}) {
         else if (action === 'status') ids = skillTargets.map((item) => item[0]);
         else {
           requireTerminal();
-          ids = await selectSkillTargets(terminalPrompts(abort.signal), ui, action);
+          try {
+            ids = await selectSkillTargets(terminalPrompts(abort.signal), ui, action);
+          } catch (error) {
+            if (!(error instanceof AppError) || error.code !== 'CANCELLED') throw error;
+            exitCode = await display(
+              failure(error, ui),
+              {
+                format: 'text',
+                language: ui,
+                renderText: () => cancelledPrompt(text(ui, error.key)),
+              },
+              channels,
+            );
+            return;
+          }
         }
         const targets = targetPaths(ids, config);
         if (action !== 'status') await preflightSkills(targets);

@@ -22,7 +22,7 @@ export class McpError extends AppError {
 }
 
 export function invalid(field: string, reason?: string): AppError {
-  return new AppError('INVALID_RESPONSE', 'mcpResponse', {
+  return new AppError('INVALID_RESPONSE', 'zhipuMcpResponse', {
     provider: 'zhipu-mcp',
     field,
     ...(reason ? { reason } : {}),
@@ -40,20 +40,20 @@ function decode(bytes: Uint8Array): unknown {
 function httpFailure(status: number, session: boolean): [AppError['code'], MessageKey, boolean] {
   switch (status) {
     case 401:
-      return ['AUTHENTICATION_ERROR', 'mcpAuth', false];
+      return ['AUTHENTICATION_ERROR', 'zhipuMcpAuth', false];
     case 402:
-      return ['QUOTA_EXCEEDED', 'mcpQuota', false];
+      return ['QUOTA_EXCEEDED', 'zhipuMcpQuota', false];
     case 403:
-      return ['ACCESS_DENIED', 'mcpAccess', false];
+      return ['ACCESS_DENIED', 'zhipuMcpAccess', false];
     case 408:
     case 504:
       return ['TIMEOUT', 'requestTimeout', true];
     case 429:
-      return ['RATE_LIMITED', 'mcpRate', true];
+      return ['RATE_LIMITED', 'zhipuMcpRate', true];
     case 404:
-      return ['UPSTREAM_ERROR', 'mcpUpstream', session];
+      return ['UPSTREAM_ERROR', 'zhipuMcpUpstream', session];
     default:
-      return ['UPSTREAM_ERROR', 'mcpUpstream', [500, 502, 503].includes(status)];
+      return ['UPSTREAM_ERROR', 'zhipuMcpUpstream', [500, 502, 503].includes(status)];
   }
 }
 
@@ -117,7 +117,7 @@ async function withSession<T>(
         context.signal.throwIfAborted();
         if (
           !(error instanceof AppError) &&
-          !transportError(error, context, 'zhipu-mcp', 'mcpNetwork', safe)
+          !transportError(error, context, 'zhipu-mcp', 'zhipuMcpNetwork', safe)
         )
           throw error;
         if (diagnostic.reason === undefined) diagnostic.reason = 'error_body_invalid';
@@ -186,7 +186,7 @@ async function withSession<T>(
       if (!isObject(error) || !Number.isInteger(error.code) || typeof error.message !== 'string')
         throw invalid('error');
       if (hasNonfiniteNumber(error.data)) throw invalid('error.data');
-      throw new McpError('UPSTREAM_ERROR', 'mcpUpstream', {
+      throw new McpError('UPSTREAM_ERROR', 'zhipuMcpUpstream', {
         ...details(),
         upstream_code: error.code as number,
         upstream_message: safe(error.message),
@@ -270,7 +270,7 @@ async function withSession<T>(
         if (chunk.done) {
           if (buffer || lines.length) throw invalid('response', 'incomplete_sse_event');
           if (resumable)
-            throw new McpError('UPSTREAM_ERROR', 'mcpUpstream', {
+            throw new McpError('UPSTREAM_ERROR', 'zhipuMcpUpstream', {
               ...details(),
               reason: 'stream_resume_required',
             });
@@ -282,9 +282,9 @@ async function withSession<T>(
       if (
         !(error instanceof AppError) &&
         resumable &&
-        transportError(error, context, 'zhipu-mcp', 'mcpNetwork', safe)
+        transportError(error, context, 'zhipu-mcp', 'zhipuMcpNetwork', safe)
       )
-        throw new McpError('UPSTREAM_ERROR', 'mcpUpstream', {
+        throw new McpError('UPSTREAM_ERROR', 'zhipuMcpUpstream', {
           ...details(),
           reason: 'stream_resume_required',
         });
@@ -297,7 +297,7 @@ async function withSession<T>(
         if (
           complete &&
           !context.signal.aborted &&
-          !transportError(error, context, 'zhipu-mcp', 'mcpNetwork', safe)
+          !transportError(error, context, 'zhipu-mcp', 'zhipuMcpNetwork', safe)
         )
           throw error;
       } finally {
@@ -374,7 +374,7 @@ async function withSession<T>(
         throw new McpError(error.code, error.key, clean, error.retry, error.retryAfter);
       throw new McpError(error.code, error.key, clean);
     }
-    const mapped = transportError(error, context, 'zhipu-mcp', 'mcpNetwork', safe);
+    const mapped = transportError(error, context, 'zhipu-mcp', 'zhipuMcpNetwork', safe);
     if (!mapped) throw error;
     throw new McpError(
       mapped.error.code,
@@ -422,7 +422,7 @@ export function discoverTool(
         visited.add(cursor);
       }
     } while (cursor !== undefined);
-    throw new AppError('UPSTREAM_ERROR', 'mcpUpstream', {
+    throw new AppError('UPSTREAM_ERROR', 'zhipuMcpUpstream', {
       provider: 'zhipu-mcp',
       reason: 'tool_not_listed',
       tool: request.tool,

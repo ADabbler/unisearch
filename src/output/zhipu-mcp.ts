@@ -47,7 +47,7 @@ export function renderBlocks(
         delete rest.description;
       }
       if (typeof rest.mimeType === 'string') {
-        sections.push(`${text(language, 'mcpResourceType')}${sep}${inline(rest.mimeType)}`);
+        sections.push(`${text(language, 'zhipuMcpResourceType')}${sep}${inline(rest.mimeType)}`);
         delete rest.mimeType;
       }
     } else if (
@@ -62,7 +62,7 @@ export function renderBlocks(
       rest.resource = resource;
     }
     if (Object.keys(rest).length)
-      sections.push(`${text(language, 'mcpAttributes')}${sep}`, jsonBlock(rest));
+      sections.push(`${text(language, 'zhipuMcpAttributes')}${sep}`, jsonBlock(rest));
   }
   return sections.join('\n\n');
 }
@@ -72,18 +72,23 @@ function renderToolContent(data: ToolContent, language: Language, operation?: Op
   const sep = colon(language);
   if (data.text !== undefined) {
     if (data.text === '')
-      sections.push(text(language, operation === 'read-file' ? 'mcpEmptyFile' : 'mcpEmpty'));
+      sections.push(
+        text(language, operation === 'read-file' ? 'zhipuMcpEmptyFile' : 'zhipuMcpEmpty'),
+      );
     else
       sections.push(
         operation === 'tree' || operation === 'read-file' ? fenced(data.text, 'text') : data.text,
       );
   }
   if (data.content?.length) sections.push(renderBlocks(data.content, language, operation));
-  else if (data.content && !data.structured_content) sections.push(text(language, 'mcpEmpty'));
+  else if (data.content && !data.structured_content) sections.push(text(language, 'zhipuMcpEmpty'));
   if (data.structured_content !== undefined)
-    sections.push(`${text(language, 'mcpStructured')}${sep}`, jsonBlock(data.structured_content));
+    sections.push(
+      `${text(language, 'zhipuMcpStructured')}${sep}`,
+      jsonBlock(data.structured_content),
+    );
   if (data.metadata !== undefined)
-    sections.push(`${text(language, 'mcpAttributes')}${sep}`, jsonBlock(data.metadata));
+    sections.push(`${text(language, 'zhipuMcpAttributes')}${sep}`, jsonBlock(data.metadata));
   return sections;
 }
 
@@ -93,7 +98,7 @@ export function renderMcp(
   operation?: Operation,
   showProvider = true,
 ): string {
-  const sections: string[] = showProvider ? [text(language, 'mcpSource')] : [];
+  const sections: string[] = showProvider ? [text(language, 'zhipuMcpSource')] : [];
   const sep = colon(language);
   if ('results' in data) {
     for (const page of data.results) {
@@ -105,7 +110,8 @@ export function renderMcp(
       if (Object.keys(rest).length) sections.push(jsonBlock(rest));
     }
   } else {
-    if (data.repo) sections.push(`${text(language, 'mcpRepoLabel')}${sep}${inline(data.repo)}`);
+    if (data.repo)
+      sections.push(`${text(language, 'zhipuMcpRepoLabel')}${sep}${inline(data.repo)}`);
     if (data.path !== undefined)
       sections.push(`${text(language, 'pathLabel')}${sep}${inline(data.path)}`);
   }

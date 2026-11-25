@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { text } from '../src/i18n/messages.js';
 import { fixture, error, hit, page, search, url } from './tinyfish-fixture.js';
 
 test('TinyFish configuration and per-operation status use effective credentials and URLs', async (t) => {
@@ -130,11 +131,17 @@ test('TinyFish validates search bounds and incompatible options before any HTTP'
     ['--search-type', 'research_paper', '--recency-minutes', '5'],
     ['--search-type', 'research_paper', '--pub-year-min', '2026', '--pub-year-max', '2025'],
     ['--search-type', 'research_paper', '--pub-year-max', '10000'],
-    ['--include-domains', 'https://example.org'],
-    ['--exclude-domains', 'example.org/path'],
   ]) {
     const r = await f.run(['tinyfish', 'search', 'query', ...extra, '--format=json']);
     assert.equal(r.exit, 2, `${extra}: ${r.channels.out}`);
+  }
+  for (const [flag, value] of [
+    ['--include-domains', 'https://example.org'],
+    ['--exclude-domains', 'example.org/path'],
+  ]) {
+    const r = await f.run(['tinyfish', 'search', 'query', flag, value, '--format=json']);
+    assert.equal(r.exit, 2);
+    assert.equal(r.json().error.message, text('en', 'tinyfishDomains'));
   }
   for (const query of [' ', 'a'.repeat(2001)])
     assert.equal((await f.run(['tinyfish', 'search', query])).exit, 2);

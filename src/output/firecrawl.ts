@@ -52,7 +52,9 @@ export function renderSearch(
       ),
     ];
     if (item.category)
-      parts.push(`${text(language, 'categoryLabel')}${colon(language)}${inline(item.category)}`);
+      parts.push(
+        `${text(language, 'firecrawlCategoryLabel')}${colon(language)}${inline(item.category)}`,
+      );
     parts.push(...warnings(item.warnings, language));
     if (item.description) parts.push(item.description);
     parts.push(...contentInfo(item, language));

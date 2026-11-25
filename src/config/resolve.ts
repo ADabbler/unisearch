@@ -93,7 +93,7 @@ export function resolveField(
         field: field.path,
         source: 'config',
         code: 'INVALID_VALUE',
-        message: 'duplicateModel',
+        message: 'modelDuplicateCandidate',
       });
     }
   }

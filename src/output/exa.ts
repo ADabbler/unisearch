@@ -62,7 +62,7 @@ export function renderSearch(
     }
     if (item.highlights)
       sections.push(
-        `${'#'.repeat(level + 1)} ${text(language, 'highlightsLabel')}\n\n${item.highlights
+        `${'#'.repeat(level + 1)} ${text(language, 'exaHighlightsLabel')}\n\n${item.highlights
           .map((value) => value.replace(/\r\n|\r/g, '\n'))
           .join('\n\n')}`,
       );
@@ -73,7 +73,7 @@ export function renderSearch(
   const diagnostics = (['warnings', 'notices'] as const).flatMap((key) =>
     (data[key] ?? []).map(
       (item) =>
-        `${text(language, key === 'warnings' ? 'upstreamWarningLabel' : 'upstreamNoticeLabel')}${separator}[${inline(item.code)}] ${inline(item.path)}: ${item.message}`,
+        `${text(language, key === 'warnings' ? 'upstreamWarningLabel' : 'exaUpstreamNoticeLabel')}${separator}[${inline(item.code)}] ${inline(item.path)}: ${item.message}`,
     ),
   );
   if (data.output)
@@ -92,7 +92,7 @@ export function renderSearch(
 export function contentSources(sources: ContentSource[] | undefined, language: Language): string[] {
   return (sources ?? []).map(
     (item) =>
-      `${text(language, 'contentSourceLabel')}${colon(language)}${link(item.url)} · ${item.source}`,
+      `${text(language, 'exaContentSourceLabel')}${colon(language)}${link(item.url)} · ${item.source}`,
   );
 }
 

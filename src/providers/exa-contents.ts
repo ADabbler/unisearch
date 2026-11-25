@@ -38,11 +38,11 @@ export function contentsData(
       ...(details && Object.keys(details).length ? { details } : {}),
     });
   };
-  if (!isObject(body) || !Array.isArray(body.results)) structural = { key: 'invalidResults' };
+  if (!isObject(body) || !Array.isArray(body.results)) structural = { key: 'exaInvalidResults' };
   const entries = isObject(body) && Array.isArray(body.results) ? body.results : [];
   for (const item of entries) {
     if (!isObject(item) || !validPageUrl(item.url)) {
-      structural ??= { key: 'invalidResponse' };
+      structural ??= { key: 'exaInvalidResponse' };
       continue;
     }
     const result: SearchResult = { url: item.url };
@@ -81,7 +81,7 @@ export function contentsData(
     }
     if (pageText !== undefined) result.text = pageText;
     if (result.text || result.highlights) results.push(result);
-    if (invalid) fail(item.url, 'INVALID_RESPONSE', 'invalidResponse');
+    if (invalid) fail(item.url, 'INVALID_RESPONSE', 'exaInvalidResponse');
     else if (!result.text)
       fail(item.url, 'CONTENT_UNAVAILABLE', 'exaEmptyContent', { reason: 'empty_content' });
     else successful++;
@@ -142,7 +142,7 @@ export function contentsData(
         fail(
           item.id,
           invalid ? 'INVALID_RESPONSE' : 'CONTENT_UNAVAILABLE',
-          invalid ? 'invalidResponse' : 'exaContentUnavailable',
+          invalid ? 'exaInvalidResponse' : 'exaContentUnavailable',
           details,
         );
       }

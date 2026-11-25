@@ -87,7 +87,7 @@ export function renderSearchExecution(data: JsonObject, language: Language): str
     Array.isArray(data.searched_sources) && data.searched_sources.length
       ? [
           '',
-          `### ${text(language, 'searchedSourcesLabel')}`,
+          `### ${text(language, 'modelSearchedSourcesLabel')}`,
           '',
           ...data.searched_sources.map((url) => `- <${linkTarget(String(url))}>`),
         ]

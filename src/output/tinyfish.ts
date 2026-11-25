@@ -23,7 +23,7 @@ export function renderSearch(
     if (index) parts.push('---');
     parts.push(resultTitle(index, item.url, item.title, level, !!item.snippet?.trim()));
     const site = [
-      item.site_name ? `${text(language, 'tinyfishSiteLabel')}${sep}${inline(item.site_name)}` : '',
+      item.site_name ? `${text(language, 'siteLabel')}${sep}${inline(item.site_name)}` : '',
       item.position !== undefined && item.position !== index + 1
         ? `${text(language, 'tinyfishRankLabel')}${sep}${item.position}`
         : '',
@@ -67,7 +67,7 @@ export function renderFetch(data: FetchData, language: Language): string {
     if (page.description) parts.push(page.description);
     if (page.unmatched_selectors)
       parts.push(
-        `${text(language, 'unmatchedSelectorsLabel')}${sep}${page.unmatched_selectors.map(inlineCode).join(language === 'zh' ? '、' : ', ')}`,
+        `${text(language, 'tinyfishUnmatchedSelectorsLabel')}${sep}${page.unmatched_selectors.map(inlineCode).join(language === 'zh' ? '、' : ', ')}`,
       );
     if (page.missing_content) {
       const missing = page.missing_content.map((key) => {

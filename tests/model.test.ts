@@ -322,7 +322,11 @@ test('Selection validates only visited entries, but never skips malformed visite
     { id: 'chosen', effort: 'high' },
   ]);
   rejects(() => prepare(make([null, { id: 'chosen' }]), { model: 'chosen' }));
-  rejects(() => prepare(make(null), { model: 'chosen' }), 'INVALID_CONFIG', 'invalidModels');
+  rejects(
+    () => prepare(make(null), { model: 'chosen' }),
+    'INVALID_CONFIG',
+    'modelInvalidFallbacks',
+  );
   rejects(() => prepare(make([{ id: 42 }, { id: 'chosen' }]), { model: 'chosen' }));
   rejects(() => prepare(make([{ id: 'chosen', effort: false }]), { model: 'chosen' }));
   assert.deepEqual(
@@ -339,12 +343,12 @@ test('Selection validates only visited entries, but never skips malformed visite
         effort: 'low',
       }),
     'INVALID_CONFIG',
-    'invalidProtocol',
+    'modelInvalidProtocol',
   );
   rejects(
     () => prepare(make([{ id: 'chosen', tools: [''] }]), { model: 'chosen' }),
     'INVALID_CONFIG',
-    'invalidTools',
+    'modelInvalidTools',
   );
   assert.deepEqual(
     prepare(

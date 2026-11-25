@@ -120,7 +120,7 @@ export function prepareModel(
     assertValid(parentProblems(values, 'providers.model.fallback_models'), language);
     const configured = valueAt(values, 'providers.model.fallback_models');
     const saved = configured === undefined ? [] : configured;
-    const invalid = (message: MessageKey = 'invalidModels') => {
+    const invalid = (message: MessageKey = 'modelInvalidFallbacks') => {
       throw new AppError('INVALID_CONFIG', message, {
         field: 'providers.model.fallback_models',
       });

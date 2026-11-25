@@ -86,7 +86,7 @@ function invalid(key: MessageKey, option: string): never {
   throw new AppError('INVALID_ARGUMENT', key, { option });
 }
 function nonempty(value: string, option: string): string {
-  if (!value.trim()) return invalid('nonemptyOption', option);
+  if (!value.trim()) return invalid('firecrawlNonemptyOption', option);
   return value;
 }
 function targetUrl(value: string): string {
@@ -198,7 +198,7 @@ export function prepareSearch(
       options.includeDomains !== undefined ||
       options.excludeDomains !== undefined)
   )
-    return invalid('developerConflict', '--categories');
+    return invalid('firecrawlDeveloperConflict', '--categories');
   const body: JsonObject = {
     query,
     limit,
@@ -230,7 +230,7 @@ export function prepareScrape(
   let waitFor = 0;
   if (options.waitFor !== undefined) {
     if (!/^(0|[1-9][0-9]*)$/.test(options.waitFor) || Number(options.waitFor) > 30)
-      return invalid('invalidWaitFor', '--wait-for');
+      return invalid('firecrawlInvalidWaitFor', '--wait-for');
     waitFor = Number(options.waitFor) * 1000;
   }
   const tags: JsonObject = {};
@@ -249,7 +249,7 @@ export function prepareScrape(
           kind: 'integer',
           minimum: 0,
           maximum: Math.floor(Number.MAX_SAFE_INTEGER / 1000),
-          invalidMessage: 'invalidMaxAge',
+          invalidMessage: 'firecrawlInvalidMaxAge',
         },
         options.maxAge,
       ) as number;
@@ -288,7 +288,7 @@ export function prepareMap(
     ['sitemap', options.sitemap, '--sitemap'],
   ]);
   if (value('sitemap') === 'only' && search !== undefined)
-    return invalid('sitemapConflict', '--search');
+    return invalid('firecrawlSitemapConflict', '--search');
   const limit = value('limit') as number;
   return {
     ...connection,

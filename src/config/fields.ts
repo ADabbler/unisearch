@@ -267,14 +267,14 @@ export const fields: readonly Field[] = [
     minimum: 1,
     maximum: 100000,
     default: 50,
-    invalidMessage: 'invalidMapLimit',
+    invalidMessage: 'firecrawlInvalidMapLimit',
   },
   {
     path: 'providers.firecrawl.map.sitemap',
     kind: 'token',
     choices: ['include', 'skip', 'only'],
     default: 'include',
-    invalidMessage: 'invalidSitemap',
+    invalidMessage: 'firecrawlInvalidSitemap',
   },
   ...providers.flatMap((provider) => [
     {
@@ -506,10 +506,10 @@ export function validate(field: Field, value: unknown): Invalid | undefined {
       break;
     case 'protocol':
       if (value !== 'responses' && value !== 'chat-completions')
-        return { code: 'INVALID_VALUE', message: 'invalidProtocol' };
+        return { code: 'INVALID_VALUE', message: 'modelInvalidProtocol' };
       break;
     case 'models': {
-      if (!Array.isArray(value)) return { code: 'INVALID_VALUE', message: 'invalidModels' };
+      if (!Array.isArray(value)) return { code: 'INVALID_VALUE', message: 'modelInvalidFallbacks' };
       for (const item of value) {
         if (
           !isObject(item) ||
@@ -517,7 +517,7 @@ export function validate(field: Field, value: unknown): Invalid | undefined {
           (item.effort !== undefined && !token(item.effort)) ||
           Object.keys(item).some((key) => !isModelKey(key))
         )
-          return { code: 'INVALID_VALUE', message: 'invalidModels' };
+          return { code: 'INVALID_VALUE', message: 'modelInvalidFallbacks' };
         if (item.protocol !== undefined) {
           const invalid = validate(fieldAt('providers.model.protocol'), item.protocol);
           if (invalid) return invalid;
@@ -529,7 +529,7 @@ export function validate(field: Field, value: unknown): Invalid | undefined {
       }
       const identities = value.map((item) => modelIdentity(item as ModelCandidate));
       if (new Set(identities).size !== identities.length)
-        return { code: 'INVALID_VALUE', message: 'duplicateModel' };
+        return { code: 'INVALID_VALUE', message: 'modelDuplicateCandidate' };
       break;
     }
     case 'tools': {
@@ -540,14 +540,14 @@ export function validate(field: Field, value: unknown): Invalid | undefined {
           typeof item === 'string' ? !token(item) : !isObject(item) || !token(item.type),
         )
       )
-        return { code: 'INVALID_VALUE', message: 'invalidTools' };
+        return { code: 'INVALID_VALUE', message: 'modelInvalidTools' };
       const expanded = expandTools(value);
       if (
         expanded.some((item, index) =>
           expanded.slice(0, index).some((other) => isDeepStrictEqual(item, other)),
         )
       )
-        return { code: 'INVALID_VALUE', message: 'duplicateTool' };
+        return { code: 'INVALID_VALUE', message: 'modelDuplicateTool' };
       break;
     }
     case 'url': {

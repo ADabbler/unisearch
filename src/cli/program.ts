@@ -536,7 +536,7 @@ export function createCli(version: string, options: CliOptions = {}) {
   management
     .command('get')
     .description(text('en', 'configGetCommand'))
-    .argument('<KEY>', text('en', 'configGetKeyArgument'))
+    .argument('<KEY>', text('en', 'configFieldOrSectionArgument'))
     .action(async (key: string) => {
       const loaded = getDocument();
       const data = queryConfig(loaded, config.env, language(), key);
@@ -549,7 +549,7 @@ export function createCli(version: string, options: CliOptions = {}) {
       .description(text('en', action === 'set' ? 'configSetCommand' : 'configUnsetCommand'))
       .argument(
         '<KEY>',
-        text('en', action === 'set' ? 'configSetKeyArgument' : 'configUnsetKeyArgument'),
+        text('en', action === 'set' ? 'configSetKeyArgument' : 'configFieldOrSectionArgument'),
       );
     if (action === 'set') command.argument('<VALUE>', text('en', 'valueArgument'));
     command.action(async (key: string, input: unknown) => {
@@ -646,17 +646,17 @@ export function createCli(version: string, options: CliOptions = {}) {
     command.argument('<QUERY>', text('en', 'queryArgument'));
     for (const [flags, key] of [
       ['--model <ID>', 'modelOption'],
-      ['--effort <LEVEL>', 'effortOption'],
-      ['--stream', 'streamOption'],
-      ['--no-stream', 'noStreamOption'],
-      ['--no-fallback', 'noFallbackOption'],
+      ['--effort <LEVEL>', 'modelEffortOption'],
+      ['--stream', 'modelStreamOption'],
+      ['--no-stream', 'modelNoStreamOption'],
+      ['--no-fallback', 'modelNoFallbackOption'],
     ] as const)
       addScalarOption(command, new Option(flags, text('en', key)));
     let streamSeen = false;
     for (const name of ['stream', 'no-stream'])
       command.on(`option:${name}`, () => {
         if (streamSeen)
-          throw new AppError('INVALID_ARGUMENT', 'streamConflict', {
+          throw new AppError('INVALID_ARGUMENT', 'modelStreamConflict', {
             option: '--stream/--no-stream',
           });
         streamSeen = true;
@@ -700,8 +700,7 @@ export function createCli(version: string, options: CliOptions = {}) {
   const zhipuGroup = program.command('zhipu').description(text('en', 'zhipuCommand'));
   const zhipuSearch = zhipuGroup
     .command('search')
-    .summary(text('en', 'exaSearch'))
-    .description(text('en', 'zhipuSearch'))
+    .description(text('en', 'webSearch'))
     .argument('<QUERY>', text('en', 'queryArgument'));
   for (const [flags, key] of [
     ['--engine <NAME>', 'zhipuEngineOption'],
@@ -716,8 +715,10 @@ export function createCli(version: string, options: CliOptions = {}) {
     .summary(text('en', 'pageFetchSummary'))
     .description(text('en', 'zhipuFetch'))
     .argument('<URL>', text('en', 'pageUrlArgument'));
+  // Zhipu and Jina have the same English fetch description and different Chinese translations.
+  commandHelpKeys.set(zhipuFetch, 'zhipuFetch');
   for (const [flags, key] of [
-    ['--no-cache', 'zhipuNoCache'],
+    ['--no-cache', 'noCacheOption'],
     ['--no-images', 'zhipuNoImages'],
     ['--include-images-summary', 'zhipuImagesSummary'],
     ['--include-links-summary', 'zhipuLinksSummary'],
@@ -749,7 +750,7 @@ export function createCli(version: string, options: CliOptions = {}) {
   const tinyfishGroup = program.command('tinyfish').description(text('en', 'tinyfishCommand'));
   const tinyfishSearch = tinyfishGroup
     .command('search')
-    .summary(text('en', 'tinyfishSearchSummary'))
+    .summary(text('en', 'webSearch'))
     .description(text('en', 'tinyfishSearch'))
     .argument('<QUERY>', text('en', 'queryArgument'));
   for (const [flags, key] of [
@@ -830,8 +831,7 @@ export function createCli(version: string, options: CliOptions = {}) {
   const deepseekGroup = program.command('deepseek').description(text('en', 'deepseekCommand'));
   const deepseekSearch = deepseekGroup
     .command('search')
-    .summary(text('en', 'deepseekSearch'))
-    .description(text('en', 'deepseekSearch'))
+    .description(text('en', 'webSearch'))
     .argument('<QUERY>', text('en', 'queryArgument'));
   for (const [flags, key] of [
     ['--limit <N>', 'deepseekLimitOption'],
@@ -863,7 +863,6 @@ export function createCli(version: string, options: CliOptions = {}) {
   });
   const deepseekFetch = deepseekGroup
     .command('fetch')
-    .summary(text('en', 'pageFetchSummary'))
     .description(text('en', 'pageFetchSummary'))
     .argument('<URL>', text('en', 'pageUrlArgument'));
   deepseekFetch.action(async (url: string, options: deepseek.FetchOptions) => {
@@ -884,7 +883,7 @@ export function createCli(version: string, options: CliOptions = {}) {
     );
   });
 
-  const mcpGroup = program.command('zhipu-mcp').description(text('en', 'mcpCommand'));
+  const mcpGroup = program.command('zhipu-mcp').description(text('en', 'zhipuMcpCommand'));
   async function runMcp(
     operation: zhipuMcp.Operation,
     target: string,
@@ -909,36 +908,31 @@ export function createCli(version: string, options: CliOptions = {}) {
   }
   mcpGroup
     .command('search')
-    .summary(text('en', 'exaSearch'))
-    .description(text('en', 'mcpSearch'))
+    .description(text('en', 'webSearch'))
     .argument('<QUERY>', text('en', 'queryArgument'))
     .action(async (query: string) => runMcp('search', query));
   mcpGroup
     .command('fetch')
-    .summary(text('en', 'pageFetchSummary'))
-    .description(text('en', 'mcpFetch'))
+    .description(text('en', 'pageFetchSummary'))
     .argument('<URL>', text('en', 'pageUrlArgument'))
     .action(async (url: string) => runMcp('fetch', url));
   mcpGroup
     .command('docs')
-    .summary(text('en', 'repositoryDocsSummary'))
-    .description(text('en', 'mcpDocs'))
-    .argument('<REPO>', text('en', 'mcpRepo'))
+    .description(text('en', 'zhipuMcpDocs'))
+    .argument('<REPO>', text('en', 'zhipuMcpRepo'))
     .argument('<QUERY>', text('en', 'queryArgument'))
     .action(async (repo: string, query: string) => runMcp('docs', repo, { query }));
   const mcpTree = mcpGroup
     .command('tree')
-    .summary(text('en', 'repositoryTreeSummary'))
-    .description(text('en', 'mcpTree'))
-    .argument('<REPO>', text('en', 'mcpRepo'));
-  addScalarOption(mcpTree, new Option('--path <PATH>', text('en', 'mcpTreePath')));
+    .description(text('en', 'zhipuMcpTree'))
+    .argument('<REPO>', text('en', 'zhipuMcpRepo'));
+  addScalarOption(mcpTree, new Option('--path <PATH>', text('en', 'zhipuMcpTreePath')));
   mcpTree.action(async (repo: string, options: { path?: string }) => runMcp('tree', repo, options));
   mcpGroup
     .command('read-file')
-    .summary(text('en', 'repositoryFileSummary'))
-    .description(text('en', 'mcpReadFile'))
-    .argument('<REPO>', text('en', 'mcpRepo'))
-    .argument('<PATH>', text('en', 'mcpFilePath'))
+    .description(text('en', 'zhipuMcpReadFile'))
+    .argument('<REPO>', text('en', 'zhipuMcpRepo'))
+    .argument('<PATH>', text('en', 'zhipuMcpFilePath'))
     .action(async (repo: string, path: string) => runMcp('read-file', repo, { path }));
 
   const jinaGroup = program.command('jina').description(text('en', 'jinaCommand'));
@@ -952,7 +946,7 @@ export function createCli(version: string, options: CliOptions = {}) {
     ['--target-selector <CSS>', 'jinaTarget'],
     ['--remove-selector <CSS>', 'jinaRemove'],
     ['--wait-for-selector <CSS>', 'jinaWait'],
-    ['--no-cache', 'jinaNoCache'],
+    ['--no-cache', 'noCacheOption'],
     ['--max-tokens <N>', 'jinaMaxTokens'],
   ] as const)
     addScalarOption(jinaFetch, new Option(flags, text('en', key)));
@@ -975,7 +969,6 @@ export function createCli(version: string, options: CliOptions = {}) {
   });
   const jinaSearch = jinaGroup
     .command('search')
-    .summary(text('en', 'jinaSearchSummary'))
     .description(text('en', 'jinaSearch'))
     .argument('<QUERY>', text('en', 'queryArgument'));
   for (const [flags, key] of [
@@ -1204,17 +1197,17 @@ export function createCli(version: string, options: CliOptions = {}) {
   const exa = program.command('exa').description(text('en', 'exaCommand'));
   const search = exa
     .command('search')
-    .description(text('en', 'exaSearch'))
+    .description(text('en', 'webSearch'))
     .argument('<QUERY>', text('en', 'queryArgument'));
   for (const [flags, key] of [
     ['--limit <N>', 'limitOption'],
-    ['--search-type <TYPE>', 'searchTypeOption'],
+    ['--search-type <TYPE>', 'exaSearchTypeOption'],
     ['--include-text', 'textOption'],
     ['--no-highlights', 'noHighlightsOption'],
-    ['--published-after <DATE>', 'publishedOption'],
-    ['--category <NAME>', 'categoryOption'],
-    ['--include-domains <DOMAINS>', 'includeDomainsOption'],
-    ['--exclude-domains <DOMAINS>', 'excludeDomainsOption'],
+    ['--published-after <DATE>', 'exaPublishedOption'],
+    ['--category <NAME>', 'exaCategoryOption'],
+    ['--include-domains <DOMAINS>', 'exaIncludeDomainsOption'],
+    ['--exclude-domains <DOMAINS>', 'exaExcludeDomainsOption'],
   ] as const)
     addScalarOption(search, new Option(flags, text('en', key)));
   search.action(async (query: string, options: SearchOptions) => {
@@ -1245,7 +1238,7 @@ export function createCli(version: string, options: CliOptions = {}) {
     .argument('<URL...>', text('en', 'pageUrlArgument'));
   for (const [flags, key] of [
     ['--max-length <N>', 'exaMaxLength'],
-    ['--include-highlights', 'highlightsOption'],
+    ['--include-highlights', 'exaHighlightsOption'],
     ['--highlights-query <TEXT>', 'exaHighlightsQuery'],
   ] as const)
     addScalarOption(exaFetchCommand, new Option(flags, text('en', key)));
@@ -1273,15 +1266,14 @@ export function createCli(version: string, options: CliOptions = {}) {
     .description(text('en', 'firecrawlCommand'));
   const firecrawlSearch = firecrawlGroup
     .command('search')
-    .summary(text('en', 'exaSearch'))
-    .description(text('en', 'firecrawlSearch'))
+    .description(text('en', 'webSearch'))
     .argument('<QUERY>', text('en', 'queryArgument'));
   for (const [flags, key] of [
     ['--limit <N>', 'limitOption'],
-    ['--categories <TYPE>', 'categoriesOption'],
-    ['--tbs <VALUE>', 'tbsOption'],
-    ['--location <TEXT>', 'locationOption'],
-    ['--country <CODE>', 'countryOption'],
+    ['--categories <TYPE>', 'firecrawlCategoriesOption'],
+    ['--tbs <VALUE>', 'firecrawlTbsOption'],
+    ['--location <TEXT>', 'firecrawlLocationOption'],
+    ['--country <CODE>', 'firecrawlCountryOption'],
     ['--include-domains <DOMAINS>', 'firecrawlIncludeDomains'],
     ['--exclude-domains <DOMAINS>', 'firecrawlExcludeDomains'],
     ['--no-highlights', 'noHighlightsOption'],
@@ -1316,17 +1308,17 @@ export function createCli(version: string, options: CliOptions = {}) {
     .description(text('en', 'firecrawlScrape'))
     .argument('<URL>', text('en', 'pageUrlArgument'));
   for (const [flags, key] of [
-    ['--max-age <SECONDS>', 'maxAgeOption'],
-    ['--wait-for <SECONDS>', 'waitForOption'],
+    ['--max-age <SECONDS>', 'firecrawlMaxAgeOption'],
+    ['--wait-for <SECONDS>', 'firecrawlWaitForOption'],
   ] as const)
     addScalarOption(firecrawlScrape, new Option(flags, text('en', key)));
   addScalarOption(
     firecrawlScrape,
-    new Option('--no-only-main-content', text('en', 'noMainContentOption')),
+    new Option('--no-only-main-content', text('en', 'firecrawlNoMainContentOption')),
   );
   for (const [flag, key] of [
-    ['include-tag', 'includeTagOption'],
-    ['exclude-tag', 'excludeTagOption'],
+    ['include-tag', 'firecrawlIncludeTagOption'],
+    ['exclude-tag', 'firecrawlExcludeTagOption'],
   ] as const)
     firecrawlScrape.addOption(
       new Option(`--${flag} <SELECTOR>`, text('en', key)).argParser(
@@ -1357,20 +1349,22 @@ export function createCli(version: string, options: CliOptions = {}) {
 
   const firecrawlMap = firecrawlGroup
     .command('map')
-    .summary(text('en', 'siteMapSummary'))
-    .description(text('en', 'firecrawlMap'))
+    .description(text('en', 'siteMapSummary'))
     .argument('<URL>', text('en', 'pageUrlArgument'));
   for (const [flags, key] of [
-    ['--limit <N>', 'mapLimitOption'],
-    ['--search <TEXT>', 'mapSearchOption'],
-    ['--sitemap <MODE>', 'sitemapOption'],
-    ['--ignore-cache', 'ignoreCacheOption'],
+    ['--limit <N>', 'firecrawlMapLimitOption'],
+    ['--search <TEXT>', 'firecrawlMapSearchOption'],
+    ['--sitemap <MODE>', 'firecrawlSitemapOption'],
+    ['--ignore-cache', 'firecrawlIgnoreCacheOption'],
   ] as const)
     addScalarOption(firecrawlMap, new Option(flags, text('en', key)));
-  addScalarOption(firecrawlMap, new Option('--include-subdomains', text('en', 'subdomainsOption')));
   addScalarOption(
     firecrawlMap,
-    new Option('--no-ignore-query-parameters', text('en', 'noQueryParametersOption')),
+    new Option('--include-subdomains', text('en', 'firecrawlSubdomainsOption')),
+  );
+  addScalarOption(
+    firecrawlMap,
+    new Option('--no-ignore-query-parameters', text('en', 'firecrawlNoQueryParametersOption')),
   );
   firecrawlMap.action(async (url: string, options: firecrawl.MapOptions) => {
     const loaded = getDocument();
@@ -1400,19 +1394,19 @@ export function createCli(version: string, options: CliOptions = {}) {
     .description(text('en', 'tavilyCommand'));
   const tavilySearch = tavily
     .command('search')
-    .summary(text('en', 'tavilySearchCommand'))
+    .summary(text('en', 'webSearch'))
     .description(text('en', 'tavilySearchDescription'))
     .argument('<QUERY>', text('en', 'queryArgument'));
   const extract = tavily
     .command('extract')
     .summary(text('en', 'batchFetchSummary'))
     .description(text('en', 'tavilyExtractCommand'))
-    .argument('<URL...>', text('en', 'urlArgument'));
+    .argument('<URL...>', text('en', 'tavilyUrlArgument'));
   const map = tavily
     .command('map')
-    .summary(text('en', 'tavilyMapCommand'))
+    .summary(text('en', 'siteMapSummary'))
     .description(text('en', 'tavilyMapDescription'))
-    .argument('<URL>', text('en', 'urlArgument'));
+    .argument('<URL>', text('en', 'tavilyUrlArgument'));
   for (const [flags, key] of [
     ['--limit <N>', 'tavilySearchLimitOption'],
     ['--search-depth <TYPE>', 'tavilySearchDepthOption'],

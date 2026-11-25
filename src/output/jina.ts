@@ -18,15 +18,15 @@ export function pageContent(page: Page, language: Language): string[] {
   const sections: string[] = [];
   const metadata = [
     [page.published_date, 'publishedLabel'],
-    [page.date, 'searchDateLabel'],
-    [page.source, 'mediaSourceLabel'],
+    [page.date, 'jinaSearchDateLabel'],
+    [page.source, 'jinaMediaSourceLabel'],
   ] as const;
   const labels = metadata.flatMap(([value, key]) =>
     value === undefined ? [] : [`${text(language, key)}${sep}${inline(value)}`],
   );
   if (labels.length) sections.push(labels.join(' · '));
   if (page.num_pages !== undefined)
-    sections.push(`${text(language, 'documentPagesLabel')}${sep}${page.num_pages}`);
+    sections.push(`${text(language, 'jinaDocumentPagesLabel')}${sep}${page.num_pages}`);
   sections.push(...warnings(page.warnings, language));
   if (page.description) sections.push(page.description);
   if (page.image_url) {
@@ -35,28 +35,28 @@ export function pageContent(page: Page, language: Language): string[] {
     if (page.image_width !== undefined && page.image_height !== undefined)
       dimensions = ` · ${page.image_width} × ${page.image_height}`;
     else if (page.image_width !== undefined)
-      dimensions = ` · ${text(language, 'imageWidthLabel')}${sep}${page.image_width}`;
+      dimensions = ` · ${text(language, 'jinaImageWidthLabel')}${sep}${page.image_width}`;
     else if (page.image_height !== undefined)
-      dimensions = ` · ${text(language, 'imageHeightLabel')}${sep}${page.image_height}`;
+      dimensions = ` · ${text(language, 'jinaImageHeightLabel')}${sep}${page.image_height}`;
     sections.push(
-      `${text(language, 'imageLabel')}${sep}${link(page.image_url, name)}${dimensions}`,
+      `${text(language, 'jinaImageLabel')}${sep}${link(page.image_url, name)}${dimensions}`,
     );
   } else {
     for (const [value, label] of [
-      [page.image_width, 'imageWidthLabel'],
-      [page.image_height, 'imageHeightLabel'],
+      [page.image_width, 'jinaImageWidthLabel'],
+      [page.image_height, 'jinaImageHeightLabel'],
     ] as const)
       if (value !== undefined) sections.push(`${text(language, label)}${sep}${value}`);
   }
   if (page.text) sections.push(page.text);
   if (page.site_links)
     sections.push(
-      `${text(language, 'siteLinksLabel')}${sep}\n\n${page.site_links.map((item) => `- ${link(item.url, item.title)}`).join('\n')}`,
+      `${text(language, 'jinaSiteLinksLabel')}${sep}\n\n${page.site_links.map((item) => `- ${link(item.url, item.title)}`).join('\n')}`,
     );
   if (page.metadata)
     sections.push(
       `${text(language, 'pageMetadataLabel')}${sep}\n\n${table(
-        [text(language, 'metadataFieldLabel'), text(language, 'metadataValueLabel')],
+        [text(language, 'jinaMetadataFieldLabel'), text(language, 'jinaMetadataValueLabel')],
         Object.entries(page.metadata).map(([key, value]) => [cell(key), cell(value)]),
       )}`,
     );
@@ -66,7 +66,7 @@ export function pageContent(page: Page, language: Language): string[] {
       return Object.entries(addresses).map(([url, attrs]) => [cell(rel), cell(url), cell(attrs)]);
     });
     sections.push(
-      `${text(language, 'externalRelationsLabel')}${sep}\n\n${table([text(language, 'relationLabel'), text(language, 'linkLabel'), text(language, 'attributesLabel')], rows)}`,
+      `${text(language, 'jinaExternalRelationsLabel')}${sep}\n\n${table([text(language, 'jinaRelationLabel'), text(language, 'jinaLinkLabel'), text(language, 'jinaAttributesLabel')], rows)}`,
     );
   }
   return sections;

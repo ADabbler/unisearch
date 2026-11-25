@@ -18,7 +18,7 @@ export function renderSearch(
     parts.push(resultTitle(index, item.url, item.title, level, !!item.summary?.trim()));
     const metadata: string[] = [];
     for (const [value, label] of [
-      [item.site_name, 'deepseekSiteLabel'],
+      [item.site_name, 'siteLabel'],
       [item.date, 'publishedLabel'],
       [item.authority, 'deepseekAuthorityLabel'],
       [item.rerank_score, 'relevanceScore'],

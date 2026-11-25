@@ -173,7 +173,7 @@ export function toolResult(
     }
     data = { provider: 'zhipu-mcp', results: [page], ...content };
     if (!page.text)
-      unavailable = new AppError('CONTENT_UNAVAILABLE', 'mcpNoPage', {
+      unavailable = new AppError('CONTENT_UNAVAILABLE', 'zhipuMcpNoPage', {
         ...diagnostic,
         reason: 'empty_content',
       });
@@ -188,15 +188,18 @@ export function toolResult(
           (typeof block.resource.text === 'string' || typeof block.resource.blob === 'string')),
     )
   ) {
-    unavailable = new AppError('CONTENT_UNAVAILABLE', 'mcpNoFile', {
+    unavailable = new AppError('CONTENT_UNAVAILABLE', 'zhipuMcpNoFile', {
       ...diagnostic,
       reason: 'missing_file_content',
     });
   }
   let error: AppError | undefined;
   if (problems.length)
-    error = new AppError('INVALID_RESPONSE', 'mcpResponse', { ...diagnostic, causes: problems });
-  else if (value.isError) error = new AppError('UPSTREAM_ERROR', 'mcpUpstream', diagnostic);
+    error = new AppError('INVALID_RESPONSE', 'zhipuMcpResponse', {
+      ...diagnostic,
+      causes: problems,
+    });
+  else if (value.isError) error = new AppError('UPSTREAM_ERROR', 'zhipuMcpUpstream', diagnostic);
   else error = unavailable;
   if (!error) return success(data);
   const outcome = failure<Data>(error, language);

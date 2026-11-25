@@ -145,8 +145,8 @@ export function prepareSearch(
     const value = options[key];
     if (value === undefined) continue;
     const flag = `--${name.replaceAll('_', '-')}`;
-    const domains = domainList(value, flag, Number.MAX_SAFE_INTEGER);
-    if (domains.some((domain) => domain.includes('/'))) invalid('invalidDomains', flag);
+    const domains = domainList(value, flag, Number.MAX_SAFE_INTEGER, 'tinyfishDomains');
+    if (domains.some((domain) => domain.includes('/'))) invalid('tinyfishDomains', flag);
     parameters.set(name, domains.join(','));
   }
   for (const [key, name] of [

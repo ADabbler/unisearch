@@ -116,7 +116,7 @@ export function domainList(
   input: string,
   option: string,
   maximum = 1200,
-  message: MessageKey = 'invalidDomains',
+  message: MessageKey = 'exaInvalidDomains',
 ): string[] {
   const list = input.split(',');
   if (list.length > maximum) return invalid(message, option);
@@ -168,11 +168,11 @@ export function prepareSearch(
   if (options.publishedAfter !== undefined)
     filters.startPublishedDate = publishedDate(options.publishedAfter);
   if (options.category !== undefined) {
-    if (!options.category.trim()) return invalid('invalidCategory', '--category');
+    if (!options.category.trim()) return invalid('exaInvalidCategory', '--category');
     if (['company', 'people'].includes(options.category) && options.publishedAfter !== undefined)
-      return invalid('categoryConflict', '--category');
+      return invalid('exaCategoryConflict', '--category');
     if (options.category === 'people' && options.excludeDomains !== undefined)
-      return invalid('peopleDomainConflict', '--category');
+      return invalid('exaPeopleDomainConflict', '--category');
     filters.category = options.category;
   }
   if (options.includeDomains !== undefined)
@@ -220,7 +220,13 @@ export function prepareFetch(
   if (options.maxLength !== undefined) {
     try {
       maxLength = parseInput(
-        { path: '--max-length', kind: 'integer', minimum: 1, maximum: 1000000 },
+        {
+          path: '--max-length',
+          kind: 'integer',
+          minimum: 1,
+          maximum: 1000000,
+          invalidMessage: 'exaInvalidMaxLength',
+        },
         options.maxLength,
       ) as number;
     } catch (error) {
@@ -256,7 +262,7 @@ export function prepareFetch(
   };
 }
 
-function responseError(key: MessageKey = 'invalidResponse'): AppError {
+function responseError(key: MessageKey = 'exaInvalidResponse'): AppError {
   return new AppError('INVALID_RESPONSE', key, { provider: 'exa', http_status: 200 });
 }
 
@@ -264,7 +270,7 @@ export function searchData(
   body: unknown,
   request: Pick<SearchRequest, 'text' | 'highlights'>,
 ): SearchData {
-  if (!isObject(body) || !Array.isArray(body.results)) throw responseError('invalidResults');
+  if (!isObject(body) || !Array.isArray(body.results)) throw responseError('exaInvalidResults');
   const results = body.results.map((item): SearchResult => {
     if (
       !isObject(item) ||

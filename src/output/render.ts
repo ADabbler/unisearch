@@ -68,8 +68,8 @@ function errorLines(
     reason: 'reasonLabel',
     index: 'resultIndexLabel',
     upstream_index: 'upstreamIndexLabel',
-    redirect_library_id: 'redirectLibraryLabel',
-    content_source: 'contentSourceLabel',
+    redirect_library_id: 'ctx7RedirectLibraryLabel',
+    content_source: 'exaContentSourceLabel',
     limit: 'rateLimitLabel',
     unit: 'rateUnitLabel',
     usage: 'usageLabel',
@@ -96,13 +96,13 @@ function errorLines(
         ? contentSources(sources, language)
         : sources.map(
             (item) =>
-              `${text(language, 'contentSourceLabel')}${colon(language)}${item.url} · ${item.source}`,
+              `${text(language, 'exaContentSourceLabel')}${colon(language)}${item.url} · ${item.source}`,
           )),
     );
   }
   for (const [key, label] of [
-    ['unmatched_selectors', 'unmatchedSelectorsLabel'],
-    ['candidate_selectors', 'candidateSelectorsLabel'],
+    ['unmatched_selectors', 'tinyfishUnmatchedSelectorsLabel'],
+    ['candidate_selectors', 'tinyfishCandidateSelectorsLabel'],
   ] as const) {
     const values = details?.[key];
     if (Array.isArray(values) && values.length)
@@ -153,7 +153,7 @@ function errorContent(error: PublicError, language: Language, target?: string): 
     );
   if (details?.upstream_metadata !== undefined)
     sections.push(
-      `${prefix}${text(language, 'mcpAttributes')}${sep}`,
+      `${prefix}${text(language, 'zhipuMcpAttributes')}${sep}`,
       jsonBlock(details.upstream_metadata),
     );
   for (const cause of details?.causes ?? [])

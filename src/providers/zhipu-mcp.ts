@@ -70,12 +70,12 @@ export function prepare(
   }
   if (['docs', 'tree', 'read-file'].includes(operation)) {
     if (!/^[^/]+\/[^/]+$/u.test(target) || /[\s\p{Cc}?#]/u.test(target))
-      throw new AppError('INVALID_ARGUMENT', 'mcpRepoInvalid', { option: 'REPO' });
+      throw new AppError('INVALID_ARGUMENT', 'zhipuMcpRepoInvalid', { option: 'REPO' });
     args.repo_name = target;
   }
   if (operation === 'read-file' || (operation === 'tree' && options.path !== undefined)) {
     if (!options.path?.trim() || /\p{Cc}/u.test(options.path))
-      throw new AppError('INVALID_ARGUMENT', 'mcpPathInvalid', {
+      throw new AppError('INVALID_ARGUMENT', 'zhipuMcpPathInvalid', {
         option: operation === 'tree' ? '--path' : 'PATH',
       });
     args[operation === 'tree' ? 'dir_path' : 'file_path'] = options.path;

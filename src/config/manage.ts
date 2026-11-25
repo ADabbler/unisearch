@@ -127,8 +127,8 @@ export function prepareMutation(
       values,
       {},
       fieldAt('providers.model.fallback_models'),
-    ).problems.find((problem) => problem.message === 'duplicateModel');
-    if (duplicate) throw new AppError('INVALID_ARGUMENT', 'duplicateModel', { field: key });
+    ).problems.find((problem) => problem.message === 'modelDuplicateCandidate');
+    if (duplicate) throw new AppError('INVALID_ARGUMENT', duplicate.message, { field: key });
   }
   const overrides: JsonObject = {};
   const issues: JsonObject[] = [];

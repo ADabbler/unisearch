@@ -136,7 +136,10 @@ test('Exa contents preparation sends one native batch with per-URL options and p
   ])
     assert.throws(() => prepare(urls), { code: 'INVALID_ARGUMENT' });
   for (const maxLength of ['0', '1000001', '1.5', '', 'Infinity'])
-    assert.throws(() => prepare([a], { maxLength }), { code: 'INVALID_ARGUMENT' });
+    assert.throws(() => prepare([a], { maxLength }), {
+      code: 'INVALID_ARGUMENT',
+      key: 'exaInvalidMaxLength',
+    });
   assert.throws(() => prepare([a], { highlightsQuery: ' ' }), { code: 'INVALID_ARGUMENT' });
 });
 

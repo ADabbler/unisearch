@@ -229,7 +229,7 @@ test('Firecrawl URLs keep query and fragment at signs separate from credentials'
   for (const url of [
     'https://example.org?email=dev@example.org',
     'https://example.org#@installation',
-    'https://example.org/@team?email=dev@example.org#part',
+    'HTTPS://example.org/@team?email=dev@example.org#part',
     'https://example.org\\@team',
     'https:////example.org?email=dev@example.org',
   ]) {

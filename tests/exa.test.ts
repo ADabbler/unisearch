@@ -37,7 +37,7 @@ export async function server(t: TestContext, listener: RequestListener): Promise
 
 test('Exa CLI reports invalid search arguments as JSON', async (t) => {
   const root = temporary(t);
-  const invalid = [[], ['q', '--limit', '101'], ['q', '--search-type', 'unrecognized'], ['   ']];
+  const invalid = [[], ['q', '--limit', '101'], ['q', '--search-type', ' '], ['   ']];
   for (const args of invalid) {
     const channels = capture();
     assert.equal(
@@ -56,8 +56,8 @@ test('Exa CLI reports invalid search arguments as JSON', async (t) => {
 
 test('Search mapping preserves defaults, explicit modes, dates, domains and requested contents', () => {
   assert.equal(
-    prepare({}, { providers: { exa: { base_url: 'https://example.com/@team/' } } }).url,
-    'https://example.com/@team/search',
+    prepare({}, { providers: { exa: { base_url: 'HTTPS://example.com/@team/' } } }).url,
+    'HTTPS://example.com/@team/search',
   );
   for (const base_url of ['https://@example.com', 'https://user@example.com']) {
     assert.throws(() => prepare({}, { providers: { exa: { base_url } } }), AppError);
@@ -76,6 +76,7 @@ test('Search mapping preserves defaults, explicit modes, dates, domains and requ
     ['lite', '100'],
     ['deep', '5'],
     ['deep-lite', '5'],
+    ['deep-reasoning', '5'],
   ]) {
     const { body } = prepare({ searchType, limit });
     assert.equal(body.type, searchType);
@@ -105,6 +106,8 @@ test('Search mapping preserves defaults, explicit modes, dates, domains and requ
     prepare({ publishedAfter: '2026-01-01' }).body.startPublishedDate,
     '2026-01-01T00:00:00.000Z',
   );
+  const precise = '2026-01-01T00:00:00.123456+08:00';
+  assert.equal(prepare({ publishedAfter: precise }).body.startPublishedDate, precise);
   assert.deepEqual(prepare({ includeDomains: 'example.com,example.com' }).body.includeDomains, [
     'example.com',
     'example.com',
@@ -126,7 +129,6 @@ test('Invalid dates, domain forms and category combinations fail before configur
     '2026-01-01T00:00:00',
     '2026-01-01T24:00:00Z',
     '2026-01-01T00:00:60Z',
-    '2026-01-01T00:00:00.1234Z',
     '2026-01-01T00:00:00+24:00',
     'tomorrow',
   ]) {
@@ -554,7 +556,7 @@ test('Results preserve order, duplicates, original Markdown and optional-content
 });
 
 test('Invalid retained response fields fail as a whole and never use id as URL', () => {
-  const valid = { title: 'title', url: 'https://example.com' };
+  const valid = { title: 'title', url: 'HTTPS://example.com' };
   for (const body of [
     {},
     { results: null },

@@ -247,12 +247,12 @@ Setup's xAI shortcut fills in the URL, Responses protocol, and `web_search` and 
 
 ### Exa
 
-| Field                              | Type and values                                  | Default              | Environment variable     |
-| ---------------------------------- | ------------------------------------------------ | -------------------- | ------------------------ |
-| `providers.exa.api_key`            | API key, required for search and fetch           | None                 | `UNISEARCH_EXA_API_KEY`  |
-| `providers.exa.base_url`           | Connection URL                                   | `https://api.exa.ai` | `UNISEARCH_EXA_BASE_URL` |
-| `providers.exa.search.limit`       | Integer `1–100`, search result limit             | `5`                  | —                        |
-| `providers.exa.search.search_type` | Search mode: `auto`, `lite`, `deep`, `deep-lite` | `auto`               | —                        |
+| Field                              | Type and values                                                      | Default              | Environment variable     |
+| ---------------------------------- | -------------------------------------------------------------------- | -------------------- | ------------------------ |
+| `providers.exa.api_key`            | API key, required for search and fetch                               | None                 | `UNISEARCH_EXA_API_KEY`  |
+| `providers.exa.base_url`           | Connection URL                                                       | `https://api.exa.ai` | `UNISEARCH_EXA_BASE_URL` |
+| `providers.exa.search.limit`       | Integer `1–100`, search result limit                                 | `5`                  | —                        |
+| `providers.exa.search.search_type` | Search mode. Options include `auto`, `lite`, `deep`, and `deep-lite` | `auto`               | —                        |
 
 ### Tavily
 

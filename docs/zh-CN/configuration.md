@@ -247,12 +247,12 @@ setup 的 xAI 快捷项会自动填写地址、Responses 协议及 `web_search`�
 
 ### Exa
 
-| 字段                               | 类型与取值                                    | 默认值               | 环境变量                 |
-| ---------------------------------- | --------------------------------------------- | -------------------- | ------------------------ |
-| `providers.exa.api_key`            | API Key，搜索和 fetch 必需                    | 无                   | `UNISEARCH_EXA_API_KEY`  |
-| `providers.exa.base_url`           | 连接地址                                      | `https://api.exa.ai` | `UNISEARCH_EXA_BASE_URL` |
-| `providers.exa.search.limit`       | 整数 `1–100`，搜索结果数量上限                | `5`                  | —                        |
-| `providers.exa.search.search_type` | 搜索模式：`auto`、`lite`、`deep`、`deep-lite` | `auto`               | —                        |
+| 字段                               | 类型与取值                                            | 默认值               | 环境变量                 |
+| ---------------------------------- | ----------------------------------------------------- | -------------------- | ------------------------ |
+| `providers.exa.api_key`            | API Key，搜索和 fetch 必需                            | 无                   | `UNISEARCH_EXA_API_KEY`  |
+| `providers.exa.base_url`           | 连接地址                                              | `https://api.exa.ai` | `UNISEARCH_EXA_BASE_URL` |
+| `providers.exa.search.limit`       | 整数 `1–100`，搜索结果数量上限                        | `5`                  | —                        |
+| `providers.exa.search.search_type` | 搜索模式，可选 `auto`、`lite`、`deep`、`deep-lite` 等 | `auto`               | —                        |
 
 ### Tavily
 

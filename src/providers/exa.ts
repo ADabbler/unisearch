@@ -92,11 +92,11 @@ function invalid(key: MessageKey, option: string): never {
 
 export function publishedDate(input: string): string {
   const match =
-    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2}))?$/.exec(
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2}))?$/i.exec(
       input,
     );
-  if (!match) return invalid('invalidDate', '--published-after');
-  const [, year, month, day, hour, minute, second, , zone] = match;
+  if (!match) return invalid('exaInvalidDate', '--published-after');
+  const [, year, month, day, hour, minute, second, fraction, zone] = match;
   const date = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
   if (
     !Number.isFinite(date.getTime()) ||
@@ -106,8 +106,10 @@ export function publishedDate(input: string): string {
     Number(second ?? 0) > 59 ||
     (zone && zone !== 'Z' && (Number(zone.slice(1, 3)) > 23 || Number(zone.slice(4)) > 59))
   )
-    return invalid('invalidDate', '--published-after');
-  return hour === undefined ? date.toISOString() : new Date(input).toISOString();
+    return invalid('exaInvalidDate', '--published-after');
+  // Date serializes to milliseconds. Keep finer timestamp precision in the API filter.
+  if (fraction && fraction.length > 3) return input;
+  return new Date(input).toISOString();
 }
 
 export function domainList(
@@ -268,7 +270,7 @@ export function searchData(
       !isObject(item) ||
       typeof item.title !== 'string' ||
       typeof item.url !== 'string' ||
-      !/^https?:\/\//.test(item.url) ||
+      !/^https?:\/\//i.test(item.url) ||
       /\s/u.test(item.url)
     )
       throw responseError();

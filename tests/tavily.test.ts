@@ -79,10 +79,8 @@ test('Tavily rejects invalid arguments and missing prerequisites before HTTP', a
     ['search', 'q', '--limit', '21'],
     ['search', 'q', '--topic', 'bad'],
     ['search', 'q', '--search-depth', 'bad'],
-    ['search', 'q', '--time-range', 'd'],
+    ['search', 'q', '--time-range', 'hour'],
     ['search', 'q', '--start-date', '2026-02-30'],
-    ['search', 'q', '--time-range', 'day', '--end-date', '2026-01-01'],
-    ['search', 'q', '--start-date', '2026-02-01', '--end-date', '2026-01-01'],
     ['search', 'q', '--include-domains', 'example.com,'],
     ['extract', a, '--chunks-per-source', '2'],
     ['extract', a, '--query', ' '],
@@ -100,6 +98,20 @@ test('Tavily rejects invalid arguments and missing prerequisites before HTTP', a
     const result = await cli(root, ['tavily', ...args, '--format=json'], environment);
     assert.equal(result.exit, 2, args.join(' '));
     assert.equal(JSON.parse(result.out).error.code, 'INVALID_ARGUMENT');
+  }
+  for (const [args, option] of [
+    [['--time-range', 'day', '--end-date', '2026-01-01'], '--time-range'],
+    [['--start-date', '2026-02-01', '--end-date', '2026-01-01'], '--start-date/--end-date'],
+  ] as const) {
+    const result = await cli(
+      root,
+      ['tavily', 'search', 'q', ...args, '--format=json'],
+      environment,
+    );
+    const { error } = JSON.parse(result.out);
+    assert.equal(result.exit, 2);
+    assert.equal(error.code, 'INVALID_ARGUMENT');
+    assert.equal(error.details.option, option);
   }
   for (const change of [
     { UNISEARCH_TAVILY_API_KEY: undefined },
@@ -396,7 +408,7 @@ test('Search filters and native bounds preserve dates, domains, four depths and 
           include_usage: false,
         });
       }
-  for (const timeRange of ['day', 'week', 'month', 'year'])
+  for (const timeRange of ['day', 'week', 'month', 'year', 'd', 'w', 'm', 'y'])
     assert.equal(search({ timeRange }).body.time_range, timeRange);
   for (const [key, count] of [
     ['includeDomains', 300],

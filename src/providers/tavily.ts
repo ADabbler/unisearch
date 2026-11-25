@@ -214,20 +214,23 @@ export function prepareTavilySearch(
     }
   }
   if (options.timeRange !== undefined) {
-    if (!['day', 'week', 'month', 'year'].includes(options.timeRange))
+    if (!['day', 'week', 'month', 'year', 'd', 'w', 'm', 'y'].includes(options.timeRange))
       invalid('tavilyTime', '--time-range');
     filters.time_range = options.timeRange;
   }
   if (options.startDate !== undefined) filters.start_date = date(options.startDate, '--start-date');
   if (options.endDate !== undefined) filters.end_date = date(options.endDate, '--end-date');
   if (
-    (options.timeRange !== undefined &&
-      (options.startDate !== undefined || options.endDate !== undefined)) ||
-    (options.startDate !== undefined &&
-      options.endDate !== undefined &&
-      options.startDate > options.endDate)
+    options.timeRange !== undefined &&
+    (options.startDate !== undefined || options.endDate !== undefined)
   )
-    invalid('tavilyDateConflict', '--time-range/--start-date/--end-date');
+    invalid('tavilyDateConflict', '--time-range');
+  if (
+    options.startDate !== undefined &&
+    options.endDate !== undefined &&
+    options.startDate > options.endDate
+  )
+    invalid('tavilyDateOrder', '--start-date/--end-date');
   if (options.includeDomains !== undefined) {
     filters.include_domains = domainList(
       options.includeDomains,

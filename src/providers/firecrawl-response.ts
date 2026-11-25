@@ -40,7 +40,7 @@ export type MapData = JsonObject & {
 export function validPageUrl(value: unknown): value is string {
   if (typeof value !== 'string' || /\s/u.test(value)) return false;
   // URL parsing skips extra leading slashes and backslashes before the host.
-  const authority = /^https?:\/\/[/\\]*([^/?#\\]*)/.exec(value)?.[1];
+  const authority = /^https?:\/\/[/\\]*([^/?#\\]*)/i.exec(value)?.[1];
   if (authority === undefined || authority.includes('@')) return false;
   try {
     const url = new URL(value);

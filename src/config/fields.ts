@@ -31,7 +31,6 @@ export interface Field {
     | 'providers'
     | 'language'
     | 'url'
-    | 'searchType'
     | 'token'
     | 'protocol'
     | 'models'
@@ -133,7 +132,7 @@ export const fields: readonly Field[] = [
     environment: 'UNISEARCH_EXA_BASE_URL',
   },
   { path: 'providers.exa.search.limit', kind: 'integer', minimum: 1, maximum: 100, default: 5 },
-  { path: 'providers.exa.search.search_type', kind: 'searchType', default: 'auto' },
+  { path: 'providers.exa.search.search_type', kind: 'token', default: 'auto' },
   {
     path: 'providers.zhipu-mcp.platform',
     kind: 'token',
@@ -552,7 +551,7 @@ export function validate(field: Field, value: unknown): Invalid | undefined {
       break;
     }
     case 'url': {
-      if (typeof value !== 'string' || /[\s?#]/u.test(value) || !/^https?:\/\//.test(value))
+      if (typeof value !== 'string' || /[\s?#]/u.test(value) || !/^https?:\/\//i.test(value))
         return { code: 'INVALID_VALUE', message: 'invalidBaseUrl' };
       try {
         const url = new URL(value);
@@ -563,10 +562,6 @@ export function validate(field: Field, value: unknown): Invalid | undefined {
       }
       break;
     }
-    case 'searchType':
-      if (!['auto', 'lite', 'deep', 'deep-lite'].includes(value as string))
-        return { code: 'INVALID_VALUE', message: 'invalidSearchType' };
-      break;
     case 'boolean':
       if (typeof value !== 'boolean') return { code: 'INVALID_TYPE', message: 'booleanRequired' };
       break;

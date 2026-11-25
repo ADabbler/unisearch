@@ -854,8 +854,8 @@ const messages = {
     'general/news/finance; default general',
   ],
   tavilyTimeOption: [
-    'day/week/month/year；不能与绝对日期并用',
-    'day/week/month/year; cannot be combined with absolute dates',
+    '相对时间范围，可选 day、week、month、year，分别简写为 d、w、m、y。不能与起止日期参数并用。',
+    'Relative time range. Use day, week, month, or year, or the short forms d, w, m, y. Cannot be combined with a start or end date.',
   ],
   tavilyStartOption: [
     '起始日期 YYYY-MM-DD，无法判断日期的结果可能保留',
@@ -930,12 +930,13 @@ const messages = {
   tavilyUrls: ['每次必须提供 1–20 个 URL', 'Provide 1–20 URLs per request'],
   tavilyDate: ['日期必须为有效的 YYYY-MM-DD', 'Use a valid YYYY-MM-DD date'],
   tavilyDateConflict: [
-    '起止日期顺序须正确，且不能与相对时间并用',
-    'Dates must be ordered and cannot be combined with a relative time range',
+    '相对时间范围不能与起始日期或结束日期并用',
+    'A relative time range cannot be combined with a start or end date',
   ],
+  tavilyDateOrder: ['起始日期不能晚于结束日期', 'The start date must be on or before the end date'],
   tavilyTime: [
-    '时间范围必须为 day、week、month 或 year',
-    'Time range must be day, week, month or year',
+    '时间范围必须为 day、week、month、year 或其简写 d、w、m、y',
+    'Use day, week, month, or year, or their short forms d, w, m, y',
   ],
   tavilyChunks: [
     '片段数必须为 1–5 的整数，且须同时提供 query',
@@ -1100,10 +1101,6 @@ const messages = {
   timeoutOption: ['超时（秒），默认读取配置', 'Timeout in seconds, defaulting to configuration'],
   invalidTimeout: ['超时必须为有限正数', 'Timeout must be a finite positive number'],
   invalidBaseUrl: ['地址必须是绝对 HTTP(S) URL', 'The URL must be an absolute HTTP(S) URL'],
-  invalidSearchType: [
-    '搜索模式必须是 auto、lite、deep 或 deep-lite',
-    'Search type must be auto, lite, deep, or deep-lite',
-  ],
   invalidLimit: [
     '结果数量必须为 1–100 的整数',
     'The result limit must be an integer from 1 to 100',
@@ -1233,9 +1230,9 @@ const messages = {
     '正文已解析 {parsed} 页，文档共 {total} 页',
     'Content was parsed from {parsed} of {total} document pages',
   ],
-  invalidDate: [
-    '日期必须是真实的 YYYY-MM-DD 或带时区的 RFC3339 时间（小数秒最多三位）',
-    'Use a real YYYY-MM-DD date or RFC3339 timestamp with timezone and at most three fractional digits',
+  exaInvalidDate: [
+    '发布日期必须是有效的 YYYY-MM-DD 日期或带时区的 RFC 3339 时间戳',
+    'The publication date must be a valid YYYY-MM-DD date or an RFC 3339 timestamp with a time zone',
   ],
   invalidDomains: [
     '域名列表必须包含 1–1200 个有效域名或域名路径，不含空白、协议、端口、查询或片段',
@@ -1259,8 +1256,8 @@ const messages = {
     'Result limit 1–100; uses the configured value if omitted, default 5',
   ],
   searchTypeOption: [
-    '搜索模式：auto（均衡）、lite（快速索引检索）、deep（深入研究）、deep-lite（轻量研究）；省略时使用配置，默认 auto',
-    'Search type: auto (balanced), lite (fast index search), deep (in-depth research), deep-lite (lightweight research); uses configuration if omitted, default auto',
+    '搜索模式，可选 auto（均衡）、lite（快速索引检索）、deep（深入研究）、deep-lite（轻量研究）等。省略时使用配置值，默认 auto',
+    'Search modes include auto (balanced), lite (fast index search), deep (in-depth research), and deep-lite (lightweight research). Defaults to the configured mode, or auto if unset.',
   ],
   textOption: ['附带完整正文，默认关闭', 'Include full text; off by default'],
   highlightsOption: ['附带相关摘录，默认关闭', 'Include relevant highlights; off by default'],
@@ -1300,8 +1297,8 @@ const messages = {
   tinyfishIframesOption: ['附带 iframe 链接', 'Include iframe links'],
   tinyfishIframesLabel: ['iframe 链接', 'Iframe links'],
   publishedOption: [
-    '发布日期下界：YYYY-MM-DD 或带时区时间',
-    'Publication date lower bound: YYYY-MM-DD or timestamp with timezone',
+    '最早发布日期，格式为 YYYY-MM-DD 或带时区的 RFC 3339 时间戳',
+    'Earliest publication date, as YYYY-MM-DD or an RFC 3339 timestamp with a time zone',
   ],
   categoryOption: [
     '类别过滤，如 company、publication、news、personal site、financial report、people；company/people 不支持发布日期，people 不支持排除域名',

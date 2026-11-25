@@ -301,21 +301,13 @@ async function promptServices(draft: SetupDraft, prompts: Prompts): Promise<void
             language,
           );
           draft.selections.set(key, mode);
-          if (mode === 'current') {
-            if (provider === 'model' && resolved.value === xaiBaseUrl) {
-              modelUsesXai = true;
-              if (draft.current('providers.model.protocol').value !== 'responses')
-                draft.set('providers.model.protocol', 'responses');
-            }
-            continue;
-          }
+          if (mode === 'current') continue;
           if (provider === 'model' && mode === 'xai') {
             modelUsesXai = true;
             draft.set(key, xaiBaseUrl);
             if (draft.current('providers.model.protocol').value !== 'responses')
               draft.set('providers.model.protocol', 'responses');
             draft.set('providers.model.tools', JSON.stringify(xaiTools));
-            draft.selections.set('providers.model.tools', 'xai');
             continue;
           }
           if (provider === 'model') askModelTools = true;
@@ -330,15 +322,7 @@ async function promptServices(draft: SetupDraft, prompts: Prompts): Promise<void
     }
     if (provider === 'model' && askModelTools) {
       const key = 'providers.model.tools';
-      const resolved = draft.current(key);
-      const current = resolved.value;
-      const hasCurrentTools = resolved.source !== 'default' || draft.selections.has(key);
-      let initial = draft.selections.get(key);
-      if (initial === undefined) {
-        initial = 'keep';
-        if (!hasCurrentTools || isDeepStrictEqual(current, xaiTools)) initial = 'xai';
-        else if (isDeepStrictEqual(current, [])) initial = 'none';
-      }
+      const hasCurrentTools = valueAt(draft.values, key) !== undefined;
       const choices: Choice[] = [];
       if (hasCurrentTools)
         choices.push({ value: 'keep', label: zh ? '保持当前工具配置' : 'Keep current tools' });
@@ -349,14 +333,10 @@ async function promptServices(draft: SetupDraft, prompts: Prompts): Promise<void
       const tools = await prompts.select(
         zh ? '模型搜索工具' : 'Model search tools',
         choices,
-        initial,
+        hasCurrentTools ? 'keep' : 'xai',
         language,
       );
-      draft.selections.set(key, tools);
-      if (tools !== 'keep') {
-        const value = tools === 'xai' ? xaiTools : [];
-        if (!isDeepStrictEqual(current, value)) draft.set(key, JSON.stringify(value));
-      }
+      if (tools !== 'keep') draft.set(key, JSON.stringify(tools === 'xai' ? xaiTools : []));
     }
   }
 }

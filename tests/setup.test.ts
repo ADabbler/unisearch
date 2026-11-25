@@ -454,11 +454,11 @@ test('Setup checks the effective classifier configuration before enabling automa
   assert.equal(automatic.routing.model, 'fixture-model');
 });
 
-test('Model setup defaults new tools to xAI and preserves existing and edited choices', async (t) => {
+test('Custom model setup preselects xAI for new tools and keeps saved or pending tools', async (t) => {
   const root = temporary(t);
   const path = join(root, 'config.json');
   for (const [choice, original, expected, useShortcut = false] of [
-    ['none', {}, undefined],
+    ['none', {}, []],
     ['xai', {}, ['web_search', 'x_search']],
     ['none', {}, ['web_search', 'x_search'], true],
     [
@@ -466,7 +466,7 @@ test('Model setup defaults new tools to xAI and preserves existing and edited ch
       { tools: [{ type: 'custom_search', limit: 3 }] },
       [{ type: 'custom_search', limit: 3 }],
     ],
-    ['none', { tools: ['web_search'] }, []],
+    ['none', { tools: ['web_search', 'x_search'] }, []],
   ] as const) {
     const draft = new SetupDraft(
       { path, source: 'default', exists: false, values: { providers: { model: original } } },
@@ -494,11 +494,9 @@ test('Model setup defaults new tools to xAI and preserves existing and edited ch
             options.map((option) => option.value),
             [...(hasCurrentTools ? ['keep'] : []), 'xai', 'none'],
           );
-          let expectedInitial = hasCurrentTools ? 'keep' : 'xai';
-          if (toolsPrompts > 0) expectedInitial = useShortcut ? 'xai' : choice;
-          assert.equal(initial, expectedInitial);
+          assert.equal(initial, hasCurrentTools ? 'keep' : 'xai');
           toolsPrompts++;
-          return useShortcut && toolsPrompts > 1 ? 'xai' : choice;
+          return toolsPrompts === 1 ? choice : initial;
         }
         if (options.some((option) => option.value === 'custom')) return urls.shift()!;
         if (options.some((option) => option.value === 'responses')) return initial;
@@ -538,7 +536,7 @@ test('Setup preselects effective choices and preserves existing sources when con
       providers: {
         model: {
           api_key: 'fixture-existing-model-key',
-          base_url: 'https://example.org/v1',
+          base_url: source === 'config' ? 'https://api.x.ai/v1' : 'https://example.org/v1',
           model: { id: 'fixture-model' },
           ...(source === 'config' ? { protocol: 'chat-completions' } : {}),
         },
@@ -664,6 +662,7 @@ test('XAI setup saves the official URL and tools and retains model, effort and c
       if (section) return section;
       if (choices.some((choice) => choice.value === 'keep'))
         assert.fail('The xAI shortcut must skip tool selection');
+      if (choices.some((choice) => choice.value === 'responses')) return initial;
       if (choices.some((choice) => choice.value === 'custom')) {
         if (choices.some((choice) => choice.value === 'xai')) {
           assert.equal(initial, 'xai');

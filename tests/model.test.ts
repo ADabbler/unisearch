@@ -423,7 +423,7 @@ test('Both response protocols preserve complete text, actual model and structure
   const annotations = [
     { type: 'url_citation', url: 'https://example.org/a', title: 'A' },
     { type: 'url_citation', url: 'https://example.org/a', title: 'duplicate' },
-    { type: 'url_citation', url: 'https://example.org/a#part', title: null },
+    { type: 'url_citation', url: 'HTTPS://example.org/a#part', title: null },
     { type: 'file_citation', file_id: 'f' },
   ];
   const body = response() as any;
@@ -435,10 +435,11 @@ test('Both response protocols preserve complete text, actual model and structure
     text: 'Complete answer.\n\nSecond part',
     citations: [
       { url: 'https://example.org/a', title: 'A' },
-      { url: 'https://example.org/a#part' },
+      { url: 'HTTPS://example.org/a#part' },
     ],
   });
   const chatBody = chat() as any;
+  chatBody.choices[0].message.tool_calls = [{ type: 'function', function: { name: 'lookup' } }];
   chatBody.choices[0].message.annotations = annotations.map((annotation) => ({
     type: annotation.type,
     url_citation: annotation,
@@ -454,11 +455,12 @@ test('Both response protocols preserve complete text, actual model and structure
   }
 });
 
-test('Malformed, incomplete, refused and client-tool responses never return partial text', () => {
+test('Malformed, incomplete and refused responses never return partial text', () => {
   for (const body of [
     {},
     { ...response(), model: '' },
     { ...response(), output: [] },
+    { ...response(), output: [{ type: 'function_call', name: 'lookup' }] },
     { ...response(), output_text: 'SDK shortcut', output: [] },
     {
       ...response(),
@@ -468,17 +470,20 @@ test('Malformed, incomplete, refused and client-tool responses never return part
     },
   ])
     rejects(() => responseAnswer(body), 'INVALID_RESPONSE');
-  for (const status of ['incomplete', 'failed', 'in_progress'])
+  for (const status of ['failed', 'in_progress'])
     rejects(() => responseAnswer({ ...response(), status }), 'UPSTREAM_ERROR');
-  for (const type of ['function_call', 'custom_tool_call', 'computer_call', 'mcp_approval_request'])
-    rejects(
-      () =>
-        responseAnswer({
-          ...response(),
-          output: [...(response().output as JsonObject[]), { type }],
-        }),
-      'UPSTREAM_ERROR',
-    );
+  assert.throws(
+    () =>
+      responseAnswer({
+        ...response(),
+        status: 'incomplete',
+        incomplete_details: { reason: 'max_output_tokens' },
+      }),
+    {
+      code: 'UPSTREAM_ERROR',
+      details: { reason: 'incomplete', upstream_code: 'max_output_tokens' },
+    },
+  );
   for (const reason of ['length', 'content_filter', 'tool_calls']) {
     const body = chat() as any;
     body.choices[0].finish_reason = reason;
@@ -542,6 +547,15 @@ test('Inline reasoning and model-written sources leave the answer text', () => {
   assert.equal(responseAnswer(response(answer)).text, 'Answer before.Answer after.');
   assert.equal(chatAnswer(chat(answer)).text, 'Answer before.Answer after.');
   assert.equal(chatAnswer(chat('Body<think>a</think><think>b</think>Text')).text, 'BodyText');
+  const example = [
+    'Use `<think>example</think>` in XML.',
+    '~~~xml\n<think>sample</think>\n~~~',
+    '<span title="<think>attribute</think>">example</span>',
+    '<pre>\n<think>literal</think>\n</pre>',
+    '<!-- example\n\n<think>literal</think>\n\n-->',
+  ].join('\n\n');
+  const reasoning = '<think>outer <think>inner</think> tail</think>';
+  assert.equal(responseAnswer(response(`${reasoning}\n\n${example}`)).text, example);
   assert.equal(
     responseAnswer(response('No block <thinking>x</thinking> here')).text,
     'No block <thinking>x</thinking> here',
@@ -577,14 +591,30 @@ test('Sources headings and trailing link blocks become structured sources', () =
   const comparison =
     'Two options:\n\n- [A](https://example.org/a) is faster.\n- [B](https://example.org/b) works offline.';
   assert.equal(responseAnswer(response(comparison)).text, comparison);
+  const code = 'Example input:\n\n    https://example.org/a\n    https://example.org/b';
+  assert.equal(chatAnswer(chat(code)).text, code);
+  const codeBeforeSources = 'Example input:\r\n\r\n    value  ';
+  assert.deepEqual(
+    chatAnswer(chat(`${codeBeforeSources}\r\n\r\n## Sources\r\nhttps://example.org/a`)),
+    {
+      model: 'reported-model',
+      text: codeBeforeSources,
+      citations: [{ url: 'https://example.org/a' }],
+    },
+  );
+  const emphasis = 'Body.\n\n*https://example.org/a*\n*https://example.org/b*';
+  assert.deepEqual(chatAnswer(chat(emphasis)), { model: 'reported-model', text: emphasis });
   const prose =
     'Body text.\n\n## Sources\nSee the [Example](https://example.org/a) page for details.';
   assert.deepEqual(responseAnswer(response(prose)), { model: 'reported-model', text: prose });
-  const zh = '正文。\n\n参考资料：\n- [A](https://example.org/a)\n- B https://example.org/b';
+  const zh = '正文。\n\n参考资料：\n- [A](https://example.org/a)\n- B HTTPS://example.org/b';
   assert.deepEqual(chatAnswer(chat(zh)), {
     model: 'reported-model',
     text: '正文。',
-    citations: [{ url: 'https://example.org/a', title: 'A' }, { url: 'https://example.org/b' }],
+    citations: [
+      { url: 'https://example.org/a', title: 'A' },
+      { url: 'HTTPS://example.org/b', title: 'B' },
+    ],
   });
   const trailing = 'Body text.\n\nhttps://example.org/a.';
   assert.deepEqual(chatAnswer(chat(trailing)), { model: 'reported-model', text: trailing });
@@ -597,12 +627,12 @@ test('Sources headings and trailing link blocks become structured sources', () =
   const single = 'Body text.\n\nhttps://example.org/a';
   assert.deepEqual(chatAnswer(chat(single)), { model: 'reported-model', text: single });
   const proseItem =
-    'Body.\n\n## References\n- Links below are official\n- [Example](https://example.org/a)';
+    'Body.\n\n## References\n- [Example](https://example.org/a) — chapter 3 gives the measurements.';
   assert.deepEqual(chatAnswer(chat(proseItem)), { model: 'reported-model', text: proseItem });
   const ordered =
-    'Body.\n\n## Sources\n- bare https://example.org/a\n- [Titled](https://example.org/b)';
+    'Body.\n\n## Sources\n- Album https://en.wikipedia.org/wiki/Help!\n- [Titled](https://example.org/b)';
   assert.deepEqual(chatAnswer(chat(ordered)).citations, [
-    { url: 'https://example.org/a' },
+    { url: 'https://en.wikipedia.org/wiki/Help!', title: 'Album' },
     { url: 'https://example.org/b', title: 'Titled' },
   ]);
   const parens =
@@ -615,10 +645,9 @@ test('Sources headings and trailing link blocks become structured sources', () =
       { url: 'https://example.org/b' },
     ],
   });
-  rejects(
-    () => chatAnswer(chat('## Sources\n- [Example](https://example.org/a)')),
-    'INVALID_RESPONSE',
-  );
+  const linksOnly =
+    '**来源：**\n- [First](https://example.org/a)\n- [Second](https://example.org/b)';
+  assert.deepEqual(chatAnswer(chat(linksOnly)), { model: 'reported-model', text: linksOnly });
 });
 
 function byteStream(content: string | Uint8Array, chunkSize = 1, close = true) {
@@ -637,6 +666,38 @@ function byteStream(content: string | Uint8Array, chunkSize = 1, close = true) {
   return { stream, cancelled: () => cancelled };
 }
 const event = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
+test('Responses return the answer alongside tool calls in JSON and SSE', async () => {
+  const commentary = {
+    type: 'message',
+    role: 'assistant',
+    phase: 'commentary',
+    content: [{ type: 'output_text', text: 'Searching.' }],
+  };
+  const tool = { type: 'custom_tool_call', name: 'lookup', call_id: '123' };
+  const body = response();
+  body.output = [
+    commentary,
+    tool,
+    { type: 'function_call', name: 'fetch' },
+    ...(body.output as JsonObject[]),
+  ];
+  const expected = { model: 'reported-model', text: 'Complete answer.' };
+  assert.deepEqual(responseAnswer(body), expected);
+  const stream =
+    event({ type: 'response.output_item.added', output_index: 0, item: commentary }) +
+    event({ type: 'response.output_text.delta', output_index: 0, delta: 'Searching.' }) +
+    event({ type: 'response.output_item.added', item: tool }) +
+    event({ type: 'response.completed', response: body });
+  assert.deepEqual(
+    await streamAnswer(byteStream(stream).stream, 'responses', () => {
+      assert.fail('Commentary counted as answer text');
+    }),
+    expected,
+  );
+
+  rejects(() => responseAnswer({ ...body, output: [commentary, tool] }), 'INVALID_RESPONSE');
+});
+
 test('Responses SSE decodes fragmented UTF-8, CRLF, multiline data and ignores deltas in favor of final response', async () => {
   const stream = byteStream(
     ': heartbeat\r\n\r\n' +
@@ -651,12 +712,14 @@ test('Responses SSE decodes fragmented UTF-8, CRLF, multiline data and ignores d
   });
   assert.equal(stream.cancelled(), true);
 });
-test('Chat SSE requires stop plus DONE, closes without EOF and uses only index zero', async () => {
+test('Chat SSE collects choice zero through stop and reads trailing citations until DONE or EOF', async () => {
   const chunk = (delta: unknown, finish_reason: unknown = null) => ({
     model: 'actual',
     choices: [{ index: 0, delta, finish_reason }],
   });
   const source =
+    event({ model: 'actual', choices: [{ index: 1, delta: { content: 'Other choice' } }] }) +
+    event(chunk({ tool_calls: [{ index: 0, type: 'function', function: { name: 'lookup' } }] })) +
     event(chunk({ content: '中文' })) +
     event(chunk({ content: ' answer' }, 'stop')) +
     event({ choices: [], usage: {} }) +
@@ -668,14 +731,25 @@ test('Chat SSE requires stop plus DONE, closes without EOF and uses only index z
   });
   assert.equal(stream.cancelled(), true);
   const cited =
+    event({ model: '', choices: [], prompt_filter_results: [] }) +
     event({ model: 'actual', choices: [{ index: 0, delta: { content: 'Body' } }] }) +
     event({
       model: 'actual',
       citations: ['https://example.org/a'],
       choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
     }) +
+    event({
+      model: '',
+      choices: [
+        {
+          index: 0,
+          finish_reason: null,
+          content_filter_results: { violence: { filtered: false } },
+        },
+      ],
+    }) +
     event({ model: 'actual', citations: ['https://example.org/b'], choices: [], usage: {} }) +
-    'data: [DONE]\n\n';
+    ': heartbeat';
   assert.deepEqual(await streamAnswer(byteStream(cited).stream, 'chat-completions'), {
     model: 'actual',
     text: 'Body',
@@ -684,7 +758,8 @@ test('Chat SSE requires stop plus DONE, closes without EOF and uses only index z
   for (const text of [
     'data: [DONE]\n\n',
     event(chunk({ content: 'partial' })),
-    event(chunk({ content: 'partial' }, 'stop')),
+    event(chunk({ content: 'Body' }, 'stop')) + event(chunk({ content: 'late text' })),
+    event(chunk({ content: 'Body' }, 'stop')) + 'data: {',
     'data: nope\n\n',
     event({ choices: 'bad' }),
   ])
@@ -693,10 +768,13 @@ test('Chat SSE requires stop plus DONE, closes without EOF and uses only index z
     });
   await assert.rejects(
     streamAnswer(
-      byteStream(event(chunk({ content: 'partial' }, 'length'))).stream,
+      byteStream(
+        event(chunk({ content: 'partial' })) +
+          event({ model: '', choices: [{ index: 0, finish_reason: 'content_filter' }] }),
+      ).stream,
       'chat-completions',
     ),
-    { code: 'UPSTREAM_ERROR' },
+    { code: 'UPSTREAM_ERROR', details: { reason: 'refusal' } },
   );
 });
 test('SSE malformed encoding, reserved fields and error terminals are explicit failures', async () => {
@@ -720,6 +798,7 @@ test('HTTP error classification uses structured facts, never infers model scope 
   const cases = [
     [401, {}, 'AUTHENTICATION_ERROR', false, undefined],
     [403, {}, 'ACCESS_DENIED', false, undefined],
+    [402, { code: 402 }, 'QUOTA_EXCEEDED', false, undefined],
     [429, { code: 'insufficient_quota' }, 'QUOTA_EXCEEDED', false, undefined],
     [404, { code: 'model_not_found' }, 'MODEL_UNAVAILABLE', false, 'model'],
     [404, { message: 'model not found' }, 'UPSTREAM_ERROR', false, undefined],
@@ -751,6 +830,10 @@ test('HTTP error classification uses structured facts, never infers model scope 
     assert.equal(result.outcome.result.error?.code, code, `${status}`);
     assert.equal(result.retry, retry);
     assert.equal(result.fallback, fallback);
+    if ('code' in error) {
+      assert.equal(result.outcome.result.error?.details?.upstream_code, error.code);
+      assert.equal(result.outcome.result.error?.details?.reason, undefined);
+    }
   }
 });
 
@@ -1347,7 +1430,7 @@ test('Model retries preserve settings, per-candidate counts and Exa is never res
   }
 });
 
-test('Generic connection failures, policy refusals and unsupported client workflows never cause model fallback', async () => {
+test('Generic connection failures, policy refusals and account errors never cause model fallback', async () => {
   const plan = prepareCombinedSearch(
     'q',
     {},
@@ -1358,7 +1441,6 @@ test('Generic connection failures, policy refusals and unsupported client workfl
   for (const body of [
     { ...response(), status: 'failed' },
     { ...response(), status: 'incomplete', incomplete_details: { reason: 'content_filter' } },
-    { ...response(), output: [{ type: 'function_call' }, ...(response().output as JsonObject[])] },
     { ...response(), error: { code: 'insufficient_quota', message: 'quota' } },
   ]) {
     let calls = 0;
@@ -1399,40 +1481,53 @@ test('Generic connection failures, policy refusals and unsupported client workfl
   }
 });
 
-test('Structured SSE errors retain safe upstream evidence and completed hosted shell output does not demand a local executor', async () => {
-  const request = prepare({}, { stream: true });
-  for (const [code, expected] of [
-    ['model_not_found', 'MODEL_UNAVAILABLE'],
-    ['insufficient_quota', 'QUOTA_EXCEEDED'],
-    ['unknown', 'UPSTREAM_ERROR'],
-  ]) {
+test('Model requests retain upstream error details from JSON and SSE', async () => {
+  for (const [protocol, format, code, expected] of [
+    ['responses', 'sse', 'model_not_found', 'MODEL_UNAVAILABLE'],
+    ['responses', 'json', 'insufficient_quota', 'QUOTA_EXCEEDED'],
+    ['responses', 'incomplete', 'fixture-model-key', 'UPSTREAM_ERROR'],
+    ['chat-completions', 'sse', 429, 'UPSTREAM_ERROR'],
+    ['chat-completions', 'sse-choice', 'model_not_found', 'MODEL_UNAVAILABLE'],
+    ['chat-completions', 'choice', 502, 'UPSTREAM_ERROR'],
+  ] as const) {
+    const request = prepare(
+      { providers: { model: { protocol } } },
+      { stream: format !== 'choice' },
+    );
     const result = await requestModel(
       request,
       request.candidates[0],
       'prompt',
       { signal: new AbortController().signal },
       'en',
-      async () =>
-        new Response(
-          event({
-            type: 'response.failed',
-            response: { error: { code, message: 'fixture-model-key details' } },
-          }),
-          { headers: { 'content-type': 'text/event-stream' } },
-        ),
+      async () => {
+        const error = { code, message: 'fixture-model-key details' };
+        if (format === 'incomplete')
+          return Response.json({ status: 'incomplete', incomplete_details: { reason: code } });
+        if (format === 'json') return Response.json({ error });
+        if (format === 'choice')
+          return Response.json({
+            choices: [
+              { message: { role: 'assistant', content: 'partial' }, finish_reason: 'error', error },
+            ],
+          });
+        const choice = { index: 0, finish_reason: 'error', delta: { content: '' } };
+        let body;
+        if (protocol === 'responses') body = { type: 'response.failed', response: { error } };
+        else if (format === 'sse-choice') body = { choices: [{ ...choice, error }] };
+        else body = { error, choices: [choice] };
+        return new Response(event(body), { headers: { 'content-type': 'text/event-stream' } });
+      },
     );
     assert.equal(result.outcome.result.error?.code, expected);
+    assert.equal(
+      result.outcome.result.error?.details?.upstream_code,
+      format === 'incomplete' ? '[REDACTED]' : code,
+    );
+    if (format === 'incomplete') assert.equal(result.fallback, 'candidate');
+    else assert.equal(result.fallback, expected === 'MODEL_UNAVAILABLE' ? 'model' : undefined);
     assert.doesNotMatch(JSON.stringify(result), /fixture-model-key/);
   }
-  const output = [...(response().output as JsonObject[]), { type: 'shell_call', call_id: 'c' }];
-  rejects(() => responseAnswer({ ...response(), output }), 'UPSTREAM_ERROR');
-  assert.equal(
-    responseAnswer({
-      ...response(),
-      output: [...output, { type: 'shell_call_output', call_id: 'c' }],
-    }).text,
-    'Complete answer.',
-  );
 });
 
 test('Model attempts can exceed 30 seconds, explicit 600-second budgets remain shared and exhaustion prevents fallback', async () => {
@@ -1472,31 +1567,6 @@ test('Invalid model options are reported before missing connection settings', ()
         error.details?.option === ('model' in options ? '--model' : '--effort'),
     );
   }
-});
-
-test('Null Chat tool calls mean no client action, while malformed declarations remain invalid', async () => {
-  const body = chat() as any;
-  body.choices[0].message.tool_calls = null;
-  assert.deepEqual(chatAnswer(body), { model: 'reported-model', text: 'Complete answer.' });
-  const source =
-    event({
-      model: 'reported-model',
-      choices: [
-        {
-          index: 0,
-          delta: { content: 'Complete answer.', tool_calls: null },
-          finish_reason: 'stop',
-        },
-      ],
-    }) + 'data: [DONE]\n\n';
-  assert.deepEqual(await streamAnswer(byteStream(source).stream, 'chat-completions'), {
-    model: 'reported-model',
-    text: 'Complete answer.',
-  });
-  body.choices[0].message.tool_calls = {};
-  rejects(() => chatAnswer(body), 'INVALID_RESPONSE');
-  body.choices[0].message.tool_calls = [{ type: 'function' }];
-  rejects(() => chatAnswer(body), 'UPSTREAM_ERROR');
 });
 
 test('Non-finite nested tool parameters fail locally instead of being sent as null', () => {

@@ -1,3 +1,4 @@
+import { parser as markdown } from '@lezer/markdown';
 import { isObject } from '../config/fields.js';
 import { AppError } from '../errors.js';
 import type { JsonObject } from '../result.js';
@@ -17,20 +18,16 @@ type AnswerSource = JsonObject & { url: string; title?: string };
 export function invalidResponse(): never {
   throw new AppError('INVALID_RESPONSE', 'modelResponse');
 }
-function incomplete(reason: string): never {
-  let message: 'modelToolWorkflow' | 'modelRefusal' | 'modelIncomplete' = 'modelIncomplete';
-  if (reason === 'unsupported_tool_workflow') message = 'modelToolWorkflow';
-  else if (reason === 'refusal') message = 'modelRefusal';
-  throw new AppError('UPSTREAM_ERROR', message, { reason });
+function incomplete(reason: string, upstreamCode?: string): never {
+  throw new AppError('UPSTREAM_ERROR', reason === 'refusal' ? 'modelRefusal' : 'modelIncomplete', {
+    reason,
+    ...(upstreamCode ? { upstream_code: upstreamCode } : {}),
+  });
 }
-function upstreamError(value: unknown): never {
-  if (typeof value === 'string' && value)
-    throw new AppError('UPSTREAM_ERROR', 'modelUpstream', {
-      reason: 'upstream_error',
-      upstream_message: value,
-    });
-  if (!isObject(value)) invalidResponse();
-  const details: JsonObject = { reason: 'upstream_error' };
+export function modelErrorDetails(value: unknown): JsonObject {
+  if (typeof value === 'string' && value) return { upstream_message: value };
+  if (!isObject(value)) return { reason: 'error_body_invalid' };
+  const details: JsonObject = {};
   for (const [field, target] of [
     ['code', 'upstream_code'],
     ['type', 'upstream_type'],
@@ -38,18 +35,26 @@ function upstreamError(value: unknown): never {
     ['message', 'upstream_message'],
   ] as const) {
     const item = value[field];
-    if (item === undefined || item === null) continue;
-    if (typeof item !== 'string') invalidResponse();
-    if (item) details[target] = item;
+    if (item === undefined || item === null || item === '') continue;
+    if (
+      typeof item === 'string' ||
+      (field === 'code' && typeof item === 'number' && Number.isFinite(item))
+    )
+      details[target] = item;
+    else details.reason = 'error_body_invalid';
   }
-  throw new AppError('UPSTREAM_ERROR', 'modelUpstream', details);
+  return details;
+}
+function upstreamError(value: unknown): never {
+  const details = modelErrorDetails(value);
+  if (details.reason) invalidResponse();
+  throw new AppError('UPSTREAM_ERROR', 'modelUpstream', { reason: 'upstream_error', ...details });
 }
 function nonempty(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 function validSourceUrl(value: unknown): value is string {
-  if (typeof value !== 'string' || !value || /\s/u.test(value) || !/^https?:\/\//.test(value))
-    return false;
+  if (typeof value !== 'string' || /\s/u.test(value) || !/^https?:\/\//i.test(value)) return false;
   try {
     return Boolean(new URL(value).hostname);
   } catch {
@@ -86,102 +91,139 @@ function annotations(
   }
 }
 
-/** Reasoning blocks emitted inside the answer text. */
-const thinkingBlock = /<think\b[^>]*>[\s\S]*?<\/think\s*>/gi;
-
 /** Characters a URL can contain, excluding parentheses, which are balanced separately. */
 const urlChar = String.raw`[^\s()<>"'\`，。、；：！？》）】]`;
 
 /** A URL body with balanced parentheses, as used by paths such as `X_(company)`. */
 const urlBody = String.raw`${urlChar}*(?:\(${urlChar}*\)${urlChar}*)*`;
 
-const linkOrUrlPattern = String.raw`\[([^\]]*)\]\((https?:\/\/${urlBody})\)|https?:\/\/${urlBody}`;
-const linkOrUrl = new RegExp(linkOrUrlPattern, 'g');
-const linkOnlyLine = new RegExp(`^(?:${linkOrUrlPattern})$`);
+const url = String.raw`https?:\/\/${urlBody}`;
+const sourceLink = new RegExp(String.raw`^\[([^\]]*)\]\((${url})\)$`, 'i');
+const sourceUrl = new RegExp(String.raw`(?:^|\s)(${url})$`, 'i');
 
 /** A standalone line naming the source list, such as `## Sources` or `参考资料：`. */
 const sourceHeading =
-  /^(?:#{1,6}[ \t]*)?(?:\*\*|__)?[ \t]*(sources?|references?|citations?|信源|参考资料|参考|引用|来源列表|来源)[ \t]*(?:\*\*|__)?(?:[ \t]*[（(][^)\n]*[)）])?[ \t]*[:：]?[ \t]*$/gim;
+  /^(?:#{1,6}[ \t]*)?(?:\*\*|__)?[ \t]*(?:sources?|references?|citations?|信源|参考资料|参考|引用|来源列表|来源)[ \t]*(?:[:：]?(?:\*\*|__))?(?:[ \t]*[（(][^)\n]*[)）])?[ \t]*[:：]?[ \t]*$/gim;
 
-const listMarker = /^[ \t]*(?:[-*]|\d+\.)[ \t]*/;
+const listMarker = /^[ \t]*(?:[-*]|\d+\.)[ \t]+/;
 
-const linkLine = /^(?:https?:\/\/|\[[^\]]*\]\(https?:\/\/)/;
+// Parse standalone HTML tags individually so their attributes and Markdown code stay literal.
+const reasoningMarkdown = markdown.configure({ remove: ['HTMLBlock'] });
 
-/** Any URL in a line, used to tell source lines from prose list items. */
-const anyUrl = new RegExp(String.raw`https?:\/\/${urlBody}`);
-
-/**
- * Remove inline reasoning blocks and collapse the blank lines they leave
- * behind. Text without a block keeps its original spacing.
- */
+/** Only paired HTML tags delimit reasoning. Markdown code can quote either tag literally. */
 function stripThinking(text: string): string {
-  const stripped = text.replace(thinkingBlock, '');
-  if (stripped === text) return text;
-  return stripped.replace(/\n{3,}/g, '\n\n').trim();
+  if (!/<think\b/i.test(text)) return text;
+  const parts: string[] = [];
+  const openParts: number[] = [];
+  let literalTag = '';
+  let end = 0;
+  let removed = false;
+  const commentSyntax = text.includes('<!--') ? markdown.parse(text) : undefined;
+  reasoningMarkdown.parse(text).iterate({
+    enter(node) {
+      if (node.name !== 'HTMLTag') return;
+      const { from, to } = node;
+      if (commentSyntax?.resolveInner(from, 1).name === 'CommentBlock') return;
+      const tag = text.slice(from, to);
+      const match = /^<(\/?)(think|pre|code|script|style|textarea)(?=[\s/>])/i.exec(tag);
+      if (!match || tag.endsWith('/>')) return;
+      const closing = match[1] === '/';
+      const name = match[2].toLowerCase();
+      if (literalTag) {
+        if (closing && name === literalTag) literalTag = '';
+      } else if (name !== 'think') {
+        if (!closing) literalTag = name;
+      } else if (!closing) {
+        parts.push(text.slice(end, from));
+        openParts.push(parts.length);
+        end = from;
+      } else {
+        const keep = openParts.pop();
+        if (keep !== undefined) {
+          parts.length = keep;
+          end = to;
+          removed = true;
+        }
+      }
+    },
+  });
+  if (!removed) return text;
+  return (parts.join('') + text.slice(end)).replace(/^(?:[ \t]*\r?\n)+|(?:\r?\n[ \t]*)+$/g, '');
 }
 
-/**
- * Separate sources the model wrote into the answer text from the answer itself.
- * Sources in a heading block or a trailing block of link-only lines leave the
- * text.
- */
+/** A source list that makes up the entire answer belongs in the answer text. */
 function extractAnswerSources(text: string): { text: string; sources: AnswerSource[] } {
-  const sources: AnswerSource[] = [];
   const block = headingBlock(text) ?? linkBlock(text);
-  if (!block) return { text, sources };
-  for (const source of block.sources) addSource(sources, source.url, source.title);
-  return { text: block.text, sources };
+  const contentEnd = block?.text.trimEnd().length;
+  if (block && contentEnd) {
+    let containsCode = false;
+    markdown.parse(text).iterate({
+      from: block.text.length,
+      enter(node) {
+        if (
+          node.to > block.text.length &&
+          (node.name === 'CodeBlock' || node.name === 'FencedCode')
+        )
+          containsCode = true;
+      },
+    });
+    if (!containsCode) {
+      const nextLine = block.text.indexOf('\n', contentEnd);
+      const body = nextLine < 0 ? block.text : block.text.slice(0, nextLine);
+      return { text: body.replace(/\r$/, ''), sources: block.sources };
+    }
+  }
+  return { text, sources: [] };
 }
 
 /**
  * Every non-blank line below the heading must be a source line carrying a URL.
  */
 function headingBlock(text: string): { text: string; sources: AnswerSource[] } | undefined {
-  const starts = [...text.matchAll(sourceHeading)].map((match) => match.index);
-  for (const start of starts.reverse()) {
-    const body = text
-      .slice(start)
-      .split('\n')
-      .slice(1)
-      .filter((line) => line.trim());
-    if (!body.length || body.some((line) => !isSourceLine(line))) continue;
-    const sources = linksIn(body.join('\n'));
-    if (sources.length) return { text: text.slice(0, start).trimEnd(), sources };
-  }
-  return undefined;
-}
-
-/** A source line is a list item or a link line that carries a URL. */
-function isSourceLine(line: string): boolean {
-  return (listMarker.test(line) || linkLine.test(line.trim())) && anyUrl.test(line);
+  const heading = [...text.matchAll(sourceHeading)].at(-1);
+  if (!heading) return;
+  const sources = text
+    .slice(heading.index + heading[0].length)
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => sourceFromLine(line, true));
+  if (sources.length && sources.every((source) => source !== undefined))
+    return { text: text.slice(0, heading.index), sources };
 }
 
 function linkBlock(text: string): { text: string; sources: AnswerSource[] } | undefined {
   const lines = text.split('\n');
-  let end = lines.length - 1;
-  while (end >= 0 && !lines[end].trim()) end -= 1;
-  if (end < 0) return undefined;
-  let first = end;
-  while (first >= 0 && (!lines[first].trim() || isLinkOnlyLine(lines[first]))) first -= 1;
-  first += 1;
-  if (lines.slice(first, end + 1).filter(isLinkOnlyLine).length < 2) return undefined;
-  const sources = linksIn(lines.slice(first, end + 1).join('\n'));
-  if (!sources.length) return undefined;
-  return { text: lines.slice(0, first).join('\n').trimEnd(), sources };
-}
-
-function isLinkOnlyLine(line: string): boolean {
-  return linkOnlyLine.test(line.replace(listMarker, '').trim());
-}
-
-function linksIn(text: string): AnswerSource[] {
   const sources: AnswerSource[] = [];
-  for (const match of text.matchAll(linkOrUrl)) {
-    const link = match[2] === undefined ? undefined : { url: match[2], title: match[1].trim() };
-    const url = link ? link.url : match[0].replace(/[.,;:!?]+$/, '');
-    if (validSourceUrl(url)) addSource(sources, url, link?.title);
+  let i = lines.length - 1;
+  for (; i >= 0; i--) {
+    if (!lines[i].trim()) continue;
+    const source = sourceFromLine(lines[i], false);
+    if (!source) break;
+    sources.push(source);
   }
-  return sources;
+  if (sources.length < 2) return undefined;
+  return {
+    text: lines.slice(0, i + 1).join('\n'),
+    sources: sources.reverse(),
+  };
+}
+
+function sourceFromLine(line: string, allowLabel: boolean): AnswerSource | undefined {
+  const entry = line.replace(listMarker, '').trim();
+  const link = sourceLink.exec(entry);
+  let url: string;
+  let title: string;
+  if (link) {
+    title = link[1].trim();
+    url = link[2];
+  } else {
+    const match = sourceUrl.exec(entry);
+    if (!match) return;
+    title = entry.slice(0, match.index).trimEnd();
+    if (title && (!allowLabel || !listMarker.test(line) || /https?:\/\//i.test(title))) return;
+    url = match[1];
+  }
+  if (validSourceUrl(url)) return { url, ...(title ? { title } : {}) };
 }
 
 /** The top-level `citations` URL list both protocols return. */
@@ -227,23 +269,15 @@ function finalize(text: string, cited: AnswerSource[], searched: AnswerSource[])
   return { text: answer.text, sources: merged, searchedSources };
 }
 
-const clientTools = new Set([
-  'function_call',
-  'custom_tool_call',
-  'computer_call',
-  'local_shell_call',
-  'apply_patch_call',
-  'mcp_approval_request',
-]);
 export function responseAnswer(body: unknown): ModelAnswer {
   if (!isObject(body)) invalidResponse();
   if (body.error !== undefined && body.error !== null && body.error !== '')
     upstreamError(body.error);
   if (typeof body.status !== 'string') invalidResponse();
   if (body.status !== 'completed') {
-    if (isObject(body.incomplete_details) && body.incomplete_details.reason === 'content_filter')
-      incomplete('refusal');
-    incomplete(body.status);
+    const reason = isObject(body.incomplete_details) ? body.incomplete_details.reason : undefined;
+    if (reason === 'content_filter') incomplete('refusal', reason);
+    incomplete(body.status, nonempty(reason) ? reason : undefined);
   }
   if (!nonempty(body.model) || !Array.isArray(body.output)) invalidResponse();
   const parts: string[] = [];
@@ -252,21 +286,9 @@ export function responseAnswer(body: unknown): ModelAnswer {
   let refusal = false;
   for (const item of body.output) {
     if (!isObject(item) || typeof item.type !== 'string') invalidResponse();
-    if (clientTools.has(item.type)) incomplete('unsupported_tool_workflow');
-    if (
-      item.type === 'shell_call' &&
-      (!nonempty(item.call_id) ||
-        !body.output.some(
-          (output) =>
-            isObject(output) &&
-            output.type === 'shell_call_output' &&
-            output.call_id === item.call_id,
-        ))
-    )
-      incomplete('unsupported_tool_workflow');
     if (item.type !== 'message') continue;
     if (typeof item.role !== 'string' || !Array.isArray(item.content)) invalidResponse();
-    if (item.role !== 'assistant') continue;
+    if (item.role !== 'assistant' || item.phase === 'commentary') continue;
     if (item.status !== undefined && typeof item.status !== 'string') invalidResponse();
     if (item.status !== undefined && item.status !== 'completed') incomplete(item.status as string);
     for (const part of item.content) {
@@ -292,27 +314,20 @@ export function responseAnswer(body: unknown): ModelAnswer {
 
 function chatFinish(reason: unknown): void {
   if (typeof reason !== 'string') invalidResponse();
-  if (reason === 'tool_calls' || reason === 'function_call')
-    incomplete('unsupported_tool_workflow');
   if (reason === 'content_filter') incomplete('refusal');
   if (reason !== 'stop') incomplete(reason);
 }
-function chatTools(message: Record<string, unknown>): void {
-  if (message.tool_calls !== undefined && message.tool_calls !== null) {
-    if (!Array.isArray(message.tool_calls)) invalidResponse();
-    if (message.tool_calls.length) incomplete('unsupported_tool_workflow');
-  }
-  if (message.function_call !== undefined && message.function_call !== null)
-    incomplete('unsupported_tool_workflow');
-}
 export function chatAnswer(body: unknown): ModelAnswer {
   if (isObject(body) && body.error !== undefined && body.error !== null) upstreamError(body.error);
-  if (!isObject(body) || !nonempty(body.model) || !Array.isArray(body.choices)) invalidResponse();
-  const choices = body.choices.filter((choice) => isObject(choice) && choice.index === 0);
+  if (!isObject(body) || !Array.isArray(body.choices)) invalidResponse();
+  const choices = body.choices.filter(
+    (choice, _, all) =>
+      isObject(choice) && (choice.index === 0 || (all.length === 1 && choice.index === undefined)),
+  );
   if (choices.length !== 1) invalidResponse();
   const choice = choices[0];
-  if (!isObject(choice.message)) invalidResponse();
-  chatTools(choice.message);
+  if (choice.error != null) upstreamError(choice.error);
+  if (!nonempty(body.model) || !isObject(choice.message)) invalidResponse();
   if (
     choice.message.refusal !== undefined &&
     choice.message.refusal !== null &&
@@ -375,7 +390,10 @@ async function* events(
           if (field === 'data') data.push(value);
         }
       }
-      if (chunk.done) break;
+      if (chunk.done) {
+        if (data.length || event || (buffer && !buffer.startsWith(':'))) invalidResponse();
+        break;
+      }
     }
   } finally {
     try {
@@ -397,16 +415,9 @@ export async function streamAnswer(
   let refused = false;
   const cited: AnswerSource[] = [];
   const searched: AnswerSource[] = [];
+  const commentaryItems = new Set<string | number>();
   for await (const event of events(body)) {
-    if (event.data === '[DONE]') {
-      if (protocol !== 'chat-completions' || !stopped || !model) invalidResponse();
-      const answer = finalize(content, cited, searched);
-      if (!answer.text.trim()) {
-        if (refused) incomplete('refusal');
-        invalidResponse();
-      }
-      return answerFields(model, answer);
-    }
+    if (event.data === '[DONE]') break;
     let value: unknown;
     try {
       value = JSON.parse(event.data);
@@ -426,21 +437,26 @@ export async function streamAnswer(
         responseAnswer(value.response);
       if (['response.failed', 'response.incomplete'].includes(value.type)) incomplete(value.type);
       if (
-        value.type === 'response.output_item.added' ||
-        value.type === 'response.output_item.done'
+        value.type === 'response.output_item.added' &&
+        isObject(value.item) &&
+        value.item.type === 'message' &&
+        value.item.phase === 'commentary'
       ) {
-        if (!isObject(value.item) || typeof value.item.type !== 'string') invalidResponse();
-        if (clientTools.has(value.item.type)) incomplete('unsupported_tool_workflow');
+        if (typeof value.item.id === 'string') commentaryItems.add(value.item.id);
+        if (typeof value.output_index === 'number') commentaryItems.add(value.output_index);
       }
       if (value.type === 'response.output_text.delta') {
         if (typeof value.delta !== 'string') invalidResponse();
-        if (value.delta) onContent?.();
+        const commentary =
+          (typeof value.item_id === 'string' && commentaryItems.has(value.item_id)) ||
+          (typeof value.output_index === 'number' && commentaryItems.has(value.output_index));
+        if (value.delta && !commentary) onContent?.();
       }
       continue;
     }
     if (value.citations !== undefined && value.citations !== null)
       citations(value.citations, searched);
-    if (value.model !== undefined) {
+    if (value.model != null && value.model !== '') {
       if (!nonempty(value.model) || (model !== undefined && value.model !== model))
         invalidResponse();
       model = value.model;
@@ -449,26 +465,34 @@ export async function streamAnswer(
     const choices = value.choices.filter((choice) => isObject(choice) && choice.index === 0);
     if (choices.length > 1) invalidResponse();
     if (!choices.length) {
-      if (value.choices.length) invalidResponse();
+      if (value.choices.some((choice) => !isObject(choice) || !Number.isInteger(choice.index)))
+        invalidResponse();
       continue;
     }
     const choice = choices[0];
-    if (!isObject(choice.delta) || stopped) invalidResponse();
-    chatTools(choice.delta);
-    if (choice.delta.content !== undefined && choice.delta.content !== null) {
-      if (typeof choice.delta.content !== 'string') invalidResponse();
-      content += choice.delta.content;
-      if (choice.delta.content) onContent?.();
+    if (choice.error != null) upstreamError(choice.error);
+    const delta = choice.delta ?? {};
+    if (!isObject(delta)) invalidResponse();
+    if (delta.content != null) {
+      if (typeof delta.content !== 'string' || (stopped && delta.content)) invalidResponse();
+      content += delta.content;
+      if (delta.content) onContent?.();
     }
-    if (choice.delta.refusal !== undefined && choice.delta.refusal !== null) {
-      if (typeof choice.delta.refusal !== 'string') invalidResponse();
-      refused ||= Boolean(choice.delta.refusal);
+    if (delta.refusal != null) {
+      if (typeof delta.refusal !== 'string') invalidResponse();
+      refused ||= Boolean(delta.refusal);
     }
-    annotations(choice.delta.annotations, 'chat-completions', cited);
+    annotations(delta.annotations, 'chat-completions', cited);
     if (choice.finish_reason !== undefined && choice.finish_reason !== null) {
       chatFinish(choice.finish_reason);
       stopped = true;
     }
   }
-  return invalidResponse();
+  if (protocol !== 'chat-completions' || !stopped || !model) invalidResponse();
+  const answer = finalize(content, cited, searched);
+  if (!answer.text.trim()) {
+    if (refused) incomplete('refusal');
+    invalidResponse();
+  }
+  return answerFields(model, answer);
 }

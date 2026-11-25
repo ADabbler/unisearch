@@ -1087,10 +1087,6 @@ const messages = {
   modelNetwork: ['无法连接模型服务', 'Unable to connect to the model service'],
   modelResponse: ['模型响应没有完整正文', 'The model response contains no complete answer text'],
   modelRefusal: ['模型拒绝了本次请求', 'The model refused this request'],
-  modelToolWorkflow: [
-    '响应要求未支持的客户端工具执行或批准',
-    'The response requires unsupported client tool execution or approval',
-  ],
   modelIncomplete: ['模型响应未完成', 'The model response did not complete'],
   searchFailed: ['搜索失败', 'Search failed'],
   searchPartial: ['部分搜索来源失败', 'Some search sources failed'],

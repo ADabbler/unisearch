@@ -7,7 +7,13 @@ import { text } from '../i18n/messages.js';
 import { success } from '../result.js';
 import type { JsonObject } from '../result.js';
 import type { ModelRequest } from './model-config.js';
-import { chatAnswer, invalidResponse, responseAnswer, streamAnswer } from './model-response.js';
+import {
+  chatAnswer,
+  invalidResponse,
+  modelErrorDetails,
+  responseAnswer,
+  streamAnswer,
+} from './model-response.js';
 import type { ModelAnswer } from './model-response.js';
 import { redactError, transportError } from './transport.js';
 
@@ -115,6 +121,23 @@ export async function requestModel(
   transport: typeof fetch = fetch,
 ): Promise<ModelAttempt> {
   const safe = (value: string) => redactError(value, request.apiKey);
+  function modelFailure(error: unknown) {
+    const outcome = failure<ModelAnswer>(error, language);
+    const reported = outcome.result.error;
+    if (reported?.details) {
+      const details = { ...reported.details };
+      for (const field of ['upstream_code', 'upstream_type', 'upstream_param', 'upstream_message'])
+        if (typeof details[field] === 'string') details[field] = safe(details[field]);
+      if (
+        error instanceof AppError &&
+        error.key === 'modelIncomplete' &&
+        typeof details.reason === 'string'
+      )
+        details.reason = safe(details.reason);
+      reported.details = details;
+    }
+    return outcome;
+  }
   let streamStarted = false;
   try {
     const protocol = effectiveProtocol(request, candidate);
@@ -133,64 +156,41 @@ export async function requestModel(
     context.retryAllowed = response.status === 200 || httpError(response.status).retry;
     const id = response.headers.get('x-request-id');
     if (id) context.requestId = safe(id);
-    if (response.status === 200) {
-      const isStream =
-        response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ===
-        'text/event-stream';
-      if (isStream !== request.stream) {
+    if (
+      response.status === 200 &&
+      response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() ===
+        'text/event-stream'
+    ) {
+      if (!request.stream) {
         await response.body?.cancel();
         invalidResponse();
       }
-      let answer: ModelAnswer;
-      if (request.stream) {
-        if (!response.body) invalidResponse();
-        answer = await streamAnswer(response.body, protocol, () => {
-          context.markStreamProgress?.();
-          streamStarted = true;
-        });
-      } else {
-        const bytes = await response.arrayBuffer();
-        let body: unknown;
-        try {
-          body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-        } catch {
-          invalidResponse();
-        }
-        answer = protocol === 'responses' ? responseAnswer(body) : chatAnswer(body);
-      }
+      if (!response.body) invalidResponse();
+      const answer = await streamAnswer(response.body, protocol, () => {
+        context.markStreamProgress?.();
+        streamStarted = true;
+      });
       return { outcome: success(answer), retry: false };
     }
     const bytes = await response.arrayBuffer();
     let body: unknown;
-    let invalidBody = false;
     try {
       body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
     } catch {
-      invalidBody = true;
+      if (response.status === 200) invalidResponse();
     }
-    const error = isObject(body) && isObject(body.error) ? body.error : undefined;
-    const details: JsonObject = {};
-    if (!error) {
-      if (isObject(body) && typeof body.error === 'string' && body.error)
-        details.upstream_message = safe(body.error);
-      else invalidBody = true;
+    if (response.status === 200) {
+      // A service can return a JSON error before opening the requested stream.
+      const answer = protocol === 'responses' ? responseAnswer(body) : chatAnswer(body);
+      if (request.stream) invalidResponse();
+      return { outcome: success(answer), retry: false };
     }
-    for (const [field, target] of [
-      ['code', 'upstream_code'],
-      ['type', 'upstream_type'],
-      ['param', 'upstream_param'],
-      ['message', 'upstream_message'],
-    ] as const) {
-      const value = error?.[field];
-      if (value === undefined || value === null || value === '') continue;
-      if (typeof value !== 'string') invalidBody = true;
-      else details[target] = safe(value);
-    }
-    const mapped = httpError(response.status, error);
+    const error = isObject(body) ? body.error : undefined;
+    const details = modelErrorDetails(error);
+    const mapped = httpError(response.status, isObject(error) ? error : undefined);
     if (mapped.code === 'TIMEOUT') details.timeout_scope = 'request';
-    if (invalidBody) details.reason = 'error_body_invalid';
-    const outcome = failure<ModelAnswer>(new AppError(mapped.code, mapped.key, details), language);
-    if (invalidBody && outcome.result.error)
+    const outcome = modelFailure(new AppError(mapped.code, mapped.key, details));
+    if (details.reason === 'error_body_invalid' && outcome.result.error)
       outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     return {
       outcome,
@@ -207,22 +207,20 @@ export async function requestModel(
         retry: streamStarted ? false : transportFailure.retry,
       };
     if (error instanceof AppError && error.details?.reason === 'upstream_error') {
-      const details = { ...error.details };
+      const details = error.details;
       const mapped = httpError(context.httpStatus ?? 200, {
         code: details.upstream_code,
         type: details.upstream_type,
         param: details.upstream_param,
       });
-      for (const field of ['upstream_code', 'upstream_type', 'upstream_param', 'upstream_message'])
-        if (typeof details[field] === 'string') details[field] = safe(details[field]);
       return {
-        outcome: failure(new AppError(mapped.code, mapped.key, details), language),
+        outcome: modelFailure(new AppError(mapped.code, mapped.key, details)),
         retry: streamStarted ? false : mapped.retry,
         ...(streamStarted || !mapped.fallback ? {} : { fallback: mapped.fallback }),
       };
     }
-    const outcome = failure<ModelAnswer>(error, language);
-    const reason = outcome.result.error?.details?.reason;
+    const outcome = modelFailure(error);
+    const reason = error instanceof AppError ? error.details?.reason : undefined;
     const fallback =
       !streamStarted &&
       (outcome.result.error?.code === 'INVALID_RESPONSE' ||

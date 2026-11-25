@@ -32,7 +32,7 @@ With a single candidate, the CLI selects it directly and calls the classifier on
 
 Model search runs on its own or as one source of unified `search`. The model service runs the configured search tools and assembles an answer, with citations when available. When other sources run in parallel, their results go directly to the caller and are not passed to the model.
 
-Model search and the classifier are configured separately. Backup models share the model search API address and credentials and are tried in configuration order. UniSearch switches models only when the problem points to the model itself, such as the service reporting that the model does not exist, model-level rate limiting, or an upstream failure specific to that model; account-level problems such as invalid credentials, exhausted quota, or insufficient permissions do not switch models. An unparsable response or an answer without text moves on to the next backup entry in order. See [model settings](configuration.md#model-settings) for the connection, search tools, and backup models.
+Model search and the classifier are configured separately. The primary and backup models share an API endpoint and credentials. If the current model is unavailable or returns an invalid response, UniSearch can try backup models in the order listed in [model settings](configuration.md#model-settings).
 
 ## Page reading and site discovery
 

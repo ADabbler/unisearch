@@ -148,7 +148,13 @@ test('Exa contents preparation sends one native batch with per-URL options and p
 test('Exa contents independently retains text, highlights, dates, authors and acquisition sources', () => {
   const body = {
     results: [
-      { ...page, url: b, author: 'Team', publishedDate: '2026-09-01', highlights: [' quote ', ''] },
+      {
+        ...page,
+        url: b,
+        author: 'Team',
+        publishedDate: '2026-09-01',
+        highlights: [page.text, ' quote ', ''],
+      },
     ],
     statuses: [{ id: a, status: 'success', source: 'cached' }],
   };
@@ -163,7 +169,7 @@ test('Exa contents independently retains text, highlights, dates, authors and ac
         text: page.text,
         author: 'Team',
         published_date: '2026-09-01',
-        highlights: [' quote '],
+        highlights: [page.text, ' quote '],
       },
     ],
     content_sources: [{ url: a, source: 'cached' }],

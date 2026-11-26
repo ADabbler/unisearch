@@ -1,7 +1,7 @@
 import { colon, text } from '../i18n/messages.js';
 import { sourceLabel } from '../i18n/providers.js';
 import type { Language } from '../i18n/messages.js';
-import type { SearchData, FetchData, ContentSource } from '../providers/exa.js';
+import type { SearchData, SearchResult, FetchData, ContentSource } from '../providers/exa.js';
 import type { JsonObject } from '../result.js';
 import {
   blockField,
@@ -15,7 +15,11 @@ import {
   renderPages,
 } from './markdown.js';
 
-function resultFields(item: SearchData['results'][number], language: Language): string[] {
+function distinctHighlights(item: SearchResult): string[] | undefined {
+  return item.highlights?.filter((highlight) => highlight !== item.text);
+}
+
+function resultFields(item: SearchResult, language: Language): string[] {
   const separator = colon(language);
   const sections: string[] = [];
   const metadata = [
@@ -50,8 +54,9 @@ export function renderSearch(
   sections.push(
     rankedResults(data.results, language, level, (item) => {
       const fields = resultFields(item, language);
-      if (item.highlights?.length) fields.push(highlightField(language, item.highlights));
-      if (item.text) fields.push(pageBody(language, item.text, item.highlights));
+      const highlights = distinctHighlights(item);
+      if (highlights?.length) fields.push(highlightField(language, highlights));
+      if (item.text) fields.push(pageBody(language, item.text, highlights));
       return fields;
     }),
   );
@@ -72,8 +77,9 @@ export function renderFetch(data: FetchData, language: Language): string {
     sourceLabel('exa', language),
     (page, single) => {
       const fields = resultFields(page, language);
-      if (page.text) fields.push(pageBody(language, page.text, page.highlights, single));
-      if (page.highlights?.length) fields.push(highlightField(language, page.highlights));
+      const highlights = distinctHighlights(page);
+      if (page.text) fields.push(pageBody(language, page.text, highlights, single));
+      if (highlights?.length) fields.push(highlightField(language, highlights));
       return fields;
     },
     contentSources(data.content_sources, language),

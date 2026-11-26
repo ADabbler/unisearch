@@ -6,7 +6,7 @@ export type ContentTruncation = { parsed_pages: number; total_pages: number };
 export type SearchItem = JsonObject & {
   url: string;
   title?: string;
-  description?: string;
+  summary?: string;
   category?: string;
   text?: string;
   final_url?: string;
@@ -142,15 +142,15 @@ export function searchData(
   const results = web.map((entry): SearchItem => {
     const item = object(entry);
     const url = requiredUrl(item.url);
-    const title = optionalText(item.title);
-    const description = optionalText(item.description);
-    const category = optionalText(item.category);
-    const result: SearchItem = {
-      url,
-      ...(title ? { title } : {}),
-      ...(description ? { description } : {}),
-      ...(category ? { category } : {}),
-    };
+    const result: SearchItem = { url };
+    for (const [source, target] of [
+      ['title', 'title'],
+      ['description', 'summary'],
+      ['category', 'category'],
+    ] as const) {
+      const value = optionalText(item[source]);
+      if (value?.trim()) result[target] = value;
+    }
     if (request.includeText) {
       const meta = metadata(item);
       const error = pageError(meta, safe);

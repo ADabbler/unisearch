@@ -14,6 +14,7 @@ export type Page = JsonObject & {
   title?: string;
   text?: string;
   description?: string;
+  summary?: string;
   published_date?: string;
   date?: string;
   source?: string;
@@ -94,10 +95,11 @@ export function parseResponse(
       }
       return value.trim() ? value : undefined;
     };
+    const previewKey = request.operation === 'search' ? 'summary' : 'description';
     const strings = [
       ['title', 'title'],
       ['content', 'text'],
-      ['description', 'description'],
+      ['description', previewKey],
       ['publishedTime', 'published_date'],
     ] as const;
     let fetchText: string | undefined;
@@ -108,8 +110,8 @@ export function parseResponse(
         else page[target] = value;
       }
     }
-    if (page.description === page.title || page.description === (fetchText ?? page.text))
-      delete page.description;
+    if (page[previewKey] === page.title || page[previewKey] === (fetchText ?? page.text))
+      delete page[previewKey];
     const warning = optionalText('warning');
     if (warning !== undefined) page.warnings = [safe(warning)];
     const numbers =

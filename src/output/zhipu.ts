@@ -37,7 +37,7 @@ export function renderZhipu(
         if (item.refer)
           labels.push(`${text(language, 'zhipuReferLabel')}${sep}${inlineCode(item.refer)}`);
         if (labels.length) fields.push(labels.join(' · '));
-        if (item.description) fields.push(proseField(language, 'summaryLabel', item.description));
+        if (item.summary) fields.push(proseField(language, 'summaryLabel', item.summary));
         return fields;
       }),
     );

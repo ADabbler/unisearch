@@ -835,22 +835,15 @@ test('Markdown renders an exact summary and body duplicate once per search resul
   const url = 'https://example.org/';
   const body = '# Original\n\nThe complete text.';
   const excerpt = 'The complete text.';
-  const page = { url, text: body };
-  const markdown = renderCombinedSearch(
-    {
-      sources: [
-        { provider: 'tavily', data: { results: [{ ...page, content: body }] } },
-        { provider: 'deepseek', data: { results: [{ url, summary: body, content: body }] } },
-        {
-          provider: 'firecrawl',
-          data: { results: [body, excerpt].map((description) => ({ ...page, description })) },
-        },
-      ],
-    },
-    'en',
-  );
-  assert.equal(markdown.split(body).length - 1, 4);
-  assert.ok(markdownNodes(markdown, 'Paragraph').some((paragraph) => paragraph.endsWith(excerpt)));
+  const results = [body, excerpt].map((summary) => ({ url, text: body, summary }));
+  for (const provider of ['tavily', 'deepseek', 'firecrawl'] as const) {
+    const markdown = renderCombinedSearch({ sources: [{ provider, data: { results } }] }, 'en');
+    assert.deepEqual(markdownNodes(markdown, 'CodeText'), [body, body], provider);
+    assert.ok(
+      markdownNodes(markdown, 'Paragraph').some((p) => p.endsWith(excerpt)),
+      provider,
+    );
+  }
 });
 
 test('Verbose searched sources link supplied URLs and omit empty lists', () => {

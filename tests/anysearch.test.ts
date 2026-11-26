@@ -287,8 +287,8 @@ test('AnySearch search validates required data without discarding useful optiona
   assert.deepEqual((await f.run(['anysearch', 'search', 'q', '--format=json'])).json().data, {
     provider: 'anysearch',
     results: [
-      { url: pageUrl, title: hit.title, content: 'same' },
-      { url: pageUrl, snippet: 'summary', content: 'summary and more' },
+      { url: pageUrl, title: hit.title, text: 'same' },
+      { url: pageUrl, summary: 'summary', text: 'summary and more' },
       { url: pageUrl },
     ],
   });

@@ -54,7 +54,7 @@ export type CatalogData = {
 };
 export type SearchData = {
   provider: 'anysearch';
-  results: { url: string; title?: string; snippet?: string; content?: string }[];
+  results: { url: string; title?: string; summary?: string; text?: string }[];
 };
 export type Domain = {
   domain: string;
@@ -215,11 +215,15 @@ export function searchData(value: unknown, limit: number): SearchData {
       const item = object(entry);
       if (!validPageUrl(item.url)) return invalid();
       const result: SearchData['results'][number] = { url: item.url };
-      for (const key of ['title', 'snippet', 'content'] as const) {
-        const value = optionalText(item[key]);
-        if (value !== undefined) result[key] = value;
+      for (const [source, target] of [
+        ['title', 'title'],
+        ['snippet', 'summary'],
+        ['content', 'text'],
+      ] as const) {
+        const value = optionalText(item[source]);
+        if (value !== undefined) result[target] = value;
       }
-      if (result.snippet === result.content) delete result.snippet;
+      if (result.summary === result.text) delete result.summary;
       return result;
     }),
   };

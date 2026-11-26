@@ -50,7 +50,7 @@ export function renderSearch(
         if (value !== undefined)
           metadata.push(`${text(language, label)}${sep}${inline(String(value))}`);
       if (metadata.length) parts.push(metadata.join(' · '));
-      if (item.snippet) parts.push(proseField(language, 'summaryLabel', item.snippet));
+      if (item.summary) parts.push(proseField(language, 'summaryLabel', item.summary));
       if (item.pdf_url) parts.push(link(item.pdf_url, 'PDF'));
       if (item.thumbnail_url)
         parts.push(link(item.thumbnail_url, text(language, 'tinyfishThumbnailLabel')));

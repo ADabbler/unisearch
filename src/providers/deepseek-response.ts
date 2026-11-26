@@ -11,7 +11,7 @@ export type SearchResult = JsonObject & {
   authority?: number;
   rerank_score?: number;
   summary?: string;
-  content?: string;
+  text?: string;
 };
 export type SearchData = JsonObject & { provider: 'deepseek'; results: SearchResult[] };
 export type FetchData = JsonObject & {
@@ -77,8 +77,8 @@ export function searchData(value: unknown, limit: number): SearchData {
       // The snippet only stands in when the summary is absent; carrying both repeats one text.
       const summary = optionalText(item.summary) ?? optionalText(item.snippet);
       if (summary !== undefined) result.summary = summary;
-      const content = optionalText(item.content);
-      if (content !== undefined) result.content = content;
+      const text = optionalText(item.content);
+      if (text !== undefined) result.text = text;
       return result;
     }),
   };

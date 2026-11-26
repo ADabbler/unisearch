@@ -65,7 +65,7 @@ Context7（`unisearch ctx7`）处理库和 API 文档：
 
 ## 结果与输出
 
-统一 `search` 和 `model search` 使用相同的结构：各来源的结果放在 `data.sources`，每项包含 `provider` 和该来源的 `data`。`model search` 只有一项 `model`，回答在 `data.text`，引用在可选的 `data.citations`。来源失败时，`error.details.failures` 标出该来源，调用方可以继续使用已取得的资料并单独检查失败原因；全部来源失败时，`error.code` 为 `ALL_PROVIDERS_FAILED`。
+`search` 和 `model search` 都按来源返回结果。单来源搜索失败时，命令保留该来源的错误码。多来源搜索按来源报告失败原因，并保留已取得的结果。
 
 | `status`  | 退出码     | 含义                                                         |
 | --------- | ---------- | ------------------------------------------------------------ |

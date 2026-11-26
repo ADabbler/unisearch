@@ -353,7 +353,7 @@ test('Zhipu redacts credential values and upstream keys without renaming public 
       'search_engine',
       'search_intent',
     ]);
-    assert.equal(data.results[0].description, 'Summary [REDACTED]');
+    assert.equal(data.results[0].summary, 'Summary [REDACTED]');
     for (const value of [data.search_intent[0].intent, data.search_intent[0].keywords]) {
       assert.equal(typeof value, 'string');
       assert.ok(!value.includes(secret));

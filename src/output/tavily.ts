@@ -35,7 +35,7 @@ export function renderTavilySearch(
       sections.push(
         `${text(language, 'missingContentLabel')}${separator}${language === 'zh' ? text(language, 'textLabel') : 'text'}`,
       );
-    const summary = distinctSummary(item.content, item.text);
+    const summary = distinctSummary(item.summary, item.text);
     if (summary) sections.push(proseField(language, 'tavilyContent', summary));
     if (item.text) sections.push(pageBody(language, item.text, summary));
     return sections;

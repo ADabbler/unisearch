@@ -299,7 +299,7 @@ test('Combined Jina and AnySearch failures retain independent evidence and redac
           mode === 'model-failure',
         );
         if (mode === 'jina-partial')
-          assert.equal(sources[1].data.results[0].description, 'Available evidence');
+          assert.equal(sources[1].data.results[0].summary, 'Available evidence');
       } else assert.match(saved, mode === 'jina-partial' ? /Available evidence/ : /Full guide/);
     }
   }

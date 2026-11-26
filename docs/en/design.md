@@ -65,7 +65,7 @@ Streaming model requests are timed differently: the model service must return th
 
 ## Results and output
 
-Unified `search` and `model search` share one result structure: results from each source appear in `data.sources`, and each entry has a `provider` and that source's `data`. `model search` returns a single `model` entry, with the answer in `data.text` and citations, when available, in `data.citations`. When a source fails, `error.details.failures` identifies it, so callers can use the results they received and inspect the failure separately; when every source fails, `error.code` is `ALL_PROVIDERS_FAILED`.
+`search` and `model search` both return results grouped by source. If the only source queried fails, the command preserves its error code. A search across multiple sources reports failures by source and keeps any results it obtained.
 
 | `status`  | Exit code           | Meaning                                                                                                                |
 | --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------- |

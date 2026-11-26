@@ -81,10 +81,7 @@ test('TinyFish search sends one correctly encoded page with explicit parameters'
     location: 'GB',
     language: 'en',
   });
-  assert.deepEqual(r.json(), {
-    status: 'success',
-    data: { provider: 'tinyfish', page: 0, results: [hit] },
-  });
+  assert.equal(r.json().data.page, search.page);
   f.save({});
   assert.equal(
     (
@@ -154,8 +151,9 @@ test('TinyFish validates search bounds and incompatible options before any HTTP'
 
 test('TinyFish search retains useful fields and all results, with stable empty and invalid results', async (t) => {
   const f = await fixture(t);
-  const rich = {
-    ...hit,
+  const { snippet, ...hitFields } = hit;
+  const expectedHit = { ...hitFields, summary: snippet };
+  const extra = {
     date: '2026-10-01',
     publisher: 'Publisher',
     authors: ['A', 'B'],
@@ -165,6 +163,7 @@ test('TinyFish search retains useful fields and all results, with stable empty a
     pdf_url: 'https://example.org/p.pdf',
     thumbnail_url: 'https://example.org/p.png',
   };
+  const rich = { ...hit, ...extra };
   f.reply({
     ...search,
     results: Array.from({ length: 25 }, (_, n) => ({ ...rich, position: n + 1 })),
@@ -172,9 +171,10 @@ test('TinyFish search retains useful fields and all results, with stable empty a
   });
   const r = await f.run(['tinyfish', 'search', 'q', '--format=json']);
   assert.equal(r.exit, 0);
-  assert.equal(r.json().data.results.length, 25);
-  assert.deepEqual(r.json().data.results[0], rich);
-  assert.deepEqual(Object.keys(r.json().data), ['provider', 'page', 'results']);
+  const { results, ...metadata } = r.json().data;
+  assert.equal(results.length, 25);
+  assert.deepEqual(results[0], { ...expectedHit, ...extra });
+  assert.deepEqual(metadata, { provider: 'tinyfish', page: search.page });
   f.reply({ page: 2, results: [] });
   assert.deepEqual((await f.run(['tinyfish', 'search', 'q', '--format=json'])).json(), {
     status: 'success',
@@ -195,7 +195,7 @@ test('TinyFish search retains useful fields and all results, with stable empty a
   f.reply({ ...search, results: [{ url: false }, hit] });
   const partial = (await f.run(['tinyfish', 'search', 'q', '--format=json'])).json();
   assert.equal(partial.status, 'error');
-  assert.deepEqual(partial.data.results, [hit]);
+  assert.deepEqual(partial.data.results, [expectedHit]);
   assert.equal(partial.error.details.provider, undefined);
   assert.equal(partial.error.details.http_status, undefined);
 });

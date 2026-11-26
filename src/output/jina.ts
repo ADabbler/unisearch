@@ -15,6 +15,7 @@ import {
 import { warnings } from './firecrawl.js';
 
 export function pageContent(page: Page, language: Language, single: boolean): string[] {
+  const preview = page.summary ?? page.description;
   const sep = colon(language);
   const sections: string[] = [];
   const metadata = [
@@ -29,7 +30,7 @@ export function pageContent(page: Page, language: Language, single: boolean): st
   if (page.num_pages !== undefined)
     sections.push(`${text(language, 'jinaDocumentPagesLabel')}${sep}${page.num_pages}`);
   sections.push(...warnings(page.warnings, language));
-  if (page.description) sections.push(proseField(language, 'summaryLabel', page.description));
+  if (preview) sections.push(proseField(language, 'summaryLabel', preview));
   if (page.image_url) {
     const name = new URL(page.image_url).pathname.split('/').at(-1) || page.image_url;
     let dimensions = '';
@@ -49,7 +50,7 @@ export function pageContent(page: Page, language: Language, single: boolean): st
     ] as const)
       if (value !== undefined) sections.push(`${text(language, label)}${sep}${value}`);
   }
-  if (page.text) sections.push(pageBody(language, page.text, page.description, single));
+  if (page.text) sections.push(pageBody(language, page.text, preview, single));
   if (page.site_links?.length)
     sections.push(
       blockField(

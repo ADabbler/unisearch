@@ -153,7 +153,7 @@ test('Zhipu search sends the exact documented domestic and international request
       {
         url,
         title: hit.title,
-        description: hit.content,
+        summary: hit.content,
         source: hit.media,
         published_date: hit.publish_date,
         refer: hit.refer,
@@ -363,7 +363,7 @@ test('Zhipu response cleaning removes exact echoes and decoration while retainin
   });
   const result = (await f.run(['zhipu', 'search', q, '--format=json'])).json();
   assert.equal(result.data.results.length, 3);
-  assert.equal(result.data.results[1].description, undefined);
+  assert.equal(result.data.results[1].summary, undefined);
   assert.equal(result.data.results[1].source, undefined);
   assert.deepEqual(result.data.search_intent, [
     { query: 'query' },

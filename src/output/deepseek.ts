@@ -23,9 +23,9 @@ export function renderSearch(
       if (value !== undefined)
         metadata.push(`${text(language, label)}${separator}${inline(String(value))}`);
     if (metadata.length) parts.push(metadata.join(' · '));
-    const summary = distinctSummary(item.summary, item.content);
+    const summary = distinctSummary(item.summary, item.text);
     if (summary) parts.push(proseField(language, 'summaryLabel', summary));
-    if (item.content) parts.push(pageBody(language, item.content, summary));
+    if (item.text) parts.push(pageBody(language, item.text, summary));
     return parts;
   });
   return showProvider ? `${sourceLabel('deepseek', language)}\n\n${entries}` : entries;

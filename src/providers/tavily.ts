@@ -89,7 +89,7 @@ export interface MapRequest extends TavilyRequest {
 export type TavilySearchResult = JsonObject & {
   url: string;
   title?: string;
-  content?: string;
+  summary?: string;
   published_date?: string;
   score?: number;
   text?: string;
@@ -362,11 +362,15 @@ export function tavilySearchData(body: unknown, includeText: boolean): TavilySea
   const results = resultsArray(body).map((item): TavilySearchResult => {
     if (!isObject(item) || !validPageUrl(item.url)) throw responseError();
     const result: TavilySearchResult = { url: item.url };
-    for (const key of ['title', 'content', 'published_date'] as const) {
-      const value = item[key];
-      if (value === undefined || value === null || value === '') continue;
+    for (const [source, target] of [
+      ['title', 'title'],
+      ['content', 'summary'],
+      ['published_date', 'published_date'],
+    ] as const) {
+      const value = item[source];
+      if (value === undefined || value === null) continue;
       if (typeof value !== 'string') throw responseError();
-      if (key !== 'content' || value.trim()) result[key] = value;
+      if (value.trim()) result[target] = value;
     }
     if (item.score !== undefined && item.score !== null) {
       if (typeof item.score !== 'number' || !Number.isFinite(item.score)) throw responseError();

@@ -22,8 +22,8 @@ export function renderSearch(
 ): string {
   const results = rankedResults(data.results, language, level, (item) => {
     const fields: string[] = [];
-    if (item.snippet) fields.push(proseField(language, 'summaryLabel', item.snippet));
-    if (item.content) fields.push(pageBody(language, item.content, item.snippet));
+    if (item.summary) fields.push(proseField(language, 'summaryLabel', item.summary));
+    if (item.text) fields.push(pageBody(language, item.text, item.summary));
     return fields;
   });
   return showProvider ? `${sourceLabel('anysearch', language)}\n\n${results}` : results;

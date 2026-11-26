@@ -218,7 +218,7 @@ test('Jina maps complete content, metadata arrays, external relations and distin
         url,
         title: 'Guide',
         text: content,
-        description: 'Independent summary',
+        summary: 'Independent summary',
         published_date: 'today',
         date: 'today',
         source: 'Original publisher',

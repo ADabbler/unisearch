@@ -49,8 +49,7 @@ test('DeepSeek search sends the documented body and renders every documented fie
   assert.equal(item.url, url);
   assert.equal(item.title, hit.title);
   assert.equal(item.summary, hit.summary);
-  // The short snippet is dropped because the long summary already carries the text.
-  assert.equal(item.snippet, undefined);
+  assert.equal(item.text, hit.content);
   assert.equal(item.site_icon, undefined);
   assert.equal(item.authority, 3);
   assert.equal(item.rerank_score, 2.4);

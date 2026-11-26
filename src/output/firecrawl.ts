@@ -49,12 +49,12 @@ export function renderSearch(
   sections.push(...warnings(data.warnings, language));
   const results = rankedResults(data.results, language, level, (item) => {
     const parts: string[] = [];
-    if (item.category?.trim())
+    if (item.category)
       parts.push(
         `${text(language, 'firecrawlCategoryLabel')}${colon(language)}${inline(item.category)}`,
       );
     parts.push(...warnings(item.warnings, language));
-    const summary = distinctSummary(item.description, item.text);
+    const summary = distinctSummary(item.summary, item.text);
     if (summary) parts.push(proseField(language, 'summaryLabel', summary));
     parts.push(...contentInfo(item, language));
     if (item.missing_content)

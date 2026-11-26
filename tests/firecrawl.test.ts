@@ -568,7 +568,7 @@ test('Firecrawl search retains useful metadata, missing text and warnings withou
       {
         url: 'https://example.org/report',
         title: 'Report',
-        description: 'Summary',
+        summary: 'Summary',
         text: '# Full\n\nContent',
         final_url: 'https://example.org/report.pdf',
         content_truncation: { parsed_pages: 3, total_pages: 12 },
@@ -585,24 +585,21 @@ test('Firecrawl search retains useful metadata, missing text and warnings withou
   const markdown = renderSearch(data, 'en');
   assert.ok(!markdown.includes('Error page'));
   assert.ok(markdown.includes(data.results[0].text!));
-  const report = { url: 'https://example.org/report', text: 'Report.' };
-  assert.equal(
-    renderSearch(
-      { ...data, results: [{ ...report, title: ' ', description: ' ', category: ' ' }] },
-      'en',
-    ),
-    renderSearch({ ...data, results: [report] }, 'en'),
-  );
+  const url = 'https://example.org';
   assert.deepEqual(
     searchData(
       {
         success: true,
-        data: { web: [{ url: 'https://example.org', metadata: 5, markdown: false }] },
+        data: {
+          web: [
+            { url, title: ' ', description: '\n', category: '\t', metadata: 5, markdown: false },
+          ],
+        },
       },
       { limit: 1, includeText: false },
       safe,
     ),
-    { provider: 'firecrawl', results: [{ url: 'https://example.org' }] },
+    { provider: 'firecrawl', results: [{ url }] },
   );
   for (const response of [
     { data: { web: [] } },
@@ -1132,6 +1129,6 @@ test('Root search redacts all known credentials in Firecrawl diagnostics while p
   assert.ok(source?.provider === 'firecrawl');
   assert.deepEqual(source.data.warnings, ['key=[REDACTED]']);
   assert.equal(source.data.results[0].title, 'Source title');
-  assert.equal(source.data.results[0].description, sourceText);
+  assert.equal(source.data.results[0].summary, sourceText);
   assert.equal(source.data.results[0].text, undefined);
 });

@@ -12,7 +12,7 @@ import type { Operation, Request } from './zhipu.js';
 export type SearchItem = {
   url: string;
   title?: string;
-  description?: string;
+  summary?: string;
   source?: string;
   published_date?: string;
   refer?: string;
@@ -81,7 +81,7 @@ export function parseResponse<O extends Operation>(
         const item: SearchItem = { url: entry.link };
         for (const [source, target] of [
           ['title', 'title'],
-          ['content', 'description'],
+          ['content', 'summary'],
           ['media', 'source'],
           ['publish_date', 'published_date'],
           ['refer', 'refer'],
@@ -89,7 +89,7 @@ export function parseResponse<O extends Operation>(
           const value = optionalText(entry, source, `${path}.${source}`);
           if (value !== undefined) item[target] = value;
         }
-        if (item.description === item.title) delete item.description;
+        if (item.summary === item.title) delete item.summary;
         results.push(item);
       }
       const intents: SearchIntent[] = [];

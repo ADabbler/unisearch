@@ -9,7 +9,7 @@ import { validPageUrl } from './firecrawl-response.js';
 export type SearchItem = JsonObject & {
   url: string;
   title?: string;
-  snippet?: string;
+  summary?: string;
   site_name?: string;
   position?: number;
   date?: string;
@@ -153,7 +153,7 @@ export function searchData(
     const read = reader(item, path, issues, language);
     for (const key of ['title', 'snippet', 'site_name', 'date', 'publisher', 'venue'] as const) {
       const value = read.string(key);
-      if (value !== undefined) result[key] = value;
+      if (value !== undefined) result[key === 'snippet' ? 'summary' : key] = value;
     }
     for (const key of ['pdf_url', 'thumbnail_url'] as const) {
       const value = read.string(key);

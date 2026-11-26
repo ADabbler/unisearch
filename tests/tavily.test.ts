@@ -441,7 +441,7 @@ test('Search and Map retain only useful fields, order, duplicates and optional t
     Array(2).fill({
       url: a,
       title: 'A',
-      content: ' summary ',
+      summary: ' summary ',
       published_date: 'original date',
       score: 0.875,
       text: '# A',
@@ -449,7 +449,7 @@ test('Search and Map retain only useful fields, order, duplicates and optional t
   );
   assert.deepEqual(
     tavilySearchData(
-      { results: [{ url: a, content: ' ', raw_content: null, title: '', published_date: null }] },
+      { results: [{ url: a, content: ' ', raw_content: null, title: '\t', published_date: ' ' }] },
       true,
     ).results,
     [{ url: a, missing_content: ['text'] }],

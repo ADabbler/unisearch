@@ -206,7 +206,10 @@ test('Combined search retains Tavily scores and reports supplemental failures in
       ({ provider }: { provider: string }) => provider === 'tavily',
     );
     if (tavilyFails) assert.equal(tavily, undefined);
-    else assert.equal(tavily.data.results[0].score, 0.875);
+    else {
+      assert.equal(tavily.data.results[0].summary, 'Relevant');
+      assert.equal(tavily.data.results[0].score, 0.875);
+    }
   }
 });
 

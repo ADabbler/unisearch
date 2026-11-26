@@ -179,6 +179,34 @@ test('Saving success, partial, and error-with-data suppresses stdout and preserv
   assert.deepEqual(JSON.parse(await fs.readFile(path, 'utf8')), partial.result);
 });
 
+test(
+  'Output uses default permissions for new files and preserves existing POSIX permissions',
+  {
+    skip: process.platform === 'win32',
+  },
+  async (t) => {
+    const root = temporary(t);
+    const reference = join(root, 'default');
+    await fs.writeFile(reference, '');
+    const path = join(root, 'result.md');
+    const save = (mode?: number) =>
+      execute(
+        async () => {
+          if (mode !== undefined) await fs.chmod(path, mode);
+          return success(body);
+        },
+        { ...options, output: path },
+        capture(),
+      );
+    assert.equal(await save(), 0);
+    assert.equal((await fs.stat(path)).mode & 0o777, (await fs.stat(reference)).mode & 0o777);
+    for (const mode of [0o600, 0o660]) {
+      assert.equal(await save(mode), 0);
+      assert.equal((await fs.stat(path)).mode & 0o777, mode);
+    }
+  },
+);
+
 test('No-data failure and cancellation keep the existing file', async (t) => {
   const root = temporary(t);
   const path = join(root, 'result.json');

@@ -77,6 +77,9 @@ const messages = {
   siteLabel: ['站点', 'Site'],
   authorLabel: ['作者', 'Author'],
   textLabel: ['正文', 'Text'],
+  summaryLabel: ['摘要', 'Summary'],
+  highlightsLabel: ['摘录', 'Highlights'],
+  descriptionLabel: ['说明', 'Description'],
   relevanceScore: ['相关性评分', 'Relevance score'],
   missingContentLabel: ['未取得请求的附带内容', 'Requested content unavailable'],
   finalUrlLabel: ['最终 URL', 'Final URL'],
@@ -630,9 +633,7 @@ const messages = {
     'The Exa response does not contain a valid results array',
   ],
 
-  exaSource: ['来源：Exa', 'Source: Exa'],
   exaContentSourceLabel: ['获取方式', 'Retrieval source'],
-  exaHighlightsLabel: ['摘录', 'Highlights'],
   exaUpstreamNoticeLabel: ['结果提示', 'Result notice'],
   exaSynthesis: ['综合结果', 'Synthesis'],
 
@@ -812,7 +813,6 @@ const messages = {
   tavilyUpstream: ['Tavily 返回错误', 'Tavily returned an error'],
   tavilyNetwork: ['无法连接 Tavily', 'Unable to connect to Tavily'],
 
-  tavilySource: ['来源：Tavily', 'Source: Tavily'],
   tavilyPublished: ['发布或更新日期', 'Published or updated'],
   tavilyContent: ['摘要或片段', 'Summary or snippets'],
   tavilySnippets: ['相关片段', 'Relevant snippets'],
@@ -951,7 +951,6 @@ const messages = {
   firecrawlPage: ['Firecrawl 未能读取页面正文', 'Firecrawl could not read the page content'],
   firecrawlEmpty: ['Firecrawl 未取得非空正文', 'Firecrawl returned no non-empty page content'],
 
-  firecrawlSource: ['来源：Firecrawl', 'Source: Firecrawl'],
   firecrawlCategoryLabel: ['类别', 'Category'],
 
   // Context7
@@ -1026,7 +1025,6 @@ const messages = {
   ctx7Rate: ['Context7 请求受到限流', 'Context7 request was rate limited'],
   ctx7Network: ['无法连接 Context7', 'Could not connect to Context7'],
 
-  ctx7Source: ['来源：Context7', 'Source: Context7'],
   ctx7SearchLabel: ['文档搜索', 'Documentation search'],
   ctx7Unverified: [
     'Context7 未提供已核实的请求版本',
@@ -1144,8 +1142,6 @@ const messages = {
   zhipuFieldInvalid: ['智谱响应字段无效', 'Invalid Zhipu response field'],
   zhipuEmpty: ['智谱未返回网页正文', 'Zhipu returned no page content'],
 
-  zhipuSource: ['来源：智谱', 'Source: Zhipu'],
-  zhipuLabel: ['智谱', 'Zhipu'],
   zhipuEngineLabel: ['引擎', 'Engine'],
   zhipuIntentLabel: ['搜索意图', 'Search intent'],
   zhipuQueryLabel: ['搜索查询', 'Search query'],
@@ -1182,7 +1178,6 @@ const messages = {
   zhipuMcpRate: ['智谱 MCP 请求受到限流', 'Zhipu MCP request was rate limited'],
   zhipuMcpNetwork: ['无法连接智谱 MCP', 'Could not connect to Zhipu MCP'],
 
-  zhipuMcpSource: ['来源：智谱 MCP', 'Source: Zhipu MCP'],
   zhipuMcpRepoLabel: ['仓库', 'Repository'],
   zhipuMcpStructured: ['结构化内容', 'Structured content'],
   zhipuMcpAttributes: ['内容属性', 'Content attributes'],
@@ -1266,7 +1261,6 @@ const messages = {
   jinaUpstream: ['Jina 请求失败', 'The Jina request failed'],
   jinaNetwork: ['无法连接 Jina', 'Could not connect to Jina'],
 
-  jinaSource: ['来源：Jina', 'Source: Jina'],
   jinaWeb: ['网页搜索', 'Web search'],
   jinaNews: ['新闻搜索', 'News search'],
   jinaImages: ['图片搜索', 'Image search'],
@@ -1275,14 +1269,9 @@ const messages = {
   jinaImageLabel: ['图片', 'Image'],
   jinaImageWidthLabel: ['图片宽度', 'Image width'],
   jinaImageHeightLabel: ['图片高度', 'Image height'],
-  jinaMetadataValueLabel: ['值', 'Value'],
-  jinaMetadataFieldLabel: ['字段', 'Field'],
   jinaSiteLinksLabel: ['站内链接', 'Site links'],
   jinaDocumentPagesLabel: ['文档页数', 'Document pages'],
   jinaExternalRelationsLabel: ['外部关系', 'External relations'],
-  jinaRelationLabel: ['关系', 'Relation'],
-  jinaAttributesLabel: ['属性', 'Attributes'],
-  jinaLinkLabel: ['链接', 'Link'],
 
   // AnySearch
   anysearchCommand: [
@@ -1347,7 +1336,6 @@ const messages = {
   anysearchUpstream: ['AnySearch 请求失败', 'AnySearch request failed'],
   anysearchNetwork: ['无法连接 AnySearch', 'Could not connect to AnySearch'],
 
-  anysearchSource: ['来源：AnySearch', 'Source: AnySearch'],
   anysearchCatalog: ['内置官方领域目录', 'Bundled official domain catalog'],
   anysearchCatalogUsage: [
     '使用 `unisearch anysearch domains DOMAIN` 查询当前下级领域及参数',
@@ -1357,8 +1345,6 @@ const messages = {
   anysearchNoSubdomains: ['未找到下级领域', 'No sub-domains found'],
   anysearchRequired: ['必需', 'Required'],
   anysearchOptional: ['可选', 'Optional'],
-  anysearchSnippet: ['摘要', 'Summary'],
-  anysearchContent: ['内容', 'Content'],
 
   // TinyFish
   tinyfishCommand: ['TinyFish 搜索与网页读取', 'TinyFish search and page reading'],
@@ -1516,7 +1502,6 @@ const messages = {
     'The page does not support the requested conditional retrieval',
   ],
 
-  tinyfishSource: ['来源：TinyFish', 'Source: TinyFish'],
   tinyfishPageLabel: ['页码', 'Page'],
   tinyfishRankLabel: ['排名', 'Rank'],
   tinyfishPublisherLabel: ['发布者', 'Publisher'],
@@ -1601,7 +1586,6 @@ const messages = {
   deepseekUpstream: ['DeepSeek 请求失败', 'DeepSeek request failed'],
   deepseekNetwork: ['无法连接 DeepSeek', 'Could not connect to DeepSeek'],
 
-  deepseekSource: ['来源：DeepSeek', 'Source: DeepSeek'],
   deepseekAuthorityLabel: ['权威度', 'Authority'],
 } satisfies Record<string, readonly [string, string]>;
 

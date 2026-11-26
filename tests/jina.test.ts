@@ -236,7 +236,7 @@ test('Jina maps complete content, metadata arrays, external relations and distin
   assert.equal(result.json().meta.attempts[0].billed_tokens, 0);
   const md = await f.run(['jina', 'search', 'q'], key);
   assert.ok(md.channels.out.includes(content));
-  assert.ok(md.channels.out.includes('Notice one\n## Notice two'));
+  assert.ok(md.channels.out.includes('Notice one\n> ## Notice two'));
   assert.ok(md.channels.out.includes('0 × 12'));
   assert.ok(md.channels.out.includes('canonical'));
 });

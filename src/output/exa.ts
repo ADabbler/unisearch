@@ -1,30 +1,35 @@
 import { colon, text } from '../i18n/messages.js';
+import { sourceLabel } from '../i18n/providers.js';
 import type { Language } from '../i18n/messages.js';
 import type { SearchData, FetchData, ContentSource } from '../providers/exa.js';
 import type { JsonObject } from '../result.js';
-import { link } from './firecrawl.js';
-import { jsonBlock } from './zhipu-mcp.js';
+import {
+  blockField,
+  diagnostic,
+  highlightField,
+  inline,
+  jsonBlock,
+  link,
+  pageBody,
+  rankedResults,
+  renderPages,
+} from './markdown.js';
 
-export function inline(value: string): string {
-  return value.replace(/[\r\n]+/g, ' ').replace(/[\\`*_[\]<>]/g, '\\$&');
-}
-
-/** Percent-encode the characters that end a Markdown link destination. */
-export function linkTarget(url: string): string {
-  return url.replace(/[<>\s()\\]/g, (value) =>
-    encodeURIComponent(value).replace(/\(/g, '%28').replace(/\)/g, '%29'),
-  );
-}
-
-export function resultTitle(
-  index: number,
-  url: string,
-  title: string | undefined,
-  level: number,
-  hasContent: boolean,
-): string {
-  const value = `${index + 1}. ${link(url, title)}`;
-  return hasContent ? `${'#'.repeat(level)} ${value}` : value;
+function resultFields(item: SearchData['results'][number], language: Language): string[] {
+  const separator = colon(language);
+  const sections: string[] = [];
+  const metadata = [
+    item.published_date
+      ? `${text(language, 'publishedLabel')}${separator}${inline(item.published_date)}`
+      : '',
+    item.author ? `${text(language, 'authorLabel')}${separator}${inline(item.author)}` : '',
+  ].filter(Boolean);
+  if (metadata.length) sections.push(metadata.join(' · '));
+  if (item.missing_content)
+    sections.push(
+      `${text(language, 'missingContentLabel')}${separator}${language === 'zh' ? text(language, 'textLabel') : 'text'}`,
+    );
+  return sections;
 }
 
 export function renderSearch(
@@ -33,60 +38,24 @@ export function renderSearch(
   level = 2,
   showProvider = true,
 ): string {
-  const separator = colon(language);
-  const entries = data.results.map((item, index) => {
-    const sections = [
-      resultTitle(
-        index,
-        item.url,
-        item.title,
-        level,
-        !!item.text?.trim() || !!item.highlights?.some((value) => value.trim()),
-      ),
-    ];
-    const metadata = [
-      item.published_date
-        ? `${text(language, 'publishedLabel')}${separator}${inline(item.published_date)}`
-        : '',
-      item.author ? `${text(language, 'authorLabel')}${separator}${inline(item.author)}` : '',
-    ].filter(Boolean);
-    if (metadata.length) sections.push(metadata.join(' · '));
-    if (item.missing_content) {
-      const missing = item.missing_content.map((value) => {
-        if (language !== 'zh') return value;
-        return text(language, 'textLabel');
-      });
+  const sections = showProvider ? [sourceLabel('exa', language)] : [];
+  for (const key of ['warnings', 'notices'] as const)
+    for (const item of data[key] ?? [])
       sections.push(
-        `${text(language, 'missingContentLabel')}${separator}${missing.join(language === 'zh' ? '、' : ', ')}`,
+        diagnostic(
+          `${text(language, key === 'warnings' ? 'upstreamWarningLabel' : 'exaUpstreamNoticeLabel')}${colon(language)}[${inline(item.code)}] ${inline(item.path)}: ${item.message}`,
+        ),
       );
-    }
-    if (item.highlights)
-      sections.push(
-        `${'#'.repeat(level + 1)} ${text(language, 'exaHighlightsLabel')}\n\n${item.highlights
-          .map((value) => value.replace(/\r\n|\r/g, '\n'))
-          .join('\n\n')}`,
-      );
-    if (item.text)
-      sections.push(`${'#'.repeat(level + 1)} ${text(language, 'textLabel')}\n\n${item.text}`);
-    return sections.join('\n\n');
-  });
-  const diagnostics = (['warnings', 'notices'] as const).flatMap((key) =>
-    (data[key] ?? []).map(
-      (item) =>
-        `${text(language, key === 'warnings' ? 'upstreamWarningLabel' : 'exaUpstreamNoticeLabel')}${separator}[${inline(item.code)}] ${inline(item.path)}: ${item.message}`,
-    ),
+  if (data.output) sections.push(blockField(language, 'exaSynthesis', jsonBlock(data.output)));
+  sections.push(
+    rankedResults(data.results, language, level, (item) => {
+      const fields = resultFields(item, language);
+      if (item.highlights?.length) fields.push(highlightField(language, item.highlights));
+      if (item.text) fields.push(pageBody(language, item.text, item.highlights));
+      return fields;
+    }),
   );
-  if (data.output)
-    diagnostics.push(
-      `${'#'.repeat(level)} ${text(language, 'exaSynthesis')}\n\n${jsonBlock(data.output)}`,
-    );
-  return [
-    showProvider ? text(language, 'exaSource') : '',
-    ...diagnostics,
-    entries.length ? entries.join('\n\n---\n\n') : text(language, 'noResults'),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  return sections.join('\n\n');
 }
 
 export function contentSources(sources: ContentSource[] | undefined, language: Language): string[] {
@@ -97,11 +66,18 @@ export function contentSources(sources: ContentSource[] | undefined, language: L
 }
 
 export function renderFetch(data: FetchData, language: Language): string {
-  return [
-    text(language, 'exaSource'),
-    ...contentSources(data.content_sources, language),
-    renderSearch(data, language, 2, false),
-  ].join('\n\n');
+  return renderPages(
+    data.results,
+    language,
+    sourceLabel('exa', language),
+    (page, single) => {
+      const fields = resultFields(page, language);
+      if (page.text) fields.push(pageBody(language, page.text, page.highlights, single));
+      if (page.highlights?.length) fields.push(highlightField(language, page.highlights));
+      return fields;
+    },
+    contentSources(data.content_sources, language),
+  );
 }
 
 export function renderPageLatencies(entry: JsonObject, language: Language): string[] {

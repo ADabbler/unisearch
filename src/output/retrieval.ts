@@ -1,8 +1,10 @@
 import { colon, text } from '../i18n/messages.js';
+import { sourceLabel } from '../i18n/providers.js';
 import type { Language } from '../i18n/messages.js';
 import type { RetrievalData } from '../retrieval.js';
-import { contentInfo, link, renderMapLinks, warnings } from './firecrawl.js';
-import { contentSources, inline } from './exa.js';
+import { contentInfo, renderMapLinks, warnings } from './firecrawl.js';
+import { contentSources } from './exa.js';
+import { fenced, inline, renderPages } from './markdown.js';
 import { renderJina } from './jina.js';
 import { renderZhipu } from './zhipu.js';
 import { renderFetch as renderTinyfish } from './tinyfish.js';
@@ -17,26 +19,15 @@ export function renderRetrieval(data: RetrievalData, language: Language): string
     return renderJina({ provider: 'jina', results: data.results }, language);
   if (data.provider === 'tinyfish' && 'results' in data)
     return renderTinyfish({ provider: 'tinyfish', results: data.results }, language);
-  const sourceLabels = {
-    tavily: 'tavilySource',
-    firecrawl: 'firecrawlSource',
-    exa: 'exaSource',
-    jina: 'jinaSource',
-    zhipu: 'zhipuSource',
-    anysearch: 'anysearchSource',
-    tinyfish: 'tinyfishSource',
-    'zhipu-mcp': 'zhipuMcpSource',
-    deepseek: 'deepseekSource',
-  } as const;
-  const source = text(language, sourceLabels[data.provider]);
-  const sections = [source, ...warnings(data.warnings, language)];
-  if ('links' in data) {
-    sections.push(renderMapLinks(data.links, language));
-  } else {
-    sections.push(...contentSources(data.content_sources, language));
-    for (const page of data.results) {
-      if (data.results.length === 1) sections[0] += ` · ${link(page.url, page.title)}`;
-      else sections.push(`## ${link(page.url, page.title)}`);
+  const source = sourceLabel(data.provider, language);
+  const notes = warnings(data.warnings, language);
+  if ('links' in data) return [source, ...notes, renderMapLinks(data.links, language)].join('\n\n');
+  return renderPages(
+    data.results,
+    language,
+    source,
+    (page, single) => {
+      const sections: string[] = [];
       const sep = colon(language);
       const metadata = [
         page.published_date
@@ -46,8 +37,9 @@ export function renderRetrieval(data: RetrievalData, language: Language): string
       ].filter(Boolean);
       if (metadata.length) sections.push(metadata.join(' · '));
       sections.push(...contentInfo(page, language));
-      if (page.text) sections.push(page.text);
-    }
-  }
-  return sections.join('\n\n');
+      if (page.text) sections.push(single ? page.text : fenced(page.text));
+      return sections;
+    },
+    [...notes, ...contentSources(data.content_sources, language)],
+  );
 }

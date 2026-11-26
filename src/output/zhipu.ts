@@ -1,10 +1,9 @@
 import { colon, text } from '../i18n/messages.js';
+import { sourceLabel } from '../i18n/providers.js';
 import type { Language } from '../i18n/messages.js';
 import type { FetchData, SearchData } from '../providers/zhipu-response.js';
-import { inline, resultTitle } from './exa.js';
-import { link } from './firecrawl.js';
+import { inline, inlineCode, proseField, rankedResults, renderPages } from './markdown.js';
 import { pageContent } from './jina.js';
-import { inlineCode } from './context7.js';
 
 export function renderZhipu(
   data: SearchData | FetchData,
@@ -13,7 +12,7 @@ export function renderZhipu(
   showProvider = true,
 ): string {
   const sep = colon(language);
-  const source = text(language, 'zhipuSource');
+  const source = sourceLabel('zhipu', language);
   const sections: string[] = [];
   if ('search_engine' in data) {
     sections.push(
@@ -27,23 +26,24 @@ export function renderZhipu(
       ] as const)
         if (intent[key]) sections.push(`${text(language, label)}${sep}${inline(intent[key])}`);
     }
-    if (!data.results.length) sections.push(text(language, 'noResults'));
-    for (const [index, item] of data.results.entries()) {
-      sections.push(resultTitle(index, item.url, item.title, level, !!item.description?.trim()));
-      const labels: string[] = [];
-      if (item.source)
-        labels.push(`${text(language, 'zhipuWebsiteLabel')}${sep}${inline(item.source)}`);
-      if (item.published_date)
-        labels.push(`${text(language, 'publishedLabel')}${sep}${inline(item.published_date)}`);
-      if (item.refer)
-        labels.push(`${text(language, 'zhipuReferLabel')}${sep}${inlineCode(item.refer)}`);
-      if (labels.length) sections.push(labels.join(' · '));
-      if (item.description) sections.push(item.description);
-    }
-  } else {
-    for (const page of data.results) {
-      sections.push(`${source} · ${link(page.url, page.title)}`, ...pageContent(page, language));
-    }
+    sections.push(
+      rankedResults(data.results, language, level, (item) => {
+        const fields: string[] = [];
+        const labels: string[] = [];
+        if (item.source)
+          labels.push(`${text(language, 'zhipuWebsiteLabel')}${sep}${inline(item.source)}`);
+        if (item.published_date)
+          labels.push(`${text(language, 'publishedLabel')}${sep}${inline(item.published_date)}`);
+        if (item.refer)
+          labels.push(`${text(language, 'zhipuReferLabel')}${sep}${inlineCode(item.refer)}`);
+        if (labels.length) fields.push(labels.join(' · '));
+        if (item.description) fields.push(proseField(language, 'summaryLabel', item.description));
+        return fields;
+      }),
+    );
+    return sections.join('\n\n');
   }
-  return sections.join('\n\n');
+  return renderPages(data.results, language, source, (page, single) =>
+    pageContent(page, language, single),
+  );
 }

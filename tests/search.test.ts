@@ -14,7 +14,7 @@ import { prepareModel } from '../src/providers/model-config.js';
 import { renderCombinedSearch, renderSearchExecution } from '../src/output/search.js';
 import { execute } from '../src/output/index.js';
 import type { JsonObject } from '../src/result.js';
-import { capture, context, temporary } from './helpers.js';
+import { capture, context, markdownNodes, temporary } from './helpers.js';
 
 const answer = {
   model: 'actual',
@@ -791,25 +791,66 @@ test(
   },
 );
 
-test('Search sources render titled links and bare autolinks with escaped URLs', () => {
-  const data = {
+test('Standalone answers render before citations and combined answers stay inside their source group', () => {
+  const body = '## Answer\n\n```js\nexample()\n```';
+  const data: CombinedData = {
     sources: [
       {
         provider: 'model',
         data: {
           model: 'm',
-          text: 'Body.',
+          text: body,
           citations: [
             { url: 'https://example.org/a' },
-            { url: 'https://example.org/b_(c)', title: 'B (c)' },
+            { url: 'https://example.org/b_(c)?q=&copy;', title: 'B (c) &copy;' },
           ],
         },
       },
     ],
-  } as CombinedData;
+  };
   const markdown = renderCombinedSearch(data, 'en');
-  assert.match(markdown, /- <https:\/\/example\.org\/a>/);
-  assert.match(markdown, /- \[B \(c\)\]\(https:\/\/example\.org\/b_%28c%29\)/);
+  assert.deepEqual(markdownNodes(markdown, 'ATXHeading2', 'CodeText', 'Autolink'), [
+    '## Answer',
+    'example()',
+    '<https://example.org/a>',
+  ]);
+  const grouped = renderCombinedSearch(
+    {
+      sources: [
+        ...data.sources,
+        { provider: 'exa', data: { results: [{ url: 'https://example.org/' }] } },
+      ],
+    },
+    'en',
+  );
+  assert.deepEqual(markdownNodes(grouped, 'CodeText', 'Autolink'), [
+    body,
+    '<https://example.org/a>',
+    '<https://example.org/>',
+  ]);
+  assert.ok(markdown.includes('- [B (c) \\&copy;](<https://example.org/b_(c)?q=\\&copy;>)'));
+});
+
+test('Markdown renders an exact summary and body duplicate once per search result', () => {
+  const url = 'https://example.org/';
+  const body = '# Original\n\nThe complete text.';
+  const excerpt = 'The complete text.';
+  const page = { url, text: body };
+  const markdown = renderCombinedSearch(
+    {
+      sources: [
+        { provider: 'tavily', data: { results: [{ ...page, content: body }] } },
+        { provider: 'deepseek', data: { results: [{ url, summary: body, content: body }] } },
+        {
+          provider: 'firecrawl',
+          data: { results: [body, excerpt].map((description) => ({ ...page, description })) },
+        },
+      ],
+    },
+    'en',
+  );
+  assert.equal(markdown.split(body).length - 1, 4);
+  assert.ok(markdownNodes(markdown, 'Paragraph').some((paragraph) => paragraph.endsWith(excerpt)));
 });
 
 test('Verbose searched sources link supplied URLs and omit empty lists', () => {
@@ -823,5 +864,5 @@ test('Verbose searched sources link supplied URLs and omit empty lists', () => {
     'en',
   );
   assert.match(markdown, /<https:\/\/example\.org\/a>/);
-  assert.match(markdown, /<https:\/\/example\.org\/b_%28c%29>/);
+  assert.ok(markdown.includes('<https://example.org/b_(c)>'));
 });

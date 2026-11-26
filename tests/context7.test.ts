@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createCli } from '../src/cli/program.js';
 import * as ctx7 from '../src/providers/context7.js';
 import { renderContext7 } from '../src/output/context7.js';
+import { text } from '../src/i18n/messages.js';
 import { localStatus } from '../src/config/status.js';
 import { redactDiagnostics, redactError } from '../src/providers/transport.js';
 import { capture, context, temporary } from './helpers.js';
@@ -160,7 +161,7 @@ test('Context7 mappings retain useful metadata, empty results and explanation-on
 });
 
 test('Context7 Markdown protects code fences without losing code or unsafe language names', () => {
-  const content = '```md\n# inner\n````\n';
+  const content = '```md\r\ninline ```````` example\r  ````\t\n';
   const mapped = ctx7.docsData(
     {
       ...docs,
@@ -180,7 +181,10 @@ test('Context7 keeps code and rules intact and renders metadata inline', () => {
     {
       codeSnippets: [{ ...code, sourceFile, codeList: [{ language: 'js', code: content }] }],
       infoSnippets: [],
-      rules: { global: ['Keep this rule.', 'Keep the next rule too.'] },
+      rules: {
+        global: ['Keep this rule.', 'Keep the next rule too.'],
+        libraries: [{ libraryId: '/empty/rules' }],
+      },
     },
     '/example/ui',
   );
@@ -188,6 +192,9 @@ test('Context7 keeps code and rules intact and renders metadata inline', () => {
   assert.ok(md.includes(content));
   assert.ok(md.includes('Keep this rule.'));
   assert.ok(md.includes('Keep the next rule too.'));
+  assert.ok(!md.includes('/empty/rules'));
+  const empty = ctx7.docsData({ ...docs, rules: { libraries: [] } }, '/example/ui');
+  assert.ok(!renderContext7(empty, 'en').includes(text('en', 'ctx7Rules')));
   assert.equal(mapped.code_snippets[0].source_file, sourceFile);
   assert.ok(md.includes('`src/ui # source.ts`'));
   const libraries = ctx7.libraryData({

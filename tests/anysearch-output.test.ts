@@ -4,6 +4,7 @@ import { text } from '../src/i18n/messages.js';
 import * as output from '../src/output/anysearch.js';
 import * as anysearch from '../src/providers/anysearch.js';
 import { hit, pageUrl } from './anysearch-fixture.js';
+import { markdownNodes } from './helpers.js';
 
 test('AnySearch Markdown preserves distinct summaries, raw content, identifiers and parameter semantics', () => {
   const language = 'zh';
@@ -12,17 +13,25 @@ test('AnySearch Markdown preserves distinct summaries, raw content, identifiers 
     {
       results: [
         { ...hit, title: 'A [link] `code`', snippet: raw, content: raw },
-        { ...hit, title: null, snippet: 'Summary.', content: raw },
+        { ...hit, title: null, snippet: 'Use <Widget> &copy;.', content: raw },
         { url: pageUrl },
       ],
     },
     5,
   );
   const md = output.renderSearch(data, language);
-  assert.equal(md.split(raw).length, 3);
-  assert.ok(md.includes('Summary.'));
+  assert.deepEqual(markdownNodes(md, 'CodeText', 'StrongEmphasis'), [
+    raw.trimEnd(),
+    `**${text(language, 'summaryLabel')}**`,
+    `**${text(language, 'textLabel')}**`,
+    raw.trimEnd(),
+  ]);
+  assert.ok(md.includes('**：Use \\<Widget\\> \\&copy;.'));
+  assert.ok(md.includes(`## 3. <${pageUrl}>`));
+  const links = { ...data, results: [{ url: pageUrl }, { url: 'https://example.org/other' }] };
+  assert.match(output.renderSearch(links, language), /^1\. <.+>\n2\. <.+>$/m);
   assert.ok(md.includes('A \\[link\\] \\`code\\`'));
-  const description = 'Values: "", 0, false. Unit: ms.\nExample: 100.';
+  const description = 'Values: "", 0, false. Unit: ms.\r# Examples\n100.';
   const domains = anysearch.domainsData({
     domains: [
       {
@@ -35,7 +44,7 @@ test('AnySearch Markdown preserves distinct summaries, raw content, identifiers 
                 required: false,
                 description,
               },
-              name: { required: true },
+              ' name ': { required: true, description: '<identifier>\r\n' },
             },
           },
         ],
@@ -43,10 +52,10 @@ test('AnySearch Markdown preserves distinct summaries, raw content, identifiers 
     ],
   });
   const definitions = output.renderDomains(domains, language);
-  const lines = definitions.split('\n');
-  const optional = lines.find((line) => line.startsWith('- `` odd`name ``'));
-  const required = lines.find((line) => line.startsWith('- `name`'));
-  assert.ok(optional?.includes(text(language, 'anysearchOptional')), definitions);
-  assert.ok(required?.includes(text(language, 'anysearchRequired')), definitions);
-  assert.ok(definitions.includes(description.replace('\n', '\n  ')));
+  const [optional, required] = markdownNodes(definitions, 'ListItem');
+  assert.ok(optional.includes(text(language, 'anysearchOptional')));
+  assert.equal(markdownNodes(optional, 'CodeText').join(''), description.replace('\r', '\n'));
+  assert.ok(required.includes(text(language, 'anysearchRequired')));
+  assert.ok(required.includes('：\\<identifier\\>'));
+  assert.deepEqual(markdownNodes(definitions, 'InlineCode'), ['`` odd`name ``', '`  name  `']);
 });

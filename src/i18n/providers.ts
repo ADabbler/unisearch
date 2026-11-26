@@ -1,6 +1,6 @@
 import type { Provider } from '../config/fields.js';
 import type { Language } from './messages.js';
-import { text } from './messages.js';
+import { colon, text } from './messages.js';
 
 const names: Record<Provider, string> = {
   model: 'Model',
@@ -23,6 +23,10 @@ export function providerName(provider: Provider, language: Language): string {
   }
   return names[provider];
 }
+export function sourceLabel(provider: Provider, language: Language): string {
+  return `${text(language, 'sourceLabel')}${colon(language)}${providerName(provider, language)}`;
+}
+
 export function operationName(operation: string, language: Language, provider?: Provider): string {
   if (provider === 'ctx7' && operation === 'search') return text(language, 'ctx7SearchLabel');
   if (language === 'en') return operation;

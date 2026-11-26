@@ -4,8 +4,8 @@ import type { Language, MessageKey } from '../i18n/messages.js';
 import type { JsonObject, JsonValue, Outcome, PublicError, Result } from '../result.js';
 import { contentSources } from './exa.js';
 import type { ContentSource } from '../providers/exa.js';
-import { inlineCode } from './context7.js';
-import { jsonBlock, renderBlocks } from './zhipu-mcp.js';
+import { blockField, diagnostic, fenced, inlineCode, jsonBlock } from './markdown.js';
+import { renderBlocks } from './zhipu-mcp.js';
 import { wrapText } from './text.js';
 
 export type Format = 'json' | 'markdown' | 'text';
@@ -140,21 +140,22 @@ function errorContent(error: PublicError, language: Language, target?: string): 
   const sections: string[] = [];
   const details = error.details;
   const prefix = target ? `${target} · ` : '';
-  const sep = colon(language);
   if (details?.upstream_data !== undefined)
     sections.push(
-      `${prefix}${text(language, 'upstreamDataLabel')}${sep}`,
-      jsonBlock(details.upstream_data),
+      prefix + blockField(language, 'upstreamDataLabel', jsonBlock(details.upstream_data)),
     );
-  if (Array.isArray(details?.upstream_content))
+  if (Array.isArray(details?.upstream_content) && details.upstream_content.length)
     sections.push(
-      `${prefix}${text(language, 'upstreamContentLabel')}${sep}`,
-      renderBlocks(details.upstream_content as JsonObject[], language),
+      prefix +
+        blockField(
+          language,
+          'upstreamContentLabel',
+          renderBlocks(details.upstream_content as JsonObject[], language),
+        ),
     );
   if (details?.upstream_metadata !== undefined)
     sections.push(
-      `${prefix}${text(language, 'zhipuMcpAttributes')}${sep}`,
-      jsonBlock(details.upstream_metadata),
+      prefix + blockField(language, 'zhipuMcpAttributes', jsonBlock(details.upstream_metadata)),
     );
   for (const cause of details?.causes ?? [])
     sections.push(...errorContent(cause, language, target));
@@ -184,9 +185,7 @@ function markdown<T extends JsonValue>(outcome: Outcome<T>, options: RenderOptio
   if (result.error) {
     const label = text(language, result.status === 'partial' ? 'partial' : 'error');
     sections.push(
-      `> ${label}${colon(language)}${errorLines(result.error, language)
-        .flatMap((value) => value.split(/\r\n|\r|\n/))
-        .join('\n> ')}`,
+      diagnostic(`${label}${colon(language)}${errorLines(result.error, language).join('\n')}`),
     );
     sections.push(...errorContent(result.error, language));
   }
@@ -316,7 +315,7 @@ export function render<T extends JsonValue>(
       renderData: () =>
         options.format === 'text'
           ? `${text(options.language, 'retainedData')}:\n${retained}`
-          : `## ${text(options.language, 'retainedData')}\n\n\`\`\`json\n${retained}\`\`\``,
+          : blockField(options.language, 'retainedData', fenced(retained, 'json')),
     });
   }
 }

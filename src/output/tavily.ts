@@ -1,8 +1,17 @@
 import { colon, text } from '../i18n/messages.js';
+import { sourceLabel } from '../i18n/providers.js';
 import type { Language } from '../i18n/messages.js';
 import type { ExtractData, MapData, TavilySearchData } from '../providers/tavily.js';
-import { inline, resultTitle } from './exa.js';
-import { link } from './firecrawl.js';
+import {
+  distinctSummary,
+  fenced,
+  inline,
+  link,
+  pageBody,
+  proseField,
+  rankedResults,
+  renderPages,
+} from './markdown.js';
 
 export function renderTavilySearch(
   data: TavilySearchData,
@@ -11,16 +20,8 @@ export function renderTavilySearch(
   showProvider = true,
 ): string {
   const separator = colon(language);
-  const entries = data.results.map((item, index) => {
-    const sections = [
-      resultTitle(
-        index,
-        item.url,
-        item.title,
-        level,
-        !!item.content?.trim() || !!item.text?.trim(),
-      ),
-    ];
+  const entries = rankedResults(data.results, language, level, (item) => {
+    const sections: string[] = [];
     const metadata = [
       item.published_date
         ? `${text(language, 'tavilyPublished')}${separator}${inline(item.published_date)}`
@@ -34,19 +35,21 @@ export function renderTavilySearch(
       sections.push(
         `${text(language, 'missingContentLabel')}${separator}${language === 'zh' ? text(language, 'textLabel') : 'text'}`,
       );
-    if (item.content)
-      sections.push(
-        `${'#'.repeat(level + 1)} ${text(language, 'tavilyContent')}\n\n${item.content}`,
-      );
-    if (item.text)
-      sections.push(`${'#'.repeat(level + 1)} ${text(language, 'textLabel')}\n\n${item.text}`);
-    return sections.join('\n\n');
+    const summary = distinctSummary(item.content, item.text);
+    if (summary) sections.push(proseField(language, 'tavilyContent', summary));
+    if (item.text) sections.push(pageBody(language, item.text, summary));
+    return sections;
   });
-  return `${showProvider ? `${text(language, 'tavilySource')}\n\n` : ''}${entries.length ? entries.join('\n\n---\n\n') : text(language, 'noResults')}`;
+  return showProvider ? `${sourceLabel('tavily', language)}\n\n${entries}` : entries;
 }
 export function renderExtract(data: ExtractData, language: Language): string {
-  return `${text(language, 'tavilySource')}${data.content_type === 'snippets' ? ` · ${text(language, 'tavilySnippets')}` : ''}\n\n${data.results.map((item) => `## ${link(item.url)}\n\n${item.text}`).join('\n\n---\n\n')}`;
+  const snippets = data.content_type === 'snippets';
+  const source =
+    sourceLabel('tavily', language) + (snippets ? ` · ${text(language, 'tavilySnippets')}` : '');
+  return renderPages(data.results, language, source, (item, single) => [
+    single && !snippets ? item.text : fenced(item.text),
+  ]);
 }
 export function renderMap(data: MapData, language: Language): string {
-  return `${text(language, 'tavilySource')}\n\n${data.results.length ? data.results.map((url) => `- ${link(url)}`).join('\n') : text(language, 'noSiteLinks')}`;
+  return `${sourceLabel('tavily', language)}\n\n${data.results.length ? data.results.map((url) => `- ${link(url)}`).join('\n') : text(language, 'noSiteLinks')}`;
 }

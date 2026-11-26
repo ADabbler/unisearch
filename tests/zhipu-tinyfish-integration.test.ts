@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import type { JsonObject } from '../src/result.js';
+import { providerName } from '../src/i18n/providers.js';
+import { text } from '../src/i18n/messages.js';
+import { markdownNodes } from './helpers.js';
 import { prepareRetrieval, retrieve } from '../src/retrieval.js';
 import { fixture as mcpFixture, pageUrl, pageText, rpc } from './zhipu-mcp-fixture.js';
 import type { Call } from './zhipu-mcp-fixture.js';
@@ -79,7 +82,7 @@ test(
   { timeout: 5000 },
   async (t) => {
     const f = await fixture(t);
-    const order = ['tinyfish', 'zhipu-mcp', 'zhipu'];
+    const order = ['tinyfish', 'zhipu-mcp', 'zhipu'] as const;
     const paths = [
       '/tf-search/',
       '/gateway/web_search_prime/mcp',
@@ -163,8 +166,11 @@ test(
             );
         } else {
           assert.deepEqual(
-            [...saved.matchAll(/^## (TinyFish|Zhipu MCP|Zhipu)$/gm)].map((m) => m[1]),
-            ['TinyFish', 'Zhipu MCP', 'Zhipu'],
+            markdownNodes(saved, 'ATXHeading2'),
+            [
+              text('en', 'modelAnswerLabel'),
+              ...order.map((provider) => providerName(provider, 'en')),
+            ].map((name) => `## ${name}`),
           );
           assert.ok(saved.includes(pageText));
           assert.match(saved, /"score": 0/);

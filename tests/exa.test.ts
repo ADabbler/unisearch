@@ -14,7 +14,8 @@ import type { SearchOptions } from '../src/providers/exa.js';
 import { localStatus } from '../src/config/status.js';
 import { renderSearch } from '../src/output/exa.js';
 import { render } from '../src/output/render.js';
-import { capture, context, temporary } from './helpers.js';
+import { capture, context, markdownNodes, temporary } from './helpers.js';
+import { text } from '../src/i18n/messages.js';
 
 const env = { UNISEARCH_EXA_API_KEY: 'test-exa-key', UNISEARCH_LANG: 'en' };
 const prepare = (options: SearchOptions = {}, values = {}) =>
@@ -697,21 +698,27 @@ test('Public errors redact credentials, authorization values and URL userinfo an
   assert.doesNotMatch(rendered.details, /\n# fake success/);
 });
 
-test('Markdown highlights normalize CR, LF and CRLF without adding quote prefixes', () => {
+test('Markdown gives each highlight its own unlabeled fence and preserves its paragraph boundaries', () => {
+  const highlights = ['first\r# second\r\nthird\nfourth', '> Original quote\n\n```sh\nrun\n```'];
   const data = searchData(
     {
       results: [
         {
           title: 'Page',
           url: 'https://example.com',
-          highlights: ['first\r# second\r\nthird\nfourth', '> Original quote'],
+          highlights,
         },
       ],
     },
     { text: false, highlights: true },
   );
-  assert.match(renderSearch(data, 'en'), /first\n# second\nthird\nfourth\n\n> Original quote/);
-  assert.equal(data.results[0].highlights?.[0], 'first\r# second\r\nthird\nfourth');
+  const markdown = renderSearch(data, 'en');
+  assert.deepEqual(markdownNodes(markdown, 'StrongEmphasis', 'CodeText', 'CodeInfo'), [
+    `**${text('en', 'highlightsLabel')}**`,
+    'first\n# second\nthird\nfourth',
+    highlights[1],
+  ]);
+  assert.deepEqual(data.results[0].highlights, highlights);
 });
 
 test('Known network failures and programming exceptions are distinct and never expose native errors', async () => {

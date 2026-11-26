@@ -2,8 +2,19 @@ import { mkdtempSync, readdirSync, rmdirSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
+import { parser } from '@lezer/markdown';
 import type { Channels } from '../src/output/index.js';
 import type { ConfigContext } from '../src/config/path.js';
+
+export function markdownNodes(source: string, ...types: string[]): string[] {
+  const matches: string[] = [];
+  parser.parse(source).iterate({
+    enter(node) {
+      if (types.includes(node.name)) matches.push(source.slice(node.from, node.to));
+    },
+  });
+  return matches;
+}
 
 function removeDirectory(path: string): void {
   for (const entry of readdirSync(path, { withFileTypes: true })) {

@@ -1,8 +1,10 @@
+import { providerName } from '../i18n/providers.js';
 import type { Language } from '../i18n/messages.js';
 import { colon, text } from '../i18n/messages.js';
 import type { JsonObject } from '../result.js';
 import type { CombinedData } from '../search.js';
-import { inline, linkTarget, renderPageLatencies, renderSearch } from './exa.js';
+import { renderPageLatencies, renderSearch } from './exa.js';
+import { blockField, fenced, inline, link } from './markdown.js';
 import { renderTavilySearch } from './tavily.js';
 import { renderSearch as renderFirecrawlSearch } from './firecrawl.js';
 import { renderJina } from './jina.js';
@@ -12,72 +14,59 @@ import { renderSearch as renderAnySearch } from './anysearch.js';
 import { renderSearch as renderTinyfish } from './tinyfish.js';
 import { renderSearch as renderDeepseek } from './deepseek.js';
 
-export function renderCombinedSearch(data: CombinedData, language: Language): string {
-  const sections: string[] = [];
-  const separator = colon(language);
-  for (const source of data.sources) {
-    if (source.provider === 'model') {
-      const answer = source.data;
-      if (data.sources.length > 1) sections.push(`## ${text(language, 'modelAnswerLabel')}`);
-      sections.push(
-        `${text(language, 'modelLabel')}${separator}${inline(answer.model)}`,
-        answer.text,
-      );
-      if (answer.citations) {
-        const citations = answer.citations.map((source) =>
-          source.title
-            ? `- [${inline(source.title)}](${linkTarget(source.url)})`
-            : `- <${linkTarget(source.url)}>`,
-        );
-        sections.push(`### ${text(language, 'modelSourcesLabel')}\n\n${citations.join('\n')}`);
+function renderSource(
+  source: CombinedData['sources'][number],
+  language: Language,
+  grouped: boolean,
+): string {
+  const { provider, data } = source;
+  const level = grouped ? 3 : 2;
+  switch (provider) {
+    case 'model': {
+      const sections = [
+        `${text(language, 'modelLabel')}${colon(language)}${inline(data.model)}`,
+        grouped ? fenced(data.text) : data.text,
+      ];
+      if (data.citations?.length) {
+        const citations = data.citations.map((item) => `- ${link(item.url, item.title)}`);
+        sections.push(blockField(language, 'modelSourcesLabel', citations.join('\n')));
       }
-    } else if (source.provider === 'zhipu')
-      sections.push(
-        `## ${text(language, 'zhipuLabel')}`,
-        renderZhipu({ provider: 'zhipu', ...source.data }, language, 3, false),
-      );
-    else if (source.provider === 'tinyfish')
-      sections.push(
-        '## TinyFish',
-        renderTinyfish({ provider: 'tinyfish', ...source.data }, language, 3, false),
-      );
-    else if (source.provider === 'zhipu-mcp')
-      sections.push(
-        '## Zhipu MCP',
-        renderMcp({ provider: 'zhipu-mcp', ...source.data }, language, 'search', false),
-      );
-    else if (source.provider === 'anysearch')
-      sections.push(
-        '## AnySearch',
-        renderAnySearch({ provider: 'anysearch', ...source.data }, language, 3, false),
-      );
-    else if (source.provider === 'exa')
-      sections.push(
-        '## Exa',
-        renderSearch({ provider: 'exa', ...source.data }, language, 3, false),
-      );
-    else if (source.provider === 'tavily')
-      sections.push(
-        '## Tavily',
-        renderTavilySearch({ provider: 'tavily', ...source.data }, language, 3, false),
-      );
-    else if (source.provider === 'jina')
-      sections.push(
-        '## Jina',
-        renderJina({ provider: 'jina', ...source.data }, language, 3, false),
-      );
-    else if (source.provider === 'deepseek')
-      sections.push(
-        '## DeepSeek',
-        renderDeepseek({ provider: 'deepseek', ...source.data }, language, 3, false),
-      );
-    else
-      sections.push(
-        '## Firecrawl',
-        renderFirecrawlSearch({ provider: 'firecrawl', ...source.data }, language, 3, false),
-      );
+      return sections.join('\n\n');
+    }
+    case 'zhipu':
+      return renderZhipu({ provider, ...data }, language, level, !grouped);
+    case 'tinyfish':
+      return renderTinyfish({ provider, ...data }, language, level, !grouped);
+    case 'zhipu-mcp':
+      return renderMcp({ provider, ...data }, language, 'search', !grouped);
+    case 'anysearch':
+      return renderAnySearch({ provider, ...data }, language, level, !grouped);
+    case 'exa':
+      return renderSearch({ provider, ...data }, language, level, !grouped);
+    case 'tavily':
+      return renderTavilySearch({ provider, ...data }, language, level, !grouped);
+    case 'jina':
+      return renderJina({ provider, ...data }, language, level, !grouped);
+    case 'deepseek':
+      return renderDeepseek({ provider, ...data }, language, level, !grouped);
+    case 'firecrawl':
+      return renderFirecrawlSearch({ provider, ...data }, language, level, !grouped);
   }
-  return sections.join('\n\n');
+}
+
+export function renderCombinedSearch(data: CombinedData, language: Language): string {
+  const grouped = data.sources.length > 1;
+  return data.sources
+    .map((source) => {
+      const body = renderSource(source, language, grouped);
+      if (!grouped) return body;
+      const title =
+        source.provider === 'model'
+          ? text(language, 'modelAnswerLabel')
+          : providerName(source.provider, language);
+      return `## ${title}\n\n${body}`;
+    })
+    .join('\n\n');
 }
 
 export function renderSearchExecution(data: JsonObject, language: Language): string {
@@ -89,7 +78,7 @@ export function renderSearchExecution(data: JsonObject, language: Language): str
           '',
           `### ${text(language, 'modelSearchedSourcesLabel')}`,
           '',
-          ...data.searched_sources.map((url) => `- <${linkTarget(String(url))}>`),
+          ...data.searched_sources.map((url) => `- ${link(String(url))}`),
         ]
       : [];
   return [

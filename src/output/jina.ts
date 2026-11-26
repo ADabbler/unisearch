@@ -1,19 +1,20 @@
 import { colon, text } from '../i18n/messages.js';
+import { sourceLabel } from '../i18n/providers.js';
 import type { Language } from '../i18n/messages.js';
 import type { Data, Page } from '../providers/jina-response.js';
-import type { JsonValue } from '../result.js';
-import { inline, resultTitle } from './exa.js';
-import { link, warnings } from './firecrawl.js';
+import {
+  blockField,
+  inline,
+  jsonBlock,
+  link,
+  pageBody,
+  proseField,
+  rankedResults,
+  renderPages,
+} from './markdown.js';
+import { warnings } from './firecrawl.js';
 
-function cell(value: JsonValue): string {
-  return inline(typeof value === 'string' ? value : JSON.stringify(value)).replace(/\|/g, '\\|');
-}
-function table(headers: string[], rows: string[][]): string {
-  return [headers, headers.map(() => '---'), ...rows]
-    .map((row) => `| ${row.join(' | ')} |`)
-    .join('\n');
-}
-export function pageContent(page: Page, language: Language): string[] {
+export function pageContent(page: Page, language: Language, single: boolean): string[] {
   const sep = colon(language);
   const sections: string[] = [];
   const metadata = [
@@ -28,7 +29,7 @@ export function pageContent(page: Page, language: Language): string[] {
   if (page.num_pages !== undefined)
     sections.push(`${text(language, 'jinaDocumentPagesLabel')}${sep}${page.num_pages}`);
   sections.push(...warnings(page.warnings, language));
-  if (page.description) sections.push(page.description);
+  if (page.description) sections.push(proseField(language, 'summaryLabel', page.description));
   if (page.image_url) {
     const name = new URL(page.image_url).pathname.split('/').at(-1) || page.image_url;
     let dimensions = '';
@@ -48,49 +49,31 @@ export function pageContent(page: Page, language: Language): string[] {
     ] as const)
       if (value !== undefined) sections.push(`${text(language, label)}${sep}${value}`);
   }
-  if (page.text) sections.push(page.text);
-  if (page.site_links)
+  if (page.text) sections.push(pageBody(language, page.text, page.description, single));
+  if (page.site_links?.length)
     sections.push(
-      `${text(language, 'jinaSiteLinksLabel')}${sep}\n\n${page.site_links.map((item) => `- ${link(item.url, item.title)}`).join('\n')}`,
+      blockField(
+        language,
+        'jinaSiteLinksLabel',
+        page.site_links.map((item) => `- ${link(item.url, item.title)}`).join('\n'),
+      ),
     );
   if (page.metadata)
-    sections.push(
-      `${text(language, 'pageMetadataLabel')}${sep}\n\n${table(
-        [text(language, 'jinaMetadataFieldLabel'), text(language, 'jinaMetadataValueLabel')],
-        Object.entries(page.metadata).map(([key, value]) => [cell(key), cell(value)]),
-      )}`,
-    );
-  if (page.external) {
-    const rows = Object.entries(page.external).flatMap(([rel, addresses]) => {
-      if (!Object.keys(addresses).length) return [[cell(rel), '', '{}']];
-      return Object.entries(addresses).map(([url, attrs]) => [cell(rel), cell(url), cell(attrs)]);
-    });
-    sections.push(
-      `${text(language, 'jinaExternalRelationsLabel')}${sep}\n\n${table([text(language, 'jinaRelationLabel'), text(language, 'jinaLinkLabel'), text(language, 'jinaAttributesLabel')], rows)}`,
-    );
-  }
+    sections.push(blockField(language, 'pageMetadataLabel', jsonBlock(page.metadata)));
+  if (page.external)
+    sections.push(blockField(language, 'jinaExternalRelationsLabel', jsonBlock(page.external)));
   return sections;
 }
 export function renderJina(data: Data, language: Language, level = 2, showProvider = true): string {
-  const searching = 'search_type' in data;
-  const source = text(language, 'jinaSource');
-  const sections: string[] = [];
-  if (searching) {
-    const labels = { web: 'jinaWeb', news: 'jinaNews', images: 'jinaImages' } as const;
-    const type = text(language, labels[data.search_type]);
-    sections.push(showProvider ? `${source} · ${type}` : type);
-  } else if (showProvider) {
-    const page = data.results[0];
-    sections.push(data.results.length === 1 ? `${source} · ${link(page.url, page.title)}` : source);
-  }
-  const entries = data.results.map((page, index) =>
-    [
-      ...(searching || data.results.length !== 1
-        ? [resultTitle(index, page.url, page.title, level, !!page.text?.trim())]
-        : []),
-      ...pageContent(page, language),
-    ].join('\n\n'),
-  );
-  sections.push(entries.length ? entries.join('\n\n---\n\n') : text(language, 'noResults'));
-  return sections.join('\n\n');
+  const source = sourceLabel('jina', language);
+  if (!('search_type' in data))
+    return renderPages(data.results, language, source, (page, single) =>
+      pageContent(page, language, single),
+    );
+  const labels = { web: 'jinaWeb', news: 'jinaNews', images: 'jinaImages' } as const;
+  const type = text(language, labels[data.search_type]);
+  return [
+    showProvider ? `${source} · ${type}` : type,
+    rankedResults(data.results, language, level, (page) => pageContent(page, language, false)),
+  ].join('\n\n');
 }

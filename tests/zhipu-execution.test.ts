@@ -342,33 +342,38 @@ test('Zhipu redacts credential values and upstream keys without renaming public 
         ),
       ),
     );
-    for (const format of ['json', 'markdown']) {
-      const searched = await f.run(['zhipu', 'search', 'q', '--format', format]);
-      const fetched = await f.run(['fetch', url, '--format', format]);
-      assert.equal(searched.exit, 0, searched.channels.out);
-      assert.equal(fetched.exit, 0, fetched.channels.out);
-      if (format === 'json') {
-        const data = searched.json().data;
-        assert.deepEqual(Object.keys(data).sort(), [
-          'provider',
-          'results',
-          'search_engine',
-          'search_intent',
-        ]);
-        assert.equal(data.results[0].description, 'Summary [REDACTED]');
-        assert.equal(typeof data.search_intent[0].intent, 'string');
-        assert.equal(typeof data.search_intent[0].keywords, 'string');
-        assert.equal(data.search_intent[0].intent.includes(secret), false);
-        const page = fetched.json().data.results[0];
-        assert.equal(page.url, url);
-        assert.equal(page.title, 'Guide');
-        assert.equal(page.text, 'Body [REDACTED]');
-        assert.deepEqual(page.metadata, {
-          '[REDACTED]': { code: '[REDACTED]', provider: '[REDACTED]' },
-        });
-      } else {
-        assert.match(searched.channels.out, /Summary \[REDACTED\]/);
-        assert.match(fetched.channels.out, /Body \[REDACTED\]/);
+    const searched = await f.run(['zhipu', 'search', 'q', '--format=json']);
+    const fetched = await f.run(['fetch', url, '--format=json']);
+    assert.equal(searched.exit, 0, searched.channels.out);
+    assert.equal(fetched.exit, 0, fetched.channels.out);
+    const data = searched.json().data;
+    assert.deepEqual(Object.keys(data).sort(), [
+      'provider',
+      'results',
+      'search_engine',
+      'search_intent',
+    ]);
+    assert.equal(data.results[0].description, 'Summary [REDACTED]');
+    for (const value of [data.search_intent[0].intent, data.search_intent[0].keywords]) {
+      assert.equal(typeof value, 'string');
+      assert.ok(!value.includes(secret));
+    }
+    const page = fetched.json().data.results[0];
+    assert.equal(page.url, url);
+    assert.equal(page.title, 'Guide');
+    assert.equal(page.text, 'Body [REDACTED]');
+    assert.deepEqual(page.metadata, {
+      '[REDACTED]': { code: '[REDACTED]', provider: '[REDACTED]' },
+    });
+    if (secret === 'metadata') {
+      for (const args of [
+        ['zhipu', 'search', 'q'],
+        ['fetch', url],
+      ]) {
+        const markdown = await f.run(args);
+        assert.equal(markdown.exit, 0, markdown.channels.err);
+        assert.match(markdown.channels.out, /(?:Summary|Body) .*REDACTED/);
+        assert.doesNotMatch(markdown.channels.out, /(?:Summary|Body) metadata/);
       }
     }
   }

@@ -1,8 +1,8 @@
 import { colon, text } from '../i18n/messages.js';
+import { sourceLabel } from '../i18n/providers.js';
 import type { Language } from '../i18n/messages.js';
 import type { FetchData, SearchData } from '../providers/deepseek-response.js';
-import { inline, resultTitle } from './exa.js';
-import { link } from './firecrawl.js';
+import { distinctSummary, inline, link, pageBody, proseField, rankedResults } from './markdown.js';
 
 export function renderSearch(
   data: SearchData,
@@ -11,11 +11,8 @@ export function renderSearch(
   showProvider = true,
 ): string {
   const separator = colon(language);
-  const parts = showProvider ? [text(language, 'deepseekSource')] : [];
-  if (!data.results.length) parts.push(text(language, 'noResults'));
-  for (const [index, item] of data.results.entries()) {
-    if (index) parts.push('---');
-    parts.push(resultTitle(index, item.url, item.title, level, !!item.summary?.trim()));
+  const entries = rankedResults(data.results, language, level, (item) => {
+    const parts: string[] = [];
     const metadata: string[] = [];
     for (const [value, label] of [
       [item.site_name, 'siteLabel'],
@@ -26,18 +23,17 @@ export function renderSearch(
       if (value !== undefined)
         metadata.push(`${text(language, label)}${separator}${inline(String(value))}`);
     if (metadata.length) parts.push(metadata.join(' · '));
-    if (item.summary) parts.push(item.summary);
-    if (item.content) {
-      parts.push(`${'#'.repeat(level + 1)} ${text(language, 'textLabel')}`);
-      parts.push(item.content);
-    }
-  }
-  return parts.join('\n\n');
+    const summary = distinctSummary(item.summary, item.content);
+    if (summary) parts.push(proseField(language, 'summaryLabel', summary));
+    if (item.content) parts.push(pageBody(language, item.content, summary));
+    return parts;
+  });
+  return showProvider ? `${sourceLabel('deepseek', language)}\n\n${entries}` : entries;
 }
 
 export function renderFetch(data: FetchData, language: Language): string {
   const [page] = data.results;
-  return [`${text(language, 'deepseekSource')} · ${link(page.url, page.title)}`, page.text].join(
+  return [`${sourceLabel('deepseek', language)} · ${link(page.url, page.title)}`, page.text].join(
     '\n\n',
   );
 }

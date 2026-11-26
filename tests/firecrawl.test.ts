@@ -18,7 +18,7 @@ import { redactError } from '../src/providers/transport.js';
 import { prepareRetrieval, retrieve } from '../src/retrieval.js';
 import { combinedSearch, prepareCombinedSearch } from '../src/search.js';
 import type { JsonObject } from '../src/result.js';
-import { capture, context, temporary } from './helpers.js';
+import { capture, context, markdownNodes, temporary } from './helpers.js';
 
 const env = {
   UNISEARCH_FIRECRAWL_API_KEY: 'firecrawl-fixture-key',
@@ -582,8 +582,17 @@ test('Firecrawl search retains useful metadata, missing text and warnings withou
       },
     ],
   });
-  assert.equal(renderSearch(data, 'zh').includes('Error page'), false);
-  assert.ok(renderSearch(data, 'en').includes(data.results[0].text!));
+  const markdown = renderSearch(data, 'en');
+  assert.ok(!markdown.includes('Error page'));
+  assert.ok(markdown.includes(data.results[0].text!));
+  const report = { url: 'https://example.org/report', text: 'Report.' };
+  assert.equal(
+    renderSearch(
+      { ...data, results: [{ ...report, title: ' ', description: ' ', category: ' ' }] },
+      'en',
+    ),
+    renderSearch({ ...data, results: [report] }, 'en'),
+  );
   assert.deepEqual(
     searchData(
       {
@@ -718,8 +727,12 @@ test('Firecrawl map keeps links and coverage warnings without inferring fields o
     {
       success: true,
       links: [
-        { url: 'https://example.org/docs', title: 'Docs', description: 'Reference' },
-        { url: 'https://example.org/path?q=1' },
+        {
+          url: 'https://example.org/docs',
+          title: 'Docs',
+          description: 'Reference\r# Examples\r\rLast.',
+        },
+        { url: 'https://example.org/path?q=1', description: ' \n' },
         { url: 'https://example.org/path?q=1' },
       ],
       warning: 'Coverage is limited',
@@ -731,8 +744,12 @@ test('Firecrawl map keeps links and coverage warnings without inferring fields o
   assert.equal(data.links[1].title, undefined);
   const markdown = renderMap(data, 'en');
   assert.ok(markdown.includes(data.warnings![0]));
-  assert.match(markdown, /\[Docs\]\(https:\/\/example\.org\/docs\)/);
-  assert.ok(markdown.includes('Reference'));
+  const items = markdownNodes(markdown, 'ListItem');
+  assert.deepEqual(
+    items.map((item) => markdownNodes(item, 'URL')),
+    data.links.map((link) => [link.url]),
+  );
+  assert.equal(markdownNodes(items[0], 'CodeText').join(''), 'Reference\n# Examples\n\nLast.');
   assert.deepEqual(mapData(blankMap, 1, safe), { provider: 'firecrawl', links: [] });
   for (const response of [
     { success: true, data: { links: [] } },

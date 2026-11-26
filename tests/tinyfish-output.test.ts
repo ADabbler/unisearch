@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { markdownNodes } from './helpers.js';
 import { fixture, hit, page, search, url } from './tinyfish-fixture.js';
 
 test('TinyFish Markdown preserves page content, links, metadata and selector diagnostics', async (t) => {
@@ -26,6 +27,7 @@ test('TinyFish Markdown preserves page content, links, metadata and selector dia
   const markdown = await f.run(args);
   assert.equal(markdown.exit, 0);
   assert.ok(markdown.channels.out.includes(page().text));
+  assert.deepEqual(markdownNodes(markdown.channels.out, 'ATXHeading1'), ['# Guide']);
   assert.ok(markdown.channels.out.includes('`mailto:media@example.org`'));
   assert.match(markdown.channels.out, /"flag": false/);
   assert.match(markdown.channels.out, /"count": 0/);
@@ -50,6 +52,20 @@ test('TinyFish Markdown preserves page content, links, metadata and selector dia
   assert.equal(failed.channels.out, '');
   assert.ok(failed.channels.err.includes('article'));
   assert.ok(failed.channels.err.includes('#main'));
+});
+
+test('Batch fetch fences each original page beneath its own numbered heading', async (t) => {
+  const f = await fixture(t);
+  const other = 'https://example.org/other';
+  const pages = [page(), { ...page(other), text: '## Upgrade' }];
+  f.reply({ results: pages, errors: [] });
+  const result = await f.run(['tinyfish', 'fetch', url, other]);
+  assert.equal(result.exit, 0, result.channels.err);
+  assert.equal(result.channels.err, '');
+  assert.deepEqual(
+    markdownNodes(result.channels.out, 'ATXHeading2', 'CodeText'),
+    pages.flatMap((p, i) => [`## ${i + 1}. [${p.title}](${p.url})`, p.text]),
+  );
 });
 
 test('TinyFish useful failed search data survives root combination without duplicated identity', async (t) => {

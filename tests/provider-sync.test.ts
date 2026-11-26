@@ -5,6 +5,7 @@ import { once } from 'node:events';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createCli } from '../src/cli/program.js';
+import { text } from '../src/i18n/messages.js';
 import * as ctx7 from '../src/providers/context7.js';
 import * as exa from '../src/providers/exa.js';
 import * as firecrawl from '../src/providers/firecrawl.js';
@@ -148,7 +149,10 @@ test('Context7 fetch distinguishes paging, truncation, relevance and unavailable
     {
       url: body.url,
       title: '',
-      highlights: [{ text: 'Relevant section', relevance: 0.9 }],
+      highlights: [
+        { text: 'Relevant section', relevance: 0.9 },
+        { text: '## Appendix', relevance: 0 },
+      ],
       untrusted: true,
       contentCheck: 'passed',
     },
@@ -156,6 +160,11 @@ test('Context7 fetch distinguishes paging, truncation, relevance and unavailable
   );
   assert.equal(highlights.highlights?.[0].relevance, 0.9);
   assert.equal(highlights.text, undefined);
+  assert.ok(
+    renderContext7(highlights, 'en')
+      .split('\n')
+      .includes(`${text('en', 'relevanceScore')}: 0`),
+  );
   for (const [options, key] of [
     [{ tokens: '99' }, 'ctx7Tokens'],
     [{ tokens: '10001' }, 'ctx7Tokens'],

@@ -1,4 +1,5 @@
 import { colon, text } from '../i18n/messages.js';
+import { sourceLabel } from '../i18n/providers.js';
 import type { Language } from '../i18n/messages.js';
 import type {
   ContentTruncation,
@@ -6,15 +7,20 @@ import type {
   ScrapeData,
   SearchData,
 } from '../providers/firecrawl-response.js';
-import { inline, linkTarget, resultTitle } from './exa.js';
+import {
+  diagnostic,
+  distinctSummary,
+  indentListBlock,
+  inline,
+  link,
+  pageBody,
+  proseField,
+  rankedResults,
+} from './markdown.js';
 
-export function link(url: string, title = url): string {
-  return `[${inline(title)}](${linkTarget(url)})`;
-}
 export function warnings(values: string[] | undefined, language: Language): string[] {
-  return (values ?? []).map(
-    (value) =>
-      `${text(language, 'upstreamWarningLabel')}${colon(language)}${value.replace(/\r\n|\r/g, '\n')}`,
+  return (values ?? []).map((value) =>
+    diagnostic(`${text(language, 'upstreamWarningLabel')}${colon(language)}${value}`),
   );
 }
 export function contentInfo(
@@ -23,7 +29,7 @@ export function contentInfo(
 ): string[] {
   const sections: string[] = [];
   if (data.final_url)
-    sections.push(`${text(language, 'finalUrlLabel')}${colon(language)}${inline(data.final_url)}`);
+    sections.push(`${text(language, 'finalUrlLabel')}${colon(language)}${link(data.final_url)}`);
   if (data.content_truncation)
     sections.push(
       text(language, 'truncatedContent')
@@ -39,24 +45,17 @@ export function renderSearch(
   level = 2,
   showProvider = true,
 ): string {
-  const sections = showProvider ? [text(language, 'firecrawlSource')] : [];
+  const sections = showProvider ? [sourceLabel('firecrawl', language)] : [];
   sections.push(...warnings(data.warnings, language));
-  const results = data.results.map((item, index) => {
-    const parts = [
-      resultTitle(
-        index,
-        item.url,
-        item.title,
-        level,
-        !!item.description?.trim() || !!item.text?.trim(),
-      ),
-    ];
-    if (item.category)
+  const results = rankedResults(data.results, language, level, (item) => {
+    const parts: string[] = [];
+    if (item.category?.trim())
       parts.push(
         `${text(language, 'firecrawlCategoryLabel')}${colon(language)}${inline(item.category)}`,
       );
     parts.push(...warnings(item.warnings, language));
-    if (item.description) parts.push(item.description);
+    const summary = distinctSummary(item.description, item.text);
+    if (summary) parts.push(proseField(language, 'summaryLabel', summary));
     parts.push(...contentInfo(item, language));
     if (item.missing_content)
       parts.push(
@@ -72,19 +71,18 @@ export function renderSearch(
         details.push(
           `${text(language, 'upstreamMessageLabel')}${colon(language)}${item.content_error.message}`,
         );
-      parts.push(details.join('\n').replace(/\r\n|\r/g, '\n'));
+      if (details.length) parts.push(diagnostic(details.join('\n')));
     }
-    if (item.text)
-      parts.push(`${'#'.repeat(level + 1)} ${text(language, 'textLabel')}\n\n${item.text}`);
-    return parts.join('\n\n');
+    if (item.text) parts.push(pageBody(language, item.text, summary));
+    return parts;
   });
-  sections.push(results.length ? results.join('\n\n---\n\n') : text(language, 'noResults'));
+  sections.push(results);
   return sections.join('\n\n');
 }
 
 export function renderScrape(data: ScrapeData, language: Language): string {
   return [
-    `${text(language, 'firecrawlSource')} · ${link(data.url, data.title)}`,
+    `${sourceLabel('firecrawl', language)} · ${link(data.url, data.title)}`,
     ...warnings(data.warnings, language),
     ...contentInfo(data, language),
     data.text,
@@ -94,21 +92,18 @@ export function renderScrape(data: ScrapeData, language: Language): string {
 export function renderMapLinks(links: MapData['links'], language: Language): string {
   if (!links.length) return text(language, 'noSiteLinks');
   return links
-    .map((item, index) => {
-      const prefix = `${index + 1}. `;
-      const indent = ' '.repeat(prefix.length);
-      const description = item.description
-        ?.split(/\r\n|\r|\n/)
-        .map((line) => indent + line)
-        .join('\n');
-      return `${prefix}${link(item.url, item.title)}${description ? `\n${description}` : ''}`;
+    .map((item) => {
+      const entry = `- ${link(item.url, item.title)}`;
+      if (!item.description?.trim()) return entry;
+      const description = proseField(language, 'descriptionLabel', item.description);
+      return `${entry}\n${indentListBlock(description)}`;
     })
     .join('\n');
 }
 
 export function renderMap(data: MapData, language: Language): string {
   return [
-    text(language, 'firecrawlSource'),
+    sourceLabel('firecrawl', language),
     ...warnings(data.warnings, language),
     renderMapLinks(data.links, language),
   ].join('\n\n');

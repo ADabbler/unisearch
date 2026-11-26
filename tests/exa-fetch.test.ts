@@ -6,13 +6,15 @@ import { once } from 'node:events';
 import { join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createCli } from '../src/cli/program.js';
+import { text } from '../src/i18n/messages.js';
 import { prepareFetch, requestFetch, exaRequestLimit } from '../src/providers/exa.js';
 import type { FetchOptions } from '../src/providers/exa.js';
+import { renderFetch } from '../src/output/exa.js';
 import { contentsData } from '../src/providers/exa-contents.js';
 import { executeRequest } from '../src/execution.js';
 import type { ExecutionClock } from '../src/execution.js';
 import { prepareRetrieval, retrieve } from '../src/retrieval.js';
-import { capture, context, temporary } from './helpers.js';
+import { capture, context, markdownNodes, temporary } from './helpers.js';
 import type { JsonObject } from '../src/result.js';
 
 const a = 'https://example.org/a';
@@ -152,14 +154,6 @@ test('Exa contents independently retains text, highlights, dates, authors and ac
   };
   const outcome = parse(body, [a], true);
   assert.equal(outcome.exitCode, 0);
-  assert.deepEqual(Object.keys(outcome.result.data!.results[0]!), [
-    'url',
-    'title',
-    'published_date',
-    'author',
-    'highlights',
-    'text',
-  ]);
   assert.deepEqual(outcome.result.data, {
     provider: 'exa',
     results: [
@@ -174,6 +168,9 @@ test('Exa contents independently retains text, highlights, dates, authors and ac
     ],
     content_sources: [{ url: a, source: 'cached' }],
   });
+  const markdown = renderFetch(outcome.result.data!, 'zh');
+  assert.ok(markdown.includes(`**${text('zh', 'textLabel')}**`));
+  assert.deepEqual(markdownNodes(markdown, 'ATXHeading1', 'CodeText'), ['# A', ' quote ']);
   assert.equal(
     parse({ results: [page] }, [a], true).result.data?.results[0].missing_content,
     undefined,

@@ -135,7 +135,6 @@ const messages = {
   pageLatencyLabel: ['页面读取耗时', 'Page retrieval latency'],
   retryWaitLabel: ['重试等待', 'Retry wait'],
   retrySecondsLabel: ['重试等待（秒）', 'Retry wait (seconds)'],
-  timeoutScopeLabel: ['超时范围', 'Timeout scope'],
   requestTimeout: ['本次请求已超时', 'The request timed out'],
   streamIdleTimeout: [
     '模型流式响应等待新内容已超时',

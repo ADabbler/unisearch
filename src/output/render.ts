@@ -63,7 +63,6 @@ function errorLines(
     upstream_message: 'upstreamMessageLabel',
     request_id: 'requestIdLabel',
     response_id: 'responseIdLabel',
-    timeout_scope: 'timeoutScopeLabel',
     retry_after_seconds: 'retrySecondsLabel',
     reason: 'reasonLabel',
     index: 'resultIndexLabel',
@@ -82,10 +81,11 @@ function errorLines(
     window_seconds: 'rateWindowLabel',
   };
   for (const [key, label] of Object.entries(labels)) {
-    if (typeof details?.[key] === 'string' || typeof details?.[key] === 'number')
-      lines.push(
-        `${text(language, label)}${colon(language)}${codes ? details[key] : String(details[key]).replace(/\r\n|\r|\n/g, '\n  ')}`,
-      );
+    const value = details?.[key];
+    if (typeof value !== 'string' && typeof value !== 'number') continue;
+    lines.push(
+      `${text(language, label)}${colon(language)}${codes ? value : String(value).replace(/\r\n|\r|\n/g, '\n  ')}`,
+    );
   }
   if (typeof details?.help === 'string')
     lines.push(`${text(language, 'seeHelp')}${colon(language)}${details.help}`);

@@ -480,6 +480,8 @@ const messages = {
   ],
   emptyRetrievalProviders: ['未选择服务', 'No services are selected'],
   fetchFailed: ['网页读取失败', 'Page retrieval failed'],
+  fetchPartial: ['部分网页读取失败', 'Some pages could not be retrieved'],
+  fetchAllFailed: ['所有网页读取均失败', 'All page retrievals failed'],
   mapFailed: ['站点链接查询失败', 'Site link discovery failed'],
   serviceFallbackLabel: ['服务切换', 'Service fallback'],
 
@@ -613,8 +615,6 @@ const messages = {
   ],
   exaEmptyContent: ['Exa 未取得网页正文', 'Exa did not return page text'],
   exaContentUnavailable: ['Exa 无法读取目标网页', 'Exa could not retrieve the target page'],
-  exaPartial: ['部分网页读取失败', 'Some pages could not be retrieved'],
-  exaAllContentFailed: ['所有网页读取均失败', 'All page retrievals failed'],
   exaResultCount: [
     'Exa 返回的结果数量与请求不符',
     'The Exa result count does not match the request',
@@ -1468,7 +1468,6 @@ const messages = {
     'The response does not cover the requested URLs and their occurrence counts',
   ],
   tinyfishUpstream: ['服务请求失败', 'The service request failed'],
-  tinyfishReadFailed: ['网页读取失败', 'Page retrieval failed'],
   tinyfishArgument: ['服务拒绝了请求参数', 'The service rejected the request parameters'],
   tinyfishAuth: ['认证失败', 'Authentication failed'],
   tinyfishQuota: ['服务额度已用尽', 'The service quota is exhausted'],

@@ -3,9 +3,8 @@ import { resolveField } from '../config/resolve.js';
 import type { ResolvedField } from '../config/resolve.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
-import { AppError, failure } from '../errors.js';
+import { AppError, failure, httpFailure } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
-import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
 import type { JsonObject, PublicError } from '../result.js';
 import { validPageUrl } from './firecrawl-response.js';
@@ -321,21 +320,14 @@ export async function request<O extends Operation>(
       http_status: response.status,
       ...(context.requestId ? { request_id: context.requestId } : {}),
       ...(context.responseId ? { response_id: context.responseId } : {}),
-      ...(mapped.code === 'TIMEOUT' ? { timeout_scope: 'request' } : {}),
     };
     if (valid) {
       details.upstream_code = redactSecrets(String(raw.code), request.secrets);
-      const message = safe(raw.message as string);
-      if (message !== text(language, mapped.key)) details.upstream_message = message;
-    } else details.reason = 'error_body_invalid';
-    const outcome = failure<DataByOperation[O]>(
-      new AppError(mapped.code, mapped.key, details),
-      language,
-    );
-    if (outcome.result.error?.code === 'UPSTREAM_ERROR')
+      details.upstream_message = safe(raw.message as string);
+    }
+    const outcome = httpFailure(mapped, details, language, !valid);
+    if (outcome.result.error.code === 'UPSTREAM_ERROR')
       upstreamSwitchPolicy.set(outcome.result.error, mapped.retry);
-    if (!valid && response.status !== 200 && outcome.result.error)
-      outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     return {
       outcome,
       retry: mapped.retry,

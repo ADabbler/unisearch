@@ -53,7 +53,7 @@ test('Platform paths and explicit relative paths use their documented roots', ()
   );
   assert.throws(
     () => selectConfigPath({ ...base, platform: 'linux', env: { UNISEARCH_CONFIG_PATH: '' } }),
-    { code: 'CONFIG_PATH_ERROR' },
+    { code: 'INVALID_CONFIG', details: { field: 'UNISEARCH_CONFIG_PATH' } },
   );
 });
 

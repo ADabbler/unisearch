@@ -2,9 +2,8 @@ import { fieldAt, isObject, parseInput } from '../config/fields.js';
 import type { ResolvedField } from '../config/resolve.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
-import { AppError, failure, normalizeDetails } from '../errors.js';
+import { AppError, failure, httpFailure, normalizeDetails } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
-import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
 import { success } from '../result.js';
 import type { JsonObject, JsonValue } from '../result.js';
@@ -415,17 +414,9 @@ async function request<T extends JsonValue>(
       typeof responseBody?.error === 'string' ? responseBody.error : undefined,
     );
     context.retryAllowed = mapped.retry;
-    if (mapped.code === 'TIMEOUT') info.timeout_scope = 'request';
     if (mapped.code === 'CONTENT_UNAVAILABLE') info.reason = 'page_error';
-    if (invalidBody) info.reason = 'error_body_invalid';
-    const outcome = failure<T>(new AppError(mapped.code, mapped.key, info), language);
-    if (outcome.result.error) {
-      if (info.upstream_message === outcome.result.error.message) delete info.upstream_message;
-      if (invalidBody)
-        outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
-    }
     return {
-      outcome,
+      outcome: httpFailure(mapped, info, language, invalidBody),
       retry: mapped.retry,
       retryAfter: response.headers.get('retry-after') ?? undefined,
     };

@@ -1,9 +1,8 @@
 import { isObject } from '../config/fields.js';
 import type { ModelCandidate, ModelProtocol } from '../config/fields.js';
-import { AppError, failure } from '../errors.js';
+import { AppError, failure, httpFailure } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
-import { text } from '../i18n/messages.js';
 import { success } from '../result.js';
 import type { JsonObject } from '../result.js';
 import type { ModelRequest } from './model-config.js';
@@ -121,22 +120,13 @@ export async function requestModel(
   transport: typeof fetch = fetch,
 ): Promise<ModelAttempt> {
   const safe = (value: string) => redactError(value, request.apiKey);
-  function modelFailure(error: unknown) {
-    const outcome = failure<ModelAnswer>(error, language);
-    const reported = outcome.result.error;
-    if (reported?.details) {
-      const details = { ...reported.details };
-      for (const field of ['upstream_code', 'upstream_type', 'upstream_param', 'upstream_message'])
-        if (typeof details[field] === 'string') details[field] = safe(details[field]);
-      if (
-        error instanceof AppError &&
-        error.key === 'modelIncomplete' &&
-        typeof details.reason === 'string'
-      )
-        details.reason = safe(details.reason);
-      reported.details = details;
-    }
-    return outcome;
+  function safeDetails(source: JsonObject, key: MessageKey): JsonObject {
+    const details = { ...source };
+    for (const field of ['upstream_code', 'upstream_type', 'upstream_param', 'upstream_message'])
+      if (typeof details[field] === 'string') details[field] = safe(details[field]);
+    if (key === 'modelIncomplete' && typeof details.reason === 'string')
+      details.reason = safe(details.reason);
+    return details;
   }
   let streamStarted = false;
   try {
@@ -188,12 +178,13 @@ export async function requestModel(
     const error = isObject(body) ? body.error : undefined;
     const details = modelErrorDetails(error);
     const mapped = httpError(response.status, isObject(error) ? error : undefined);
-    if (mapped.code === 'TIMEOUT') details.timeout_scope = 'request';
-    const outcome = modelFailure(new AppError(mapped.code, mapped.key, details));
-    if (details.reason === 'error_body_invalid' && outcome.result.error)
-      outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     return {
-      outcome,
+      outcome: httpFailure(
+        mapped,
+        safeDetails(details, mapped.key),
+        language,
+        details.reason === 'error_body_invalid',
+      ),
       retry: mapped.retry,
       fallback: mapped.fallback,
       retryAfter: response.headers.get('retry-after') ?? undefined,
@@ -214,12 +205,20 @@ export async function requestModel(
         param: details.upstream_param,
       });
       return {
-        outcome: modelFailure(new AppError(mapped.code, mapped.key, details)),
+        outcome: failure(
+          new AppError(mapped.code, mapped.key, safeDetails(details, mapped.key)),
+          language,
+        ),
         retry: streamStarted ? false : mapped.retry,
         ...(streamStarted || !mapped.fallback ? {} : { fallback: mapped.fallback }),
       };
     }
-    const outcome = modelFailure(error);
+    const outcome = failure<ModelAnswer>(
+      error instanceof AppError && error.details
+        ? new AppError(error.code, error.key, safeDetails(error.details, error.key))
+        : error,
+      language,
+    );
     const reason = error instanceof AppError ? error.details?.reason : undefined;
     const fallback =
       !streamStarted &&

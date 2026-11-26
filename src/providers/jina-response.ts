@@ -1,5 +1,5 @@
 import { isObject } from '../config/fields.js';
-import { AppError, failure, normalizeDetails } from '../errors.js';
+import { AppError, failure, normalizeDetails, publicError } from '../errors.js';
 import type { AttemptContext } from '../execution.js';
 import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
@@ -187,9 +187,7 @@ export function parseResponse(
     const unavailable = (key: MessageKey, reason: string, details: JsonObject = {}) =>
       failures.push({
         url: safe(page.url),
-        code: 'CONTENT_UNAVAILABLE',
-        message: text(language, key),
-        details: { index, reason, ...details },
+        ...publicError('CONTENT_UNAVAILABLE', key, language, { index, reason, ...details }),
       });
     let pageStatus: number | undefined;
     if (entry.httpStatus != null) {

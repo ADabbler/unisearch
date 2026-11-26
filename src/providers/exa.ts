@@ -2,9 +2,8 @@ import { fieldAt, isObject, parseInput } from '../config/fields.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
 import type { ResolvedField } from '../config/resolve.js';
-import { AppError, failure } from '../errors.js';
+import { AppError, failure, httpFailure } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
-import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
 import { configuredSecrets, redactDiagnostics, transportError } from './transport.js';
 import { validPageUrl } from './firecrawl-response.js';
@@ -436,18 +435,9 @@ async function requestExa<T extends JsonObject>(
       response.status,
       isObject(body) && typeof body.tag === 'string' ? body.tag : undefined,
     );
-    if (mapped.code === 'TIMEOUT') details.timeout_scope = 'request';
-    if (invalidBody) details.reason = 'error_body_invalid';
     context.retryAllowed = mapped.retry;
-    const outcome = failure<T>(new AppError(mapped.code, mapped.key, details), language);
-    if (outcome.result.error) {
-      if (details.upstream_message === outcome.result.error.message)
-        delete details.upstream_message;
-      if (invalidBody)
-        outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
-    }
     return {
-      outcome,
+      outcome: httpFailure(mapped, details, language, invalidBody),
       retry: mapped.retry,
       retryAfter: response.headers.get('retry-after') ?? undefined,
     };

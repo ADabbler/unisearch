@@ -3,9 +3,8 @@ import { fieldAt, isObject, parseInput } from '../config/fields.js';
 import type { ResolvedField } from '../config/resolve.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
-import { AppError, failure } from '../errors.js';
+import { AppError, failure, httpFailure } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
-import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
 import { success } from '../result.js';
 import type { JsonObject } from '../result.js';
@@ -329,7 +328,6 @@ export async function request(
     context.retryAllowed = mapped.retry;
     const details: JsonObject = { provider: 'deepseek', http_status: response.status };
     if (context.requestId) details.request_id = context.requestId;
-    if (mapped.code === 'TIMEOUT') details.timeout_scope = 'request';
     const error = isObject(body) && isObject(body.error) ? body.error : undefined;
     let validBody = false;
     if (error && typeof error.message === 'string' && error.message.trim()) {
@@ -346,19 +344,8 @@ export async function request(
         else details[key] = safe(value);
       }
     }
-    if (!validBody) details.reason = 'error_body_invalid';
-    const outcome = failure<SearchData | FetchData>(
-      new AppError(mapped.code, mapped.key, details),
-      language,
-    );
-    if (outcome.result.error) {
-      if (details.upstream_message === outcome.result.error.message)
-        delete details.upstream_message;
-      if (!validBody)
-        outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
-    }
     return {
-      outcome,
+      outcome: httpFailure(mapped, details, language, !validBody),
       retry: mapped.retry,
       retryAfter: response.headers.get('retry-after') ?? undefined,
     };

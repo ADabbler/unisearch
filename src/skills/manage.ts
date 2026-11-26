@@ -3,7 +3,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { findPackageJSON } from 'node:module';
 import { canonicalPath } from '../config/write.js';
 import { checkCancellation } from '../config/manage.js';
-import { AppError, failure, fileError, systemCode } from '../errors.js';
+import { AppError, failure, fileError, publicError, systemCode } from '../errors.js';
 import type { Language } from '../i18n/messages.js';
 import { success } from '../result.js';
 import type { JsonObject, Outcome, PublicError } from '../result.js';
@@ -261,7 +261,7 @@ export async function manageSkills(
   }
   const failed = data.targets.filter((item) => item.state === 'failed').length;
   if (!failed) return success(data);
-  const error = new AppError('SKILL_TARGETS_FAILED', 'skillsFailed').public(language);
+  const error = publicError('SKILL_TARGETS_FAILED', 'skillsFailed', language);
   return failed === data.targets.length
     ? { result: { status: 'error', data, error }, exitCode: 5 }
     : { result: { status: 'partial', data, error }, exitCode: 6 };

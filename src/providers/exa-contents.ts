@@ -203,7 +203,7 @@ export function contentsData(
       result: {
         status: 'partial',
         data,
-        error: { code: 'PARTIAL_FAILURE', message: text(language, 'exaPartial'), details },
+        error: { code: 'PARTIAL_FAILURE', message: text(language, 'fetchPartial'), details },
       },
       exitCode: 6,
     };
@@ -215,7 +215,7 @@ export function contentsData(
         code: failures.every((item) => item.code === failures[0].code)
           ? failures[0].code
           : 'UPSTREAM_ERROR',
-        message: text(language, 'exaAllContentFailed'),
+        message: text(language, 'fetchAllFailed'),
         details,
       },
     },

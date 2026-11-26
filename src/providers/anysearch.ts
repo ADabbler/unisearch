@@ -2,9 +2,8 @@ import { fieldAt, hasNonfiniteNumber, isObject, parseInput, token } from '../con
 import type { ResolvedField } from '../config/resolve.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
-import { AppError, failure } from '../errors.js';
+import { AppError, failure, httpFailure } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
-import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
 import { success } from '../result.js';
 import type { JsonObject } from '../result.js';
@@ -382,7 +381,6 @@ export async function request<O extends Operation>(
     context.retryAllowed = mapped.retry;
     const details: JsonObject = { provider: 'anysearch', http_status: response.status };
     if (context.requestId) details.request_id = context.requestId;
-    if (mapped.code === 'TIMEOUT') details.timeout_scope = 'request';
     const validBody =
       isObject(body) &&
       typeof body.code === 'number' &&
@@ -395,19 +393,8 @@ export async function request<O extends Operation>(
       if (typeof body.message === 'string' && body.message.trim())
         details.upstream_message = safe(body.message);
     }
-    if (!validBody) details.reason = 'error_body_invalid';
-    const outcome = failure<DataByOperation[O]>(
-      new AppError(mapped.code, mapped.key, details),
-      language,
-    );
-    if (outcome.result.error) {
-      if (details.upstream_message === outcome.result.error.message)
-        delete details.upstream_message;
-      if (!validBody)
-        outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
-    }
     return {
-      outcome,
+      outcome: httpFailure(mapped, details, language, !validBody),
       retry: mapped.retry,
       retryAfter: response.headers.get('retry-after') ?? undefined,
     };

@@ -2,9 +2,8 @@ import { fieldAt, isObject, parseInput, token } from '../config/fields.js';
 import type { ResolvedField } from '../config/resolve.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
-import { AppError, failure } from '../errors.js';
+import { AppError, failure, httpFailure } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
-import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
 import type { JsonObject, PublicError } from '../result.js';
 import { domainList, publishedDate } from './exa.js';
@@ -393,8 +392,7 @@ export async function request(
     const details: JsonObject = { provider: 'tinyfish', http_status: response.status };
     if (context.requestId) details.request_id = context.requestId;
     if (upstreamCode !== undefined) details.upstream_code = safe(upstreamCode);
-    if (upstreamMessage !== undefined && upstreamMessage !== text(language, mapped.key))
-      details.upstream_message = safe(upstreamMessage);
+    if (upstreamMessage !== undefined) details.upstream_message = safe(upstreamMessage);
     if (error) {
       if (isObject(error.details)) {
         for (const name of ['limit', 'window_seconds']) {
@@ -431,17 +429,9 @@ export async function request(
         if (causes.length) details.causes = causes;
       }
     }
-    if (mapped.code === 'TIMEOUT') details.timeout_scope = 'request';
-    if (invalidBody) details.reason = 'error_body_invalid';
-    const outcome = failure<SearchData | FetchData>(
-      new AppError(mapped.code, mapped.key, details),
-      language,
-    );
-    if (invalidBody && outcome.result.error)
-      outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
     context.retryAllowed = mapped.retry;
     return {
-      outcome,
+      outcome: httpFailure(mapped, details, language, invalidBody),
       retry: mapped.retry,
       retryAfter: response.headers.get('retry-after') ?? undefined,
     };

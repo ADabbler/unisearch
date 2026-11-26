@@ -134,7 +134,7 @@ test('Status and doctor wrap Chinese reasons within terminal columns and retain 
         {
           provider: 'exa',
           state: 'invalid',
-          issues: [{ code: 'INVALID_CONFIG', message, field: 'providers.exa.api_key' }],
+          issues: [{ code: 'INVALID_VALUE', message, field: 'providers.exa.api_key' }],
         },
       ],
     },

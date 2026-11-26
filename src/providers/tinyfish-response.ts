@@ -306,13 +306,11 @@ export function fetchData(
         continue;
       }
       if (url === undefined) continue;
-      const key = Object.hasOwn(pageErrors, entry.error)
-        ? pageErrors[entry.error]
-        : 'tinyfishReadFailed';
+      const known = Object.hasOwn(pageErrors, entry.error);
+      const key = known ? pageErrors[entry.error] : 'fetchFailed';
       let code: PublicError['code'] = 'CONTENT_UNAVAILABLE';
       if (entry.error === 'invalid_url') code = 'INVALID_ARGUMENT';
-      else if (key === 'tinyfishReadFailed' || entry.error === 'conditional_unsupported')
-        code = 'UPSTREAM_ERROR';
+      else if (!known || entry.error === 'conditional_unsupported') code = 'UPSTREAM_ERROR';
       const own: JsonObject = { upstream_code: entry.error };
       if (entry.status !== undefined) {
         if (
@@ -370,7 +368,7 @@ export function fetchData(
       result: {
         status: 'partial',
         data,
-        error: { code: 'PARTIAL_FAILURE', message: text(language, 'exaPartial'), details: own },
+        error: { code: 'PARTIAL_FAILURE', message: text(language, 'fetchPartial'), details: own },
       },
       exitCode: 6,
     };
@@ -383,7 +381,7 @@ export function fetchData(
       ...(data ? { data } : {}),
       error: {
         code,
-        message: text(language, hasInvalidArgument ? 'tinyfishArgument' : 'exaAllContentFailed'),
+        message: text(language, hasInvalidArgument ? 'tinyfishArgument' : 'fetchAllFailed'),
         details: own,
       },
     },

@@ -843,6 +843,7 @@ test('Save failure prevents Skill writes; successful config and failed installat
   await fs.writeFile(draft.targets()[0].path, 'not a directory');
   const partial = await applySetup(draft, path, abort.signal, source);
   assert.equal(partial.exitCode, 6);
+  assert.equal(partial.result.error?.code, 'PARTIAL_FAILURE');
   assert.equal(partial.result.data?.config.state, 'saved');
   const rename = fs.rename;
   t.mock.method(fs, 'rename', async (...args: Parameters<typeof fs.rename>) => {

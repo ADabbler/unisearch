@@ -641,7 +641,7 @@ export function redact(field: Field, value: JsonValue): JsonValue {
   return field.kind === 'credential' ? '[REDACTED]' : structuredClone(value);
 }
 
-export function issue(problem: Problem, language: Language): JsonObject {
+export function issue(problem: Problem, language: Language) {
   return {
     ...(problem.field ? { field: problem.field } : {}),
     ...(problem.environment ? { environment: problem.environment } : {}),

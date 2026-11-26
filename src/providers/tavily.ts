@@ -2,7 +2,7 @@ import { fieldAt, isObject, parseInput } from '../config/fields.js';
 import type { ResolvedField } from '../config/resolve.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
-import { AppError, failure } from '../errors.js';
+import { AppError, failure, httpFailure, publicError } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
 import { text } from '../i18n/messages.js';
 import type { Language, MessageKey } from '../i18n/messages.js';
@@ -397,23 +397,14 @@ export function mapData(body: unknown): MapData {
   return { provider: 'tavily', results };
 }
 type UrlFailure = PublicError & { url: string };
-function urlFailure(
-  url: string,
-  key: MessageKey,
-  language: Language,
-  reason?: string,
-  upstream?: string,
-): UrlFailure {
-  const code =
-    key === 'tavilyRawInvalid' || key === 'tavilyFailureInvalid'
-      ? 'INVALID_RESPONSE'
-      : 'UPSTREAM_ERROR';
-  const message = text(language, key);
-  const details = {
-    ...(reason ? { reason } : {}),
-    ...(upstream && upstream !== message ? { upstream_message: upstream } : {}),
+function extractFailure(url: string, upstream: string, language: Language): UrlFailure {
+  return {
+    url,
+    ...publicError('UPSTREAM_ERROR', 'tavilyExtractFailed', language, {
+      reason: 'extraction_failed',
+      upstream_message: upstream,
+    }),
   };
-  return { url, code, message, ...(Object.keys(details).length ? { details } : {}) };
 }
 export function extractResult(
   body: unknown,
@@ -428,30 +419,31 @@ export function extractResult(
   for (const item of entries) {
     if (!isObject(item) || !validPageUrl(item.url)) throw responseError();
     if (typeof item.raw_content !== 'string')
-      failures.push(urlFailure(safe(item.url), 'tavilyRawInvalid', language));
+      failures.push({
+        url: safe(item.url),
+        ...publicError('INVALID_RESPONSE', 'tavilyRawInvalid', language),
+      });
     else if (!item.raw_content.trim())
-      failures.push(
-        urlFailure(
-          safe(item.url),
+      failures.push({
+        url: safe(item.url),
+        ...publicError(
+          'UPSTREAM_ERROR',
           request.contentType === 'page' ? 'tavilyEmpty' : 'tavilyEmptySnippets',
           language,
-          'empty_content',
+          { reason: 'empty_content' },
         ),
-      );
+      });
     else results.push({ url: item.url, text: item.raw_content });
   }
   for (const item of body.failed_results) {
     if (!isObject(item) || !validPageUrl(item.url)) throw responseError();
     failures.push(
       typeof item.error === 'string' && item.error.trim()
-        ? urlFailure(
-            safe(item.url),
-            'tavilyExtractFailed',
-            language,
-            'extraction_failed',
-            safe(item.error),
-          )
-        : urlFailure(safe(item.url), 'tavilyFailureInvalid', language),
+        ? extractFailure(safe(item.url), safe(item.error), language)
+        : {
+            url: safe(item.url),
+            ...publicError('INVALID_RESPONSE', 'tavilyFailureInvalid', language),
+          },
     );
   }
   const data: ExtractData = { provider: 'tavily', content_type: request.contentType, results };
@@ -609,15 +601,7 @@ async function requestJson<T extends JsonObject>(
           typeof item.error === 'string' &&
           item.error.trim()
         )
-          failures.push(
-            urlFailure(
-              safe(item.url),
-              'tavilyExtractFailed',
-              language,
-              'extraction_failed',
-              safe(item.error),
-            ),
-          );
+          failures.push(extractFailure(safe(item.url), safe(item.error), language));
         else invalidBody = true;
       }
       if (failures.length) details.failures = failures;
@@ -633,18 +617,9 @@ async function requestJson<T extends JsonObject>(
       mapped.key = 'tavilyUpstream';
       details.reason = 'url_unsupported';
     }
-    if (mapped.code === 'TIMEOUT') details.timeout_scope = 'request';
     if (context.requestId) details.request_id = context.requestId;
-    if (invalidBody) details.reason = 'error_body_invalid';
-    const outcome = failure<T>(new AppError(mapped.code, mapped.key, details), language);
-    if (outcome.result.error) {
-      if (details.upstream_message === outcome.result.error.message)
-        delete details.upstream_message;
-      if (invalidBody)
-        outcome.result.error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
-    }
     return {
-      outcome,
+      outcome: httpFailure(mapped, details, language, invalidBody),
       retry: mapped.retry,
       retryAfter: response.headers.get('retry-after') ?? undefined,
     };

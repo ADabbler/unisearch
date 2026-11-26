@@ -1,56 +1,61 @@
 import { text } from './i18n/messages.js';
 import type { Language, MessageKey } from './i18n/messages.js';
-import type { FailureExitCode, JsonObject, JsonValue, Outcome, PublicError } from './result.js';
-
-const codes = {
-  INVALID_ARGUMENT: 2,
-  CONFIG_PATH_ERROR: 3,
-  CONFIG_NOT_FOUND: 3,
-  CONFIG_READ_ERROR: 3,
-  CONFIG_PARSE_ERROR: 3,
-  INVALID_CONFIG: 3,
-  MISSING_CONFIG: 3,
-  SERVICE_DISABLED: 3,
-  AUTHENTICATION_ERROR: 3,
-  ACCESS_DENIED: 3,
-  QUOTA_EXCEEDED: 4,
-  TIMEOUT: 4,
-  RATE_LIMITED: 4,
-  UPSTREAM_ERROR: 4,
-  NETWORK_ERROR: 4,
-  INVALID_RESPONSE: 4,
-  CONTENT_UNAVAILABLE: 4,
-  MODEL_UNAVAILABLE: 4,
-  FILE_IO_ERROR: 5,
-  SKILL_NOT_INSTALLED: 5,
-  SKILL_TARGETS_FAILED: 5,
-  SETUP_SKILLS_FAILED: 5,
-  RENDER_ERROR: 5,
-  INTERNAL_ERROR: 5,
-  CANCELLED: 130,
-} as const;
+import { errorExitCodes } from './result.js';
+import type { ErrorDetails, FailureExitCode, JsonValue, Outcome, PublicError } from './result.js';
 
 export class AppError extends Error {
   readonly exitCode: FailureExitCode;
 
   constructor(
-    readonly code: keyof typeof codes,
+    readonly code: keyof typeof errorExitCodes,
     readonly key: MessageKey,
-    readonly details?: JsonObject,
+    readonly details?: ErrorDetails,
   ) {
     super(text('en', key));
     this.name = 'AppError';
-    this.exitCode = codes[code];
+    this.exitCode = errorExitCodes[code];
   }
 
   public(language: Language): PublicError {
-    const details = normalizeDetails(this.details);
-    return {
-      code: this.code,
-      message: text(language, this.key),
-      ...(details && Object.keys(details).length ? { details } : {}),
-    };
+    return publicError(this.code, this.key, language, this.details);
   }
+}
+
+export function publicError(
+  code: PublicError['code'],
+  key: MessageKey,
+  language: Language,
+  details?: ErrorDetails,
+): PublicError {
+  const message = text(language, key);
+  let normalized = normalizeDetails(details);
+  if (normalized?.upstream_message === message) {
+    normalized = { ...normalized };
+    delete normalized.upstream_message;
+  }
+  return {
+    code,
+    message,
+    ...(normalized && Object.keys(normalized).length ? { details: normalized } : {}),
+  };
+}
+
+export function httpFailure(
+  { code, key }: Pick<AppError, 'code' | 'key'>,
+  details: ErrorDetails,
+  language: Language,
+  invalidBody: boolean,
+) {
+  const diagnostic = { ...details };
+  if (code === 'TIMEOUT') diagnostic.timeout_scope = 'request';
+  if (invalidBody) {
+    diagnostic.reason ??= 'error_body_invalid';
+    if (diagnostic.reason !== 'error_body_invalid') diagnostic.error_body_invalid = true;
+  }
+  const error = publicError(code, key, language, diagnostic);
+  if (invalidBody && code !== 'INVALID_RESPONSE')
+    error.message += `${language === 'zh' ? '；' : '; '}${text(language, 'errorBodyInvalid')}`;
+  return { result: { status: 'error' as const, error }, exitCode: errorExitCodes[code] };
 }
 
 /**
@@ -58,7 +63,7 @@ export class AppError extends Error {
  * API call's own 200 beside it and readers take that as the page status, so the
  * redundant value is dropped once, before either output format renders details.
  */
-export function normalizeDetails(details: JsonObject | undefined): JsonObject | undefined {
+export function normalizeDetails(details: ErrorDetails | undefined): ErrorDetails | undefined {
   if (!details || typeof details.page_status !== 'number' || details.http_status !== 200)
     return details;
   const { http_status: _omitted, ...rest } = details;

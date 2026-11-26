@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { getEventListeners } from 'node:events';
 import { AppError } from '../src/errors.js';
+import { text } from '../src/i18n/messages.js';
 import { fieldAt, parseInput } from '../src/config/fields.js';
 import { localStatus } from '../src/config/status.js';
 import { modelSearch, prepareModel } from '../src/providers/model-config.js';
@@ -805,8 +806,8 @@ test('HTTP error classification uses structured facts, never infers model scope 
     [402, { code: 402 }, 'QUOTA_EXCEEDED', false, undefined],
     [429, { code: 'insufficient_quota' }, 'QUOTA_EXCEEDED', false, undefined],
     [404, { code: 'model_not_found' }, 'MODEL_UNAVAILABLE', false, 'model'],
-    [404, { message: 'model not found' }, 'UPSTREAM_ERROR', false, undefined],
-    [429, {}, 'RATE_LIMITED', true, 'model'],
+    [404, { message: 'model not found' }, 'UPSTREAM_ERROR', false, undefined, 'model not found'],
+    [429, { message: text('en', 'modelRate') }, 'RATE_LIMITED', true, 'model'],
     [429, { param: 'model' }, 'RATE_LIMITED', true, 'model'],
     [503, {}, 'UPSTREAM_ERROR', true, undefined],
     [503, { param: 'model' }, 'UPSTREAM_ERROR', true, 'model'],
@@ -822,7 +823,7 @@ test('HTTP error classification uses structured facts, never infers model scope 
     [504, {}, 'TIMEOUT', true, undefined],
     [302, {}, 'UPSTREAM_ERROR', false, undefined],
   ] as const;
-  for (const [status, error, code, retry, fallback] of cases) {
+  for (const [status, error, code, retry, fallback, upstreamMessage] of cases) {
     const result = await requestModel(
       prepare(),
       { id: 'primary' },
@@ -834,6 +835,8 @@ test('HTTP error classification uses structured facts, never infers model scope 
     assert.equal(result.outcome.result.error?.code, code, `${status}`);
     assert.equal(result.retry, retry);
     assert.equal(result.fallback, fallback);
+    if ('message' in error)
+      assert.equal(result.outcome.result.error?.details?.upstream_message, upstreamMessage);
     if ('code' in error) {
       assert.equal(result.outcome.result.error?.details?.upstream_code, error.code);
       assert.equal(result.outcome.result.error?.details?.reason, undefined);

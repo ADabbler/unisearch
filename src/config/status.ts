@@ -15,13 +15,7 @@ export interface OperationDefinition {
   optional?: readonly string[];
 }
 export type State = 'ready' | 'missing' | 'disabled' | 'invalid';
-export type StatusIssue = JsonObject & {
-  code: string;
-  message: string;
-  field?: string;
-  environment?: string;
-  operation?: string;
-};
+export type StatusIssue = ReturnType<typeof issue> & { operation?: string };
 export type OperationStatus = JsonObject & {
   operation: string;
   state: State;
@@ -109,8 +103,8 @@ export function localStatus(
   )!;
   const used = new Set<Problem>();
   const classifier = inspectClassifier(values, env);
-  const classifierIssues = [...classifier.problems, ...classifier.missing].map(
-    (problem) => issue(problem, language) as StatusIssue,
+  const classifierIssues = [...classifier.problems, ...classifier.missing].map((problem) =>
+    issue(problem, language),
   );
   for (const problem of problems)
     if (classifier.problems.some((item) => isDeepStrictEqual(item, problem))) used.add(problem);
@@ -130,7 +124,7 @@ export function localStatus(
         const required = requiredSettings(values, env, definition);
         const invalid = requiredProblems(required, problems);
         for (const problem of invalid) used.add(problem);
-        const issues = invalid.map((problem) => issue(problem, language) as StatusIssue);
+        const issues = invalid.map((problem) => issue(problem, language));
         if (!disabled) {
           for (const setting of required) {
             if (
@@ -148,7 +142,7 @@ export function localStatus(
                       setting.field.kind === 'credential' ? 'missingCredential' : 'missingRequired',
                   },
                   language,
-                ) as StatusIssue,
+                ),
               );
           }
         }
@@ -202,7 +196,7 @@ export function localStatus(
   }
   const remaining = problems
     .filter((problem) => !used.has(problem))
-    .map((problem) => issue(problem, language) as StatusIssue);
+    .map((problem) => issue(problem, language));
   return {
     search: {
       ...(search.value === undefined ? {} : { providers: search.value as string[] }),

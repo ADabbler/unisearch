@@ -15,7 +15,7 @@ import type { ConfigDocument } from './config/read.js';
 import type { ConfigContext } from './config/path.js';
 import { resolveField } from './config/resolve.js';
 import { saveConfig } from './config/write.js';
-import { AppError, failure } from './errors.js';
+import { AppError, failure, publicError } from './errors.js';
 import { colon, text } from './i18n/messages.js';
 import type { Language, MessageKey } from './i18n/messages.js';
 import { providerName, operationName } from './i18n/providers.js';
@@ -25,9 +25,8 @@ import { operations } from './providers/operations.js';
 import { targetPaths } from './skills/targets.js';
 import type { SkillTarget, TargetPath } from './skills/targets.js';
 import { manageSkills } from './skills/manage.js';
-import type { SkillsData } from './skills/manage.js';
 import { success } from './result.js';
-import type { JsonObject, JsonValue, Outcome } from './result.js';
+import type { ErrorDetails, JsonObject, JsonValue, Outcome } from './result.js';
 
 export const setupFields: Record<Provider, string[]> = {
   model: ['base_url', 'protocol', 'api_key', 'model.id', 'model.effort'],
@@ -529,38 +528,33 @@ export async function applySetup(
     if (saved.result.status !== 'success')
       return { ...saved, result: { ...saved.result, data } } as Outcome<SetupData>;
     checkCancellation(signal);
-    if (draft.skills.length) {
-      let installed: Outcome<SkillsData>;
-      try {
-        installed = await manageSkills('install', draft.targets(), draft.language, signal, source);
-      } catch (error) {
-        if (!(error instanceof AppError) || error.code !== 'FILE_IO_ERROR') throw error;
-        return {
-          result: {
-            status: 'partial',
-            data,
-            error: new AppError('SETUP_SKILLS_FAILED', 'setupSkillsFailed', {
-              causes: [error.public(draft.language)],
-            }).public(draft.language),
-          },
-          exitCode: 6,
-        };
-      }
+    if (!draft.skills.length) return success(data);
+
+    let failureDetails: ErrorDetails | undefined;
+    try {
+      const installed = await manageSkills(
+        'install',
+        draft.targets(),
+        draft.language,
+        signal,
+        source,
+      );
       data.skills = installed.result.data?.targets ?? data.skills;
-      if (installed.result.status !== 'success') {
-        if (installed.exitCode === 130 || installed.result.error.code === 'INTERNAL_ERROR')
-          return { ...installed, result: { ...installed.result, data } } as Outcome<SetupData>;
-        return {
-          result: {
-            status: 'partial',
-            data,
-            error: new AppError('SETUP_SKILLS_FAILED', 'setupSkillsFailed').public(draft.language),
-          },
-          exitCode: 6,
-        };
-      }
+      if (installed.result.status === 'success') return success(data);
+      if (installed.exitCode === 130 || installed.result.error.code === 'INTERNAL_ERROR')
+        return { ...installed, result: { ...installed.result, data } } as Outcome<SetupData>;
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== 'FILE_IO_ERROR') throw error;
+      failureDetails = { causes: [error.public(draft.language)] };
     }
-    return success(data);
+    return {
+      result: {
+        status: 'partial',
+        data,
+        error: publicError('PARTIAL_FAILURE', 'setupSkillsFailed', draft.language, failureDetails),
+      },
+      exitCode: 6,
+    };
   } catch (error) {
     return failure(error, draft.language, success(data));
   }

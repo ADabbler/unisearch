@@ -687,12 +687,13 @@ test('Native HTTP errors preserve status classification, diagnostic IDs, validat
     assert.equal(calls, before + 1);
   }
   status = 403;
-  payload = { detail: { error: '[403] URL is not supported' } };
+  payload = { detail: { error: '[403] URL is not supported' }, request_id: 2 };
   const unsupported = JSON.parse(
     (await cli(root, ['tavily', 'map', a, '--format=json'], environment)).out,
   );
   assert.equal(unsupported.error.code, 'UPSTREAM_ERROR');
   assert.equal(unsupported.error.details.reason, 'url_unsupported');
+  assert.equal(unsupported.error.details.error_body_invalid, true);
   assert.equal(
     JSON.parse((await cli(root, ['tavily', 'search', 'q', '--format=json'], environment)).out).error
       .code,

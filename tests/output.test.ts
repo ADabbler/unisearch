@@ -68,7 +68,7 @@ test('Result shapes preserve empty data, partial results, failures, and cancella
 });
 
 test('Failure composition keeps the incoming error causes and previous failure', () => {
-  const cause = { code: 'CLEANUP_FAILURE', message: 'The temporary file could not be removed.' };
+  const cause = new AppError('FILE_IO_ERROR', 'fileIO', { operation: 'cleanup' }).public('en');
   const error = new AppError('FILE_IO_ERROR', 'fileIO', { causes: [cause] });
   const outcome = failure(error, 'en', partial);
   assert.equal(outcome.exitCode, 5);

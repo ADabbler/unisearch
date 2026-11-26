@@ -23,7 +23,7 @@ export function selectConfigPath(context: ConfigContext): ConfigPath {
   const explicit = context.env.UNISEARCH_CONFIG_PATH;
   if (explicit !== undefined) {
     if (explicit.length === 0)
-      throw new AppError('CONFIG_PATH_ERROR', 'configPath', { field: 'UNISEARCH_CONFIG_PATH' });
+      throw new AppError('INVALID_CONFIG', 'configPath', { field: 'UNISEARCH_CONFIG_PATH' });
     return { path: path.resolve(context.cwd, explicit), source: 'environment' };
   }
   let directory: string;

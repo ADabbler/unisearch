@@ -83,7 +83,7 @@ async function withSession<T>(
     responseExpected: boolean,
   ): Promise<Response> {
     context.signal.throwIfAborted();
-    context.operation = safe(operation);
+    context.operation = operation;
     delete context.httpStatus;
     delete context.requestId;
     delete context.retryAllowed;
@@ -172,7 +172,7 @@ async function withSession<T>(
             ? { result: {} }
             : { error: { code: -32601, message: 'Method not found' } }),
         },
-        value.method,
+        safe(value.method),
         false,
       );
       Object.assign(context, phase);

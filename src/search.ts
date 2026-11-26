@@ -396,28 +396,7 @@ export async function combinedSearch(
           record.searched_sources = redact(searchedSources, plan.secrets);
       } else {
         const { provider, ...sourceData } = content as SourceData;
-        if (provider === 'firecrawl') {
-          const firecrawlData = sourceData as Pick<FirecrawlData, 'results' | 'warnings'>;
-          const sanitize = (message: string) => redact(message, plan.secrets) as string;
-          const warnings = (items: string[]) => [...new Set(items.map(sanitize))];
-          source = {
-            provider,
-            data: {
-              ...firecrawlData,
-              results: firecrawlData.results.map((item) => {
-                const result = { ...item };
-                if (item.warnings) result.warnings = warnings(item.warnings);
-                if (item.content_error?.message)
-                  result.content_error = {
-                    ...item.content_error,
-                    message: sanitize(item.content_error.message),
-                  };
-                return result;
-              }),
-              ...(firecrawlData.warnings ? { warnings: warnings(firecrawlData.warnings) } : {}),
-            },
-          };
-        } else source = { provider, data: sourceData } as SearchSource;
+        source = { provider, data: sourceData } as SearchSource;
       }
       data.sources.push(source);
     }

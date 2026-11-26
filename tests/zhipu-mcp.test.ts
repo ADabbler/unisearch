@@ -389,6 +389,7 @@ test('Zhipu MCP opaque session IDs cannot rename public fields or protocol tags 
   for (const session of [
     'provider',
     'status',
+    'assistant',
     'text',
     'type',
     'content',
@@ -411,6 +412,7 @@ test('Zhipu MCP opaque session IDs cannot rename public fields or protocol tags 
     assert.equal(result.json().status, 'success');
     assert.equal(data.provider, 'zhipu-mcp');
     assert.equal(data.content[0].type, 'text');
+    assert.deepEqual(data.content[0].annotations.audience, ['assistant']);
     assert.equal(data.content[0].text, 'body [REDACTED]');
     assert.equal(data.content[1].type, 'resource');
     assert.equal(data.content[1].resource.text, 'file [REDACTED]');

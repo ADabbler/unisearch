@@ -1,10 +1,10 @@
-import { fieldAt, isObject } from '../config/fields.js';
+import { fieldAt } from '../config/fields.js';
 import { operationConfig } from '../config/status.js';
 import type { OperationDefinition } from '../config/status.js';
 import { AppError, failure } from '../errors.js';
 import type { AttemptContext, AttemptResult } from '../execution.js';
 import type { Language } from '../i18n/messages.js';
-import type { JsonObject, PublicError } from '../result.js';
+import type { JsonObject } from '../result.js';
 import { validPageUrl } from './firecrawl-response.js';
 import { configuredSecrets, redactSecrets } from './transport.js';
 import { callTool, McpError } from './zhipu-mcp-http.js';
@@ -119,42 +119,27 @@ function redactFields(value: JsonObject, fields: readonly string[], secrets: str
 }
 
 function redactBlock(block: JsonObject, secrets: string[]): JsonObject {
+  const { type, resource, annotations, ...fields } = block;
   const result = redactFields(
-    block,
-    [
-      'type',
-      'text',
-      'data',
-      'mimeType',
-      'uri',
-      'name',
-      'title',
-      'description',
-      'size',
-      'icons',
-      'resource',
-      'annotations',
-      '_meta',
-    ],
+    fields,
+    ['text', 'data', 'mimeType', 'uri', 'name', 'title', 'description', 'size', 'icons', '_meta'],
     secrets,
   );
-  // Validated protocol tags and field names are not copies of credentials.
-  result.type = block.type;
-  if (block.type === 'resource' && isObject(block.resource))
-    result.resource = redactFields(
-      block.resource as JsonObject,
-      ['uri', 'text', 'blob', 'mimeType', '_meta'],
-      secrets,
-    );
-  if (isObject(block.annotations)) {
-    const annotations = redactFields(
-      block.annotations as JsonObject,
-      ['audience', 'priority', 'lastModified'],
-      secrets,
-    );
-    if (Array.isArray(block.annotations.audience))
-      annotations.audience = [...block.annotations.audience];
-    result.annotations = annotations;
+  // The block type and audience roles have already been validated as protocol values.
+  result.type = type;
+  if (resource !== undefined)
+    result.resource =
+      type === 'resource'
+        ? redactFields(
+            resource as JsonObject,
+            ['uri', 'text', 'blob', 'mimeType', '_meta'],
+            secrets,
+          )
+        : redactSecrets(resource, secrets);
+  if (annotations !== undefined) {
+    const { audience, ...attributes } = annotations as JsonObject;
+    result.annotations = redactFields(attributes, ['priority', 'lastModified'], secrets);
+    if (audience !== undefined) result.annotations.audience = audience;
   }
   return result;
 }
@@ -179,26 +164,6 @@ function redactData(data: Data, secrets: string[]): Data {
   ) as Data;
 }
 
-function redactToolError(error: PublicError, secrets: string[]): PublicError {
-  const result: PublicError = {
-    ...error,
-    message: redactSecrets(error.message, secrets),
-  };
-  const details = error.details;
-  if (!details) return result;
-  result.details = Object.fromEntries(
-    Object.entries(details).map(([key, value]) => {
-      if (key === 'provider') return [key, value];
-      if (key === 'causes')
-        return [key, details.causes!.map((cause) => redactToolError(cause, secrets))];
-      if (key === 'upstream_content')
-        return [key, (value as JsonObject[]).map((block) => redactBlock(block, secrets))];
-      return [key, redactSecrets(value, secrets)];
-    }),
-  );
-  return result;
-}
-
 export async function request(
   request: Request,
   context: AttemptContext,
@@ -211,17 +176,15 @@ export async function request(
     if (outcome.result.data) outcome.result.data = redactData(outcome.result.data, secrets);
     if (outcome.result.error) {
       context.retryAllowed = false;
-      outcome.result.error = redactToolError(
-        {
-          ...outcome.result.error,
-          details: {
-            ...outcome.result.error.details,
-            ...(context.httpStatus === undefined ? {} : { http_status: context.httpStatus }),
-            ...(context.requestId ? { request_id: context.requestId } : {}),
-          },
-        },
-        secrets,
-      );
+      const details = (outcome.result.error.details ??= {});
+      for (const key of ['upstream_message', 'upstream_data', 'upstream_metadata'] as const)
+        if (details[key] !== undefined) details[key] = redactSecrets(details[key], secrets);
+      if (Array.isArray(details.upstream_content))
+        details.upstream_content = (details.upstream_content as JsonObject[]).map((block) =>
+          redactBlock(block, secrets),
+        );
+      if (context.httpStatus !== undefined) details.http_status = context.httpStatus;
+      if (context.requestId) details.request_id = context.requestId;
     }
     return { outcome, retry: false };
   } catch (error) {

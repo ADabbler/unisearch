@@ -195,10 +195,8 @@ export function parseResponse<O extends Operation>(
         Object.entries(item).map(([key, value]) => [key, redactSecrets(value, request.secrets)]),
       ) as T;
     data.results = data.results.map((item) => redactFields(item));
-    if ('search_engine' in data) {
-      data.search_engine = redactSecrets(data.search_engine, request.secrets);
-      if (data.search_intent) data.search_intent = data.search_intent.map(redactFields);
-    }
+    if ('search_intent' in data && data.search_intent)
+      data.search_intent = data.search_intent.map(redactFields);
   }
   let error: AppError | undefined;
   if (errors.length) {

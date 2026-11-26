@@ -322,7 +322,8 @@ export async function request<O extends Operation>(
       ...(context.responseId ? { response_id: context.responseId } : {}),
     };
     if (valid) {
-      details.upstream_code = redactSecrets(String(raw.code), request.secrets);
+      details.upstream_code =
+        typeof raw.code === 'string' ? redactSecrets(raw.code, request.secrets) : String(raw.code);
       details.upstream_message = safe(raw.message as string);
     }
     const outcome = httpFailure(mapped, details, language, !valid);

@@ -480,18 +480,9 @@ export async function retrieve(
       if (entry.response_id && error?.details?.response_id === entry.response_id)
         delete entry.response_id;
     }
-  } else if (switches.length)
-    result.meta = { service_fallbacks: redactDiagnostics(switches, plan.secrets) };
+  } else if (switches.length) result.meta = { service_fallbacks: switches };
   if (final.result.error)
     final.result.error = redactDiagnostics(final.result.error, plan.secrets) as PublicError;
-  if (final.result.data?.warnings)
-    final.result.data.warnings = [
-      ...new Set(
-        final.result.data.warnings.map(
-          (message) => redactDiagnostics(message, plan.secrets) as string,
-        ),
-      ),
-    ];
   record.elapsed_ms = Math.max(0, Math.round(time.now() - started));
   record.attempts = redactDiagnostics(attempts, plan.secrets);
   return final;
